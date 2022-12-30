@@ -1,1 +1,2 @@
-# bare-bones-rust-kernel
+# Osmium
+Toy operating system written in Rust
