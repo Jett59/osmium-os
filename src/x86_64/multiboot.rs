@@ -26,5 +26,5 @@ pub fn parse_multiboot_structures() {
     let mbi_header: &MbiHeader = unsafe {
         reinterpret_memory(slice_from_memory(mbi_pointer, size_of::<MbiHeader>()).unwrap()).unwrap()
     };
-    console::write_string("Successfully found and validated the mbi header structure");
+    
 }
