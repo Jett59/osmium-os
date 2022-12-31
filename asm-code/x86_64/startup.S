@@ -74,9 +74,15 @@ jmp $8, $_start64
 _start64:
 lea high_gdt_pointer(%rip), %rax
 lgdt (%rax)
+
+add $KERNEL_VIRTUAL_OFFSET, %rbx /*remember that we have a physical address*/
+mov %rbx, mbi_pointer
+
 lea stack_end(%rip), %rsp
 call kmain
-1: jmp 1b
+1:
+hlt
+jmp 1b
 
 .section .bootstrap.data, "aw", @progbits
 low_gdt_pointer:
