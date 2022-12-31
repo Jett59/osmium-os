@@ -11,7 +11,7 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
         return None;
     }
     let ptr = memory.as_ptr() as *const T;
-    let reference = unsafe { &*ptr };
+    let reference = &*ptr;
     if reference.validate() {
         Some(reference)
     } else {
@@ -32,6 +32,9 @@ pub unsafe fn slice_from_memory<'lifetime>(
 // For types which have a field which represents the size of the structure. This is often useful for lists of structures (in some sort of table) which may have any of a number of different types of field. In these cases, there is some mechanism for determining the size of the entry, either through a 'length' field or a type field, where the type implies a size.
 pub trait DynamicallySized {
     fn size(&self) -> usize;
+
+    // This is the bound to which offsets will be aligned in the buffer when the offset is incremented. It is useful if the size field doesn't account for manditory alignment of entries (as is sometimes the case).
+    const ALIGNMENT: usize = 1;
 }
 
 pub struct DynamicallySizedItem<'lifetime, T: DynamicallySized> {
@@ -83,6 +86,9 @@ where
             value_memory,
         };
         self.current_offset += item.value.size();
+        // Align current_offset up to the correct boundary.
+        let alignment = T::ALIGNMENT;
+        self.current_offset = (self.current_offset + alignment - 1) & !(alignment - 1);
         Some(item)
     }
 }

@@ -18,6 +18,7 @@ use core::panic::PanicInfo;
 #[panic_handler]
 #[cfg(not(test))]
 fn kpanic(_info: &PanicInfo) -> ! {
+    console::write_string("Panic!!!\n");
     loop {}
 }
 
