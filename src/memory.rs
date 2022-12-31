@@ -9,7 +9,7 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
         return None;
     }
     let ptr = memory.as_ptr() as *const T;
-    let reference = unsafe { &*ptr };
+    let reference = &*ptr;
     if reference.validate() {
         Some(reference)
     } else {
