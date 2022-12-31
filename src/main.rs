@@ -1,5 +1,6 @@
 #![no_std]
-#![no_main]
+// This whole no_main thing gets rather complicated when we want to support unit tests. See the (seemingly) random cfg attributes and other weirdness in this file and others (like skipping checks which won't work in the test environment etc.).
+#![cfg_attr(not(test), no_main)]
 
 mod memory;
 
@@ -26,4 +27,8 @@ extern "C" fn kmain() -> ! {
     console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
     loop {}
+}
+
+#[cfg(test)]
+fn main() {
 }

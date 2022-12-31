@@ -45,6 +45,19 @@ pub struct DynamicallySizedObjectIterator<'lifetime, T: DynamicallySized> {
     _phantom: core::marker::PhantomData<T>, // To make the compiler happy about having T as a type parameter.
 }
 
+impl<'lifetime, T: DynamicallySized> DynamicallySizedObjectIterator<'lifetime, T>
+where
+    T: 'lifetime + Validateable,
+{
+    pub fn new(memory: &'lifetime [u8]) -> Self {
+        Self {
+            total_memory: memory,
+            current_offset: 0,
+            _phantom: core::marker::PhantomData,
+        }
+    }
+}
+
 impl<'lifetime, T: DynamicallySized> Iterator for DynamicallySizedObjectIterator<'lifetime, T>
 where
     T: 'lifetime + Validateable,
@@ -71,5 +84,47 @@ where
         };
         self.current_offset += item.value.size();
         Some(item)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_dynamic_sized_object_iterator() {
+        #[repr(C, packed)]
+        struct TestStruct {
+            a: u8,
+            b: u8,
+            c: u8,
+        }
+
+        impl Validateable for TestStruct {
+            fn validate(&self) -> bool {
+                true
+            }
+        }
+
+        impl DynamicallySized for TestStruct {
+            fn size(&self) -> usize {
+                3
+            }
+        }
+
+        let memory = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        let iterator: DynamicallySizedObjectIterator<TestStruct> =
+            DynamicallySizedObjectIterator::new(&memory);
+        let mut iterator = iterator.peekable();
+        assert_eq!(iterator.peek().unwrap().value.a, 0);
+        assert_eq!(iterator.next().unwrap().value.b, 1);
+        assert_eq!(iterator.peek().unwrap().value.a, 3);
+        assert_eq!(iterator.next().unwrap().value.c, 5);
+        assert_eq!(iterator.peek().unwrap().value.a, 6);
+        assert_eq!(iterator.next().unwrap().value.a, 6);
+        assert_eq!(iterator.peek().unwrap().value.a, 9);
+        assert_eq!(iterator.next().unwrap().value.b, 10);
+        assert!(iterator.peek().is_none());
+        assert!(iterator.next().is_none());
     }
 }

@@ -18,13 +18,17 @@ impl Validateable for MbiHeader {
     }
 }
 
+#[cfg(not(test))] // Unless you want a link error
 extern "C" {
     static mbi_pointer: *const u8;
 }
+
+#[cfg(test)]
+#[allow(non_upper_case_globals)]
+const mbi_pointer: *const u8 = 0 as *const u8;
 
 pub fn parse_multiboot_structures() {
     let mbi_header: &MbiHeader = unsafe {
         reinterpret_memory(slice_from_memory(mbi_pointer, size_of::<MbiHeader>()).unwrap()).unwrap()
     };
-    
 }
