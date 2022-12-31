@@ -1,3 +1,5 @@
+use core::slice;
+
 pub trait Validateable {
     // Ensure that an instance of this type is valid. This is used to ensure that
     // objects which are created by reinterpreting some region of memory are in fact instances of the correct type.
@@ -9,7 +11,7 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
         return None;
     }
     let ptr = memory.as_ptr() as *const T;
-    let reference = &*ptr;
+    let reference = unsafe { &*ptr };
     if reference.validate() {
         Some(reference)
     } else {
@@ -17,6 +19,12 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
     }
 }
 
-pub unsafe fn pointer_from_address(address: usize) -> *const u8 {
-    address as *const u8
+pub unsafe fn slice_from_memory<'lifetime>(
+    pointer: *const u8,
+    length: usize,
+) -> Option<&'lifetime [u8]> {
+    if pointer.is_null() {
+        return None;
+    }
+    Some(slice::from_raw_parts(pointer, length))
 }

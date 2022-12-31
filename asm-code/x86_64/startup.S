@@ -118,5 +118,6 @@ stack:
 .fill 8192
 stack_end:
 
+.globl mbi_pointer
 mbi_pointer:
 .quad 0
