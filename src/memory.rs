@@ -38,8 +38,8 @@ pub trait DynamicallySized {
 }
 
 pub struct DynamicallySizedItem<'lifetime, T: DynamicallySized> {
-    value: &'lifetime T,
-    value_memory: &'lifetime [u8], // Sized to the dynamic size of T
+    pub value: &'lifetime T,
+    pub value_memory: &'lifetime [u8], // Sized to the dynamic size of T
 }
 
 pub struct DynamicallySizedObjectIterator<'lifetime, T: DynamicallySized> {
