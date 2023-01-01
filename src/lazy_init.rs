@@ -49,7 +49,7 @@ impl<'initializer, T: Sized + Sync> DerefMut for LazilyInitialized<'initializer,
 }
 
 macro_rules! lazy_static {
-    (static ref $visibility:vis $name:ident : $type:ty = $initializer:expr ;) => {
+    ($visibility:vis static ref $name:ident : $type:ty = $initializer:expr ;) => {
         $visibility static mut $name: crate::lazy_init::LazilyInitialized<$type> = crate::lazy_init::LazilyInitialized::new(&||$initializer);
     };
 }

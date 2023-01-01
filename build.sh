@@ -5,7 +5,7 @@ set +x
 
 source .config
 
-cargo build --target ./targets/$ARCH.json -Z build-std="core,alloc" --release
+cargo build --target ./targets/$ARCH.json --release
 
 mkdir -p build/isoroot/boot/grub
 cp target/$ARCH/release/osmium build/isoroot/boot/osmium

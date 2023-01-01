@@ -93,6 +93,13 @@ where
     }
 }
 
+pub fn align_address_down(address: usize, alignment: usize) -> usize {
+    address & !(alignment - 1)
+}
+pub fn align_address_up(address: usize, alignment: usize) -> usize {
+    (address + alignment - 1) & !(alignment - 1)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
