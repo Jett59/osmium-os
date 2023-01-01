@@ -1,6 +1,7 @@
-use crate::{arch_api::paging::PAGE_SIZE, lazy_init::lazy_static};
+use crate::arch_api::paging::PAGE_SIZE;
 use core::{
     intrinsics::size_of,
+    mem::MaybeUninit,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -19,10 +20,21 @@ impl<const BITS: usize> MemoryBitmapAllocator<BITS>
 where
     [(); get_bitmap_size(BITS)]:,
 {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         // Since AtomicUsize isn't copyable, this is the best solution I could find (ref: https://stackoverflow.com/a/69756635/11553216)
-        let bits = [(); get_bitmap_size(BITS)].map(|_| AtomicUsize::new(0));
-        Self { bits }
+        unsafe {
+            let mut bits: [MaybeUninit<AtomicUsize>; get_bitmap_size(BITS)] =
+                MaybeUninit::uninit_array();
+            // For loops are disallowed in const functions.
+            let mut i = 0;
+            while i < get_bitmap_size(BITS) {
+                bits[i].write(AtomicUsize::new(0));
+                i += 1;
+            }
+            Self {
+                bits: MaybeUninit::array_assume_init(bits),
+            }
+        }
     }
 
     fn get_index_and_bit_offset(bit: usize) -> (usize, usize) {
@@ -113,6 +125,4 @@ pub fn get_block_index(address: usize) -> usize {
     address / BLOCK_SIZE
 }
 
-lazy_static! {
-    pub static ref GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
-}
+pub static mut GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();

@@ -1,7 +1,18 @@
 #![no_std]
 // This whole no_main thing gets rather complicated when we want to support unit tests. See the (seemingly) random cfg attributes and other weirdness in this file and others (like skipping checks which won't work in the test environment etc.).
 #![cfg_attr(not(test), no_main)]
-#![feature(core_intrinsics, generic_const_exprs)]
+// Lets just hope these aren't as unstable as the language says they are (it would be a pain to have to change everywhere one of these is used)
+#![feature(
+    core_intrinsics,
+    generic_const_exprs,
+    // Why all of these maybe_uninit things are separate is beyond me.
+    maybe_uninit_uninit_array,
+    maybe_uninit_array_assume_init,
+    const_maybe_uninit_uninit_array,
+    const_mut_refs,
+    const_maybe_uninit_write,
+    const_maybe_uninit_array_assume_init
+)]
 
 mod lazy_init;
 mod memory;
