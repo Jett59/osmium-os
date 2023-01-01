@@ -1,8 +1,11 @@
 #![no_std]
 // This whole no_main thing gets rather complicated when we want to support unit tests. See the (seemingly) random cfg attributes and other weirdness in this file and others (like skipping checks which won't work in the test environment etc.).
 #![cfg_attr(not(test), no_main)]
+#![feature(core_intrinsics, generic_const_exprs)]
 
+mod lazy_init;
 mod memory;
+mod pmm;
 
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
@@ -31,5 +34,4 @@ extern "C" fn kmain() -> ! {
 }
 
 #[cfg(test)]
-fn main() {
-}
+fn main() {}
