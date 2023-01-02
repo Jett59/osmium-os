@@ -148,5 +148,7 @@ mod test {
             assert_eq!(allocator.allocate_block(), Some(i));
         }
         assert_eq!(allocator.allocate_block(), None);
+        allocator.mark_as_free(17);
+        assert_eq!(allocator.allocate_block(), Some(17));
     }
 }
