@@ -118,15 +118,15 @@ pub fn parse_multiboot_structures() {
         for i in 0..entry_count {
             let entry_memory = &entry_area[entry_size as usize * i as usize..];
             let entry: &MemoryMapEntry = unsafe { reinterpret_memory(entry_memory).unwrap() };
-            // Type 1 is available, so only ignore regions with a non-1 type.
-            if entry.entry_type != 1 {
+            // Type 1 means available, so therefore we should mark them as such in the PMM (by default everything is used).
+            if entry.entry_type == 1 {
                 let starting_address = align_address_up(entry.base_address as usize, BLOCK_SIZE);
                 let ending_address = align_address_down(
                     entry.base_address as usize + entry.length as usize,
                     BLOCK_SIZE,
                 );
                 unsafe {
-                    GLOBAL_PMM.mark_range_as_used(
+                    GLOBAL_PMM.mark_range_as_free(
                         get_block_index(starting_address),
                         get_block_index(ending_address),
                     );

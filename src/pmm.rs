@@ -13,6 +13,7 @@ pub struct MemoryBitmapAllocator<const BITS: usize>
 where
     [(); get_bitmap_size(BITS)]:,
 {
+    // If a bit is one, that means that it is available (free). Otherwise it is marked as unavailable (used)
     bits: [AtomicUsize; get_bitmap_size(BITS)],
 }
 
@@ -21,13 +22,13 @@ where
     [(); get_bitmap_size(BITS)]:,
 {
     pub const fn new() -> Self {
-        // Since AtomicUsize isn't copyable, this is the best solution I could find (ref: https://stackoverflow.com/a/69756635/11553216)
         unsafe {
             let mut bits: [MaybeUninit<AtomicUsize>; get_bitmap_size(BITS)] =
                 MaybeUninit::uninit_array();
             // For loops are disallowed in const functions.
             let mut i = 0;
             while i < get_bitmap_size(BITS) {
+                // Start with "all unavailable", then allow for marking regions as available.
                 bits[i].write(AtomicUsize::new(0));
                 i += 1;
             }
@@ -38,17 +39,17 @@ where
     }
 
     fn get_index_and_bit_offset(bit: usize) -> (usize, usize) {
-        let index = bit / size_of::<usize>() * 8;
-        let bit_offset = bit % size_of::<usize>() * 8;
+        let index = bit / (size_of::<usize>() * 8);
+        let bit_offset = bit % (size_of::<usize>() * 8);
         (index, bit_offset)
     }
 
-    pub fn mark_as_used(&mut self, bit: usize) {
+    pub fn mark_as_free(&mut self, bit: usize) {
         let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
         self.bits[index].fetch_or(1 << bit_offset, Ordering::SeqCst);
     }
 
-    pub fn mark_as_free(&mut self, bit: usize) {
+    pub fn mark_as_used(&mut self, bit: usize) {
         let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
         self.bits[index].fetch_and(!(1 << bit_offset), Ordering::SeqCst);
     }
@@ -61,7 +62,7 @@ where
         mask
     }
 
-    pub fn mark_range_as_used(&mut self, start: usize, end: usize) {
+    pub fn mark_range_as_free(&mut self, start: usize, end: usize) {
         // Split into a series of masks so that we don't have to do so many operations.
         // This means that we take the leading bits before a multiple of the size of usize, we create a mask for that, then we go over all of the complete usizes and set them straight up, then we do the same with the trailing bits.
         let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
@@ -88,7 +89,7 @@ where
         }
     }
 
-    pub fn mark_range_as_free(&mut self, start: usize, end: usize) {
+    pub fn mark_range_as_used(&mut self, start: usize, end: usize) {
         let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
         let (end_index, end_bit_offset) = Self::get_index_and_bit_offset(end);
         if start_index == end_index {
