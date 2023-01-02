@@ -99,6 +99,26 @@ where
             );
         }
     }
+
+    pub fn allocate_block(&mut self) -> Option<usize> {
+        // Simply traverse the list of usizes and find the first non-zero one. If there are none, we will return None.
+        // This does have a race condition if someone goes and frees some memory while we are allocating, however this is an edge-case and can be safely ignored to make it simpler and faster.
+        for i in 0..get_bitmap_size(BITS) {
+            if self.bits[i].load(Ordering::SeqCst) != 0 {
+                // Take the entire entry, set it to all ones (all used), then put it back with the relevant bits set to zero.
+                let entry = self.bits[i].swap(0, Ordering::SeqCst);
+                if entry == 0 {
+                    continue;
+                }
+                let bit = entry.trailing_zeros() as usize;
+                // Don't forget to write it back, otherwise no one will be able to allocate from this chunk of blocks anymore.
+                // Use or to include any frees which happened while we weren't looking.
+                self.bits[i].fetch_or(entry & !(1 << bit), Ordering::SeqCst);
+                return Some(i * size_of::<usize>() * 8 + bit);
+            }
+        }
+        None
+    }
 }
 
 // The size of a block (bit) in the bitmap allocator.
@@ -115,3 +135,18 @@ pub fn get_block_index(address: usize) -> usize {
 }
 
 pub static mut GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
+
+mod test {
+    use super::*;
+
+    #[test]
+    fn pmm_bitmap_test() {
+        let mut allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
+        assert_eq!(allocator.allocate_block(), None);
+        allocator.mark_range_as_free(52, 60);
+        for i in 52..60 {
+            assert_eq!(allocator.allocate_block(), Some(i));
+        }
+        assert_eq!(allocator.allocate_block(), None);
+    }
+}
