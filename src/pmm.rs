@@ -1,7 +1,6 @@
-use crate::arch_api::paging::PAGE_SIZE;
+use crate::{arch_api::paging::PAGE_SIZE, memory::constant_initialized_array};
 use core::{
     intrinsics::size_of,
-    mem::MaybeUninit,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -22,19 +21,8 @@ where
     [(); get_bitmap_size(BITS)]:,
 {
     pub const fn new() -> Self {
-        unsafe {
-            let mut bits: [MaybeUninit<AtomicUsize>; get_bitmap_size(BITS)] =
-                MaybeUninit::uninit_array();
-            // For loops are disallowed in const functions.
-            let mut i = 0;
-            while i < get_bitmap_size(BITS) {
-                // Start with "all unavailable", then allow for marking regions as available.
-                bits[i].write(AtomicUsize::new(0));
-                i += 1;
-            }
-            Self {
-                bits: MaybeUninit::array_assume_init(bits),
-            }
+        Self {
+            bits: constant_initialized_array(&AtomicUsize::default),
         }
     }
 

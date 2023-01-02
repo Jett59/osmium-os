@@ -5,6 +5,7 @@
 #![feature(
     core_intrinsics,
     generic_const_exprs,
+    const_trait_impl,
     // Why all of these maybe_uninit things are separate is beyond me.
     maybe_uninit_uninit_array,
     maybe_uninit_array_assume_init,
