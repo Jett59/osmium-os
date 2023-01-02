@@ -96,6 +96,7 @@ pub fn parse_multiboot_structures() {
         }
     }
 
+    #[repr(C, packed)]
     struct MemoryMapEntry {
         base_address: u64,
         length: u64,
