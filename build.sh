@@ -12,7 +12,7 @@ if [ "$PROFILE" != "debug" ]; then
     PROFILE_OPTION="--$PROFILE"
 fi
 
-cargo build --target ./targets/$ARCH.json $PROFILE_OPTION
+cargo build --target ./targets/$ARCH.json $PROFILE_OPTION -Zbuild-std=core,alloc
 
 mkdir -p build/isoroot/boot/grub
 cp target/$ARCH/$PROFILE/osmium build/isoroot/boot/osmium
