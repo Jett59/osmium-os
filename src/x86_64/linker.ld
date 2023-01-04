@@ -8,7 +8,13 @@ SECTIONS {
 
     .multiboot : ALIGN(4k) {
         KEEP(*(.multiboot*))
-        *(.bootstrap*)
+        /* We want to put the bootstrap bss section somewhere different, so we only put the other ones in here */
+        *(.bootstrap.text)
+        *(.bootstrap.data)
+        *(.bootstrap.rodata)
+    }
+    .bootstrap.bss : ALIGN(4k) {
+        *(.bootstrap.bss)
     }
 
 . += KERNEL_VIRTUAL_OFFSET;
