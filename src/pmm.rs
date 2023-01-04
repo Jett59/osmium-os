@@ -1,4 +1,6 @@
-use crate::{arch_api::paging::PAGE_SIZE, memory::constant_initialized_array};
+use crate::{
+    arch_api::paging::PAGE_SIZE, assert::const_assert, memory::constant_initialized_array,
+};
 use core::{
     intrinsics::size_of,
     sync::atomic::{AtomicUsize, Ordering},
@@ -124,6 +126,11 @@ where
 // The size of a block (bit) in the bitmap allocator.
 pub const BLOCK_SIZE: usize = 65536;
 
+const_assert!(
+    PAGE_SIZE < BLOCK_SIZE && BLOCK_SIZE % PAGE_SIZE == 0,
+    "Block size must be larger and divisible by (platform-specific) page size."
+);
+
 pub const PAGES_PER_BLOCK: usize = BLOCK_SIZE / PAGE_SIZE;
 
 pub const MAX_PHYSICAL_MEMORY: usize = 0x1000000000;
@@ -134,8 +141,41 @@ pub fn get_block_index(address: usize) -> usize {
     address / BLOCK_SIZE
 }
 
+pub fn get_address(block_index: usize) -> usize {
+    block_index * BLOCK_SIZE
+}
+
 pub static mut GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
 
+pub fn mark_as_free(address: usize) {
+    unsafe {
+        GLOBAL_PMM.mark_as_free(get_block_index(address));
+    }
+}
+
+pub fn mark_as_used(address: usize) {
+    unsafe {
+        GLOBAL_PMM.mark_as_used(get_block_index(address));
+    }
+}
+
+pub fn mark_range_as_free(start_address: usize, end_address: usize) {
+    unsafe {
+        GLOBAL_PMM.mark_range_as_free(get_block_index(start_address), get_block_index(end_address));
+    }
+}
+
+pub fn mark_range_as_used(start_address: usize, end_address: usize) {
+    unsafe {
+        GLOBAL_PMM.mark_range_as_used(get_block_index(start_address), get_block_index(end_address));
+    }
+}
+
+pub fn allocate_block_address() -> Option<usize> {
+    unsafe { GLOBAL_PMM.allocate_block().map(get_address) }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
 
@@ -151,4 +191,12 @@ mod test {
         allocator.mark_as_free(17);
         assert_eq!(allocator.allocate_block(), Some(17));
     }
+}
+
+// This is outside the test module because it is for testing in the real kernel environment and not part of the unit testing suite.
+pub fn sanity_check() {
+    // Make sure there is some memory to work with. I'll probably add more stuff later.
+    mark_as_free(
+        allocate_block_address().expect("There should be at least some memory by this point"),
+    );
 }

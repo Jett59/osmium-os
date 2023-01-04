@@ -15,6 +15,7 @@
     const_maybe_uninit_array_assume_init
 )]
 
+mod assert;
 mod lazy_init;
 mod memory;
 mod pmm;
@@ -32,7 +33,7 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 #[cfg(not(test))]
-fn kpanic(_info: &PanicInfo) -> ! {
+fn kpanic(info: &PanicInfo) -> ! {
     console::write_string("Panic!!!\n");
     loop {}
 }
@@ -42,6 +43,7 @@ extern "C" fn kmain() -> ! {
     console::clear();
     console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
+    pmm::sanity_check();
     loop {}
 }
 

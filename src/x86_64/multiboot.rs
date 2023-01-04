@@ -6,7 +6,7 @@ use crate::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Validateable,
     },
-    pmm::{get_block_index, BLOCK_SIZE, GLOBAL_PMM},
+    pmm::{get_block_index, mark_range_as_free, BLOCK_SIZE, GLOBAL_PMM},
 };
 
 #[repr(C, packed)]
@@ -126,12 +126,7 @@ pub fn parse_multiboot_structures() {
                     entry.base_address as usize + entry.length as usize,
                     BLOCK_SIZE,
                 );
-                unsafe {
-                    GLOBAL_PMM.mark_range_as_free(
-                        get_block_index(starting_address),
-                        get_block_index(ending_address),
-                    );
-                }
+                mark_range_as_free(starting_address, ending_address);
             }
         }
     }
