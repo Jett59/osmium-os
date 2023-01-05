@@ -1,3 +1,5 @@
+use crate::pmm;
+
 pub const PAGE_SIZE: usize = 4096;
 
 const RECURSIVE_PAGE_TABLE_INDEX: usize = 257; // We are in the last 2g so we can't use 511.
@@ -92,4 +94,241 @@ unsafe fn read_page_table_entry(
     deconstruct_page_table_entry(entry)
 }
 
-pub fn initialize_paging_structures() {}
+unsafe fn get_page_table_entry_address(
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+    pml1_index: usize,
+) -> *mut u64 {
+    let offset =
+        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
+    RECURSIVE_PAGE_TABLE_POINTER.add(offset)
+}
+
+struct PageTableIndices {
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+    pml1_index: usize,
+}
+
+fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
+    PageTableIndices {
+        pml4_index: (address >> 39) & 0x1ff,
+        pml3_index: (address >> 30) & 0x1ff,
+        pml2_index: (address >> 21) & 0x1ff,
+        pml1_index: (address >> 12) & 0x1ff,
+    }
+}
+
+// TODO: Make these waste less than 94% of all memory allocated.
+fn allocate_page_table() -> usize {
+    // This is really easy, but really bad. Fix ASAP.
+    return pmm::allocate_block_address().expect("Failed to allocate page table");
+}
+fn free_page_table(address: usize) {
+    // Same as above. Fix ASAP!!!
+    pmm::mark_as_free(address);
+}
+
+fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: usize) {
+    // Indexing with the first indices set to RECURSIVE_PAGE_TABLE_INDEX will give us the next layer up in the page tables.
+    let pml4_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            pml4_index,
+        )
+    };
+    if !pml4_entry.present {
+        unsafe {
+            write_page_table_entry(
+                PageTableEntry {
+                    present: true,
+                    writeable: true,
+                    user_accessible: pml4_index <= 256,
+                    write_through: false,
+                    cache_disabled: false,
+                    accessed: false,
+                    dirty: false,
+                    huge_page: false,
+                    global: false,
+                    physical_address: allocate_page_table() as u64,
+                },
+                RECURSIVE_PAGE_TABLE_INDEX,
+                RECURSIVE_PAGE_TABLE_INDEX,
+                RECURSIVE_PAGE_TABLE_INDEX,
+                pml4_index,
+            );
+        }
+    }
+    let pml3_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            pml4_index,
+            pml3_index,
+        )
+    };
+    if !pml3_entry.present {
+        unsafe {
+            write_page_table_entry(
+                PageTableEntry {
+                    present: true,
+                    writeable: true,
+                    user_accessible: pml4_index <= 256,
+                    write_through: false,
+                    cache_disabled: false,
+                    accessed: false,
+                    dirty: false,
+                    huge_page: false,
+                    global: false,
+                    physical_address: allocate_page_table() as u64,
+                },
+                RECURSIVE_PAGE_TABLE_INDEX,
+                RECURSIVE_PAGE_TABLE_INDEX,
+                pml4_index,
+                pml3_index,
+            );
+        }
+    }
+    let pml2_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            pml4_index,
+            pml3_index,
+            pml2_index,
+        )
+    };
+    if !pml2_entry.present {
+        unsafe {
+            write_page_table_entry(
+                PageTableEntry {
+                    present: true,
+                    writeable: true,
+                    user_accessible: pml4_index <= 256,
+                    write_through: false,
+                    cache_disabled: false,
+                    accessed: false,
+                    dirty: false,
+                    huge_page: false,
+                    global: false,
+                    physical_address: allocate_page_table() as u64,
+                },
+                RECURSIVE_PAGE_TABLE_INDEX,
+                pml4_index,
+                pml3_index,
+                pml2_index,
+            );
+        }
+    }
+}
+
+pub fn map_page(virtual_address: usize, physical_address: usize) {
+    unsafe {
+        let indices = deconstruct_virtual_address(virtual_address);
+        ensure_page_table_exists(indices.pml4_index, indices.pml3_index, indices.pml2_index);
+        let entry = read_page_table_entry(
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+        if entry.present {
+            panic!("Remapping a page without unmapping in the first place!");
+        }
+        write_page_table_entry(
+            PageTableEntry {
+                present: true,
+                writeable: true,
+                user_accessible: virtual_address & (1 << 47) == 0,
+                write_through: false,
+                cache_disabled: false,
+                accessed: false,
+                dirty: false,
+                huge_page: false,
+                global: virtual_address & (1 << 47) != 0,
+                physical_address: physical_address as u64,
+            },
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+    }
+}
+
+fn is_page_table_present(indices: &PageTableIndices) -> bool {
+    // Check if the pml4 entry is there, then the pml3, then the pml2.
+    let pml4_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            indices.pml4_index,
+        )
+    };
+    if !pml4_entry.present {
+        return false;
+    }
+    let pml3_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            indices.pml4_index,
+            indices.pml3_index,
+        )
+    };
+    if !pml3_entry.present {
+        return false;
+    }
+    let pml2_entry = unsafe {
+        read_page_table_entry(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+        )
+    };
+    if !pml2_entry.present {
+        return false;
+    }
+    true
+}
+
+pub fn unmap_page(virtual_address: usize) {
+    unsafe {
+        let indices = deconstruct_virtual_address(virtual_address);
+        if !is_page_table_present(&indices) {
+            panic!("Unmapping a page that isn't mapped!");
+        }
+        let entry = read_page_table_entry(
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+        if !entry.present {
+            panic!("Unmapping a page that isn't mapped!");
+        }
+        write_page_table_entry(
+            PageTableEntry {
+                present: false,
+                writeable: false,
+                user_accessible: false,
+                write_through: false,
+                cache_disabled: false,
+                accessed: false,
+                dirty: false,
+                huge_page: false,
+                global: false,
+                physical_address: 0,
+            },
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+    }
+}
