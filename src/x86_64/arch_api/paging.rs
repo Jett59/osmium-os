@@ -2,9 +2,9 @@ use crate::pmm;
 
 pub const PAGE_SIZE: usize = 4096;
 
-const RECURSIVE_PAGE_TABLE_INDEX: usize = 257; // We are in the last 2g so we can't use 511.
+const RECURSIVE_PAGE_TABLE_INDEX: usize = 256; // We are in the last 2g so we can't use 511.
 
-// 257 is the first entry in the higher half of the virtual address space.
+// 256 is the first entry in the higher half of the virtual address space.
 const RECURSIVE_PAGE_TABLE_POINTER: *mut u64 = 0xffff_8000_0000_0000 as *mut u64;
 
 // Not the actual layout, but has all of the right fields.
@@ -147,7 +147,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index <= 256,
+                    user_accessible: pml4_index < 256,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -161,6 +161,13 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 RECURSIVE_PAGE_TABLE_INDEX,
                 pml4_index,
             );
+            let address = get_page_table_entry_address(
+                RECURSIVE_PAGE_TABLE_INDEX,
+                RECURSIVE_PAGE_TABLE_INDEX,
+                pml4_index,
+                0,
+            );
+            core::ptr::write_bytes(address as *mut u8, 0, 4096);
         }
     }
     let pml3_entry = unsafe {
@@ -177,7 +184,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index <= 256,
+                    user_accessible: pml4_index < 256,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -191,6 +198,9 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 pml4_index,
                 pml3_index,
             );
+            let address =
+                get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, pml4_index, pml3_index, 0);
+            core::ptr::write_bytes(address as *mut u8, 0, 4096);
         }
     }
     let pml2_entry = unsafe {
@@ -207,7 +217,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index <= 256,
+                    user_accessible: pml4_index < 256,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -221,6 +231,8 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 pml3_index,
                 pml2_index,
             );
+            let address = get_page_table_entry_address(pml4_index, pml3_index, pml2_index, 0);
+            core::ptr::write_bytes(address as *mut u8, 0, 4096);
         }
     }
 }
@@ -330,5 +342,22 @@ pub fn unmap_page(virtual_address: usize) {
             indices.pml2_index,
             indices.pml1_index,
         );
+    }
+}
+
+pub(super) fn initialize_paging() {
+    // We must remove some of the mappings the startup code used (there is one which maps the first gigabyte exactly like the last, and one which maps the first 512g likewise).
+    // First remove the mapping of the low 512g:
+    unsafe {
+        unmap_page(get_page_table_entry_address(
+            RECURSIVE_PAGE_TABLE_INDEX,
+            RECURSIVE_PAGE_TABLE_INDEX,
+            0,
+            0,
+        ) as usize);
+    }
+    // Then for the 511th pml4, 0th pml3:
+    unsafe {
+        unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
 }

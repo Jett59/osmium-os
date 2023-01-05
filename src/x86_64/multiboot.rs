@@ -6,7 +6,7 @@ use crate::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Validateable,
     },
-    pmm::{get_block_index, mark_range_as_free, BLOCK_SIZE, GLOBAL_PMM},
+    pmm::{mark_range_as_free, BLOCK_SIZE},
 };
 
 #[repr(C, packed)]

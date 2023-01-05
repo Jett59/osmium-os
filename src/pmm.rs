@@ -1,6 +1,4 @@
-use crate::{
-    arch_api::paging::PAGE_SIZE, assert::const_assert, memory::constant_initialized_array,
-};
+use crate::{assert::const_assert, memory::constant_initialized_array, paging::PAGE_SIZE};
 use core::{
     intrinsics::size_of,
     sync::atomic::{AtomicUsize, Ordering},
