@@ -248,7 +248,7 @@ pub fn map_page(virtual_address: usize, physical_address: usize) {
             indices.pml1_index,
         );
         if entry.present {
-            panic!("Remapping a page without unmapping in the first place!");
+            panic!("Remapping a page which is already mapped!");
         }
         write_page_table_entry(
             PageTableEntry {
