@@ -50,6 +50,11 @@ mov $pml2, %eax
 or $3, %eax
 mov %eax, pml3 + (4096 - 16)
 
+/*also put a reference to pml4 in itself for recursive mapping*/
+mov $pml4, %eax
+or $3, %eax
+mov %eax, pml4 + 2048 /*257th entry*/
+
 mov $pml4, %eax
 mov %eax, %cr3
 
@@ -79,6 +84,7 @@ add $KERNEL_VIRTUAL_OFFSET, %rbx /*remember that we have a physical address*/
 mov %rbx, mbi_pointer
 
 lea stack_end(%rip), %rsp
+xor %ebp, %ebp
 call kmain
 1:
 hlt

@@ -3,7 +3,7 @@ struct VgaCell {
     attribute: u8,
 }
 
-const VIDEO_MEMORY: *mut VgaCell = 0xb8000 as *mut VgaCell;
+const VIDEO_MEMORY: *mut VgaCell = 0xffffffff800b8000 as *mut VgaCell;
 
 static mut X: usize = 0;
 static mut Y: usize = 0;

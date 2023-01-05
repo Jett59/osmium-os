@@ -18,6 +18,7 @@
 mod assert;
 mod lazy_init;
 mod memory;
+mod paging;
 mod pmm;
 
 #[cfg(target_arch = "x86_64")]
@@ -33,7 +34,7 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 #[cfg(not(test))]
-fn kpanic(info: &PanicInfo) -> ! {
+fn kpanic(_info: &PanicInfo) -> ! {
     console::write_string("Panic!!!\n");
     loop {}
 }
