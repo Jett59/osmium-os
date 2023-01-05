@@ -45,7 +45,6 @@ extern "C" fn kmain() -> ! {
     console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
     pmm::sanity_check();
-    paging::map_block(0, pmm::allocate_block_address().unwrap());
     loop {}
 }
 
