@@ -16,6 +16,7 @@
 )]
 
 mod assert;
+mod lazy_init;
 mod memory;
 mod paging;
 mod pmm;
