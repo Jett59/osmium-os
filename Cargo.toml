@@ -14,4 +14,3 @@ panic = "abort"
 debug = true
 
 [dependencies]
-spin = "0.9.4"
