@@ -1,7 +1,6 @@
 #[derive(Clone, Copy)]
 struct LeafBuddyEntry {
     order: u8,
-    free: bool,
     address: usize,
     sibling: u32,
     parent: u32,
@@ -185,7 +184,6 @@ where
         let order = Self::get_order(size);
         *first_unused_entry = BuddyEntry::Leaf(LeafBuddyEntry {
             order,
-            free: true,
             address,
             sibling: Self::NON_EXISTANT_INDEX,
             parent: Self::NON_EXISTANT_INDEX,
@@ -203,7 +201,6 @@ where
         let old_entry = self.entries[index as usize].as_leaf_mut();
         let left_child = LeafBuddyEntry {
             order: old_entry.order - 1,
-            free: true,
             address: old_entry.address,
             sibling: right_child_index,
             parent: index,
@@ -212,7 +209,6 @@ where
         };
         let right_child = LeafBuddyEntry {
             order: old_entry.order - 1,
-            free: true,
             address: old_entry.address + Self::get_size(old_entry.order - 1),
             sibling: left_child_index,
             parent: index,
