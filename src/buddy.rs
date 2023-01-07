@@ -229,8 +229,10 @@ where
         self.entries[left_child_index as usize] = BuddyEntry::Leaf(left_child);
         self.entries[right_child_index as usize] = BuddyEntry::Leaf(right_child);
         self.entries[index as usize] = BuddyEntry::Parent(parent_entry);
-        self.append_to_free_list(left_child.order, left_child_index);
+        // Append the right child first in order to have the left be the first one (so it is handed out first).
+        // This is not strictly necessary, just nice.
         self.append_to_free_list(right_child.order, right_child_index);
+        self.append_to_free_list(left_child.order, left_child_index);
     }
 
     fn append_to_allocated_list(&mut self, order: u8, index: u32) {
@@ -287,5 +289,23 @@ where
             self.append_to_allocated_list(entry.as_leaf().order, index);
             entry.as_leaf().address
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_buddy_allocator() {
+        let mut allocator: BuddyAllocator<64, 20, 16> = BuddyAllocator::unusable();
+        allocator.all_unused();
+        // Just a simple one for now: Put in a big entry and pull out a small entry or two or more than two.
+        allocator.add_entry(1048576, 0);
+        assert_eq!(allocator.allocate(65536), Some(0));
+        assert_eq!(allocator.allocate(65536), Some(65536));
+        assert_eq!(allocator.allocate(65536), Some(131072));
+        assert_eq!(allocator.allocate(131072), Some(262144));
+        assert_eq!(allocator.allocate(1048576), None);
     }
 }
