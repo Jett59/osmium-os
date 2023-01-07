@@ -14,6 +14,8 @@
     const_maybe_uninit_write,
     const_maybe_uninit_array_assume_init
 )]
+// While I don't enjoy surpressing warnings, I think that this particular warning is unnecessary at this stage of development. It would be more useful when the basic components are in place and working.
+#![allow(dead_code)]
 
 mod assert;
 mod buddy;

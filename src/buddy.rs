@@ -1,7 +1,8 @@
 #[derive(Clone, Copy)]
 struct LeafBuddyEntry {
-    size: u32,
+    order: u8,
     free: bool,
+    address: usize,
     sibling: u32,
     parent: u32,
     next_of_this_size: u32,
@@ -9,7 +10,7 @@ struct LeafBuddyEntry {
 }
 #[derive(Clone, Copy)]
 struct ParentBuddyEntry {
-    size: u32,
+    order: u8,
     left_child: u32,
     right_child: u32,
     parent: u32,
@@ -68,21 +69,19 @@ impl BuddyEntry {
     }
 }
 
-struct BuddyAllocator<const CAPACITY: u32, const HIGHEST_ORDER: usize, const LOWEST_ORDER: usize>
+struct BuddyAllocator<const CAPACITY: usize, const HIGHEST_ORDER: usize, const LOWEST_ORDER: usize>
 where
     [(); HIGHEST_ORDER - LOWEST_ORDER + 1]:,
-    [(); CAPACITY as usize]:,
 {
-    entries: [BuddyEntry; CAPACITY as usize],
+    entries: [BuddyEntry; CAPACITY],
     first_free_indices_for_orders: [Option<u32>; HIGHEST_ORDER - LOWEST_ORDER + 1],
     unused_entries: Option<u32>,
 }
 
-impl<const CAPACITY: u32, const HIGHEST_ORDER: usize, const LOWEST_ORDER: usize>
+impl<const CAPACITY: usize, const HIGHEST_ORDER: usize, const LOWEST_ORDER: usize>
     BuddyAllocator<CAPACITY, HIGHEST_ORDER, LOWEST_ORDER>
 where
     [(); HIGHEST_ORDER - LOWEST_ORDER + 1]:,
-    [(); CAPACITY as usize]:,
 {
     const NON_EXISTANT_INDEX: u32 = u32::MAX;
 
@@ -95,7 +94,7 @@ where
             entries: [BuddyEntry::Unused(UnusedBuddyEntry {
                 next: 0,
                 previous: 0,
-            }); CAPACITY as usize],
+            }); CAPACITY],
             first_free_indices_for_orders: [None; HIGHEST_ORDER - LOWEST_ORDER + 1],
             unused_entries: None,
         }
@@ -118,6 +117,36 @@ where
             next: Self::NON_EXISTANT_INDEX,
             previous: (CAPACITY - 2) as u32,
         });
+        self
+    }
+
+    fn get_order(size: usize) -> u8 {
+        let size = size.next_power_of_two();
+        size.trailing_zeros() as u8
+    }
+
+    pub fn add_entry(&mut self, size: usize, address: usize) -> &mut Self {
+        let index = self
+            .unused_entries
+            .expect("Use of uninitialized buddy allocator");
+        let first_unused_entry = &mut self.entries[index as usize];
+        self.unused_entries = Some(first_unused_entry.as_unused().next);
+        let order = Self::get_order(size);
+        let first_entry_of_this_order = self.first_free_indices_for_orders[order as usize];
+        *first_unused_entry = BuddyEntry::Leaf(LeafBuddyEntry {
+            order,
+            free: true,
+            address,
+            sibling: Self::NON_EXISTANT_INDEX,
+            parent: Self::NON_EXISTANT_INDEX,
+            next_of_this_size: first_entry_of_this_order.unwrap_or(Self::NON_EXISTANT_INDEX),
+            previous_of_this_size: Self::NON_EXISTANT_INDEX,
+        });
+        if let Some(first_entry_of_this_order) = first_entry_of_this_order {
+            self.entries[first_entry_of_this_order as usize]
+                .as_leaf_mut()
+                .previous_of_this_size = index;
+        }
         self
     }
 }
