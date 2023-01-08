@@ -1,4 +1,4 @@
-use crate::pmm;
+use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, pmm};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -121,14 +121,37 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
     }
 }
 
-// TODO: Make these waste less than 94% of all memory allocated.
+lazy_static! {
+    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, 16, 12> = {
+        static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
+        unsafe { ACTUAL_ALLOCATOR.all_unused() }
+    };
+}
+
 fn allocate_page_table() -> usize {
-    // This is really easy, but really bad. Fix ASAP.
-    return pmm::allocate_block_address().expect("Failed to allocate page table");
+    unsafe {
+        if let Some(allocated_page) = PAGE_TABLE_ALLOCATION_POOL.allocate(4096) {
+            allocated_page
+        } else {
+            PAGE_TABLE_ALLOCATION_POOL.add_entry(
+                pmm::BLOCK_SIZE,
+                pmm::allocate_block_address()
+                    .expect("Failed to get physical memory for page tables"),
+            );
+            PAGE_TABLE_ALLOCATION_POOL
+                .allocate(4096)
+                .expect("Adding new entry to page table allocation pool didn't change anything")
+        }
+    }
 }
 fn free_page_table(address: usize) {
-    // Same as above. Fix ASAP!!!
-    pmm::mark_as_free(address);
+    unsafe {
+        PAGE_TABLE_ALLOCATION_POOL.free(4096, address);
+        // If this merged into a 64 kb block, return it to the PMM so it can be used by someone else.
+        if let Some(free_block) = PAGE_TABLE_ALLOCATION_POOL.allocate(pmm::BLOCK_SIZE) {
+            pmm::mark_as_free(free_block);
+        }
+    }
 }
 
 fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: usize) {
