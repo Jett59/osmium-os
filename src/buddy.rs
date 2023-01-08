@@ -70,7 +70,7 @@ impl BuddyEntry {
     }
 }
 
-struct BuddyAllocator<const CAPACITY: usize, const HIGHEST_ORDER: u8, const LOWEST_ORDER: u8>
+pub struct BuddyAllocator<const CAPACITY: usize, const HIGHEST_ORDER: u8, const LOWEST_ORDER: u8>
 where
     [(); (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize]:,
 {
