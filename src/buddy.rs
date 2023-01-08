@@ -1,5 +1,6 @@
 #[derive(Clone, Copy)]
 struct LeafBuddyEntry {
+    free: bool,
     order: u8,
     address: usize,
     sibling: u32,
@@ -131,6 +132,9 @@ where
     }
 
     fn append_to_free_list(&mut self, order: u8, index: u32) {
+        self.entries[index as usize]
+            .as_leaf_mut()
+            .previous_of_this_size = Self::NON_EXISTANT_INDEX;
         if let Some(previous_index) = self.free_indices_for_orders[(order - LOWEST_ORDER) as usize]
         {
             // We can fairly safely assume that the previous index is a leaf, because we only ever add leaves to the free list.
@@ -138,6 +142,8 @@ where
             self.entries[previous_index as usize]
                 .as_leaf_mut()
                 .previous_of_this_size = index;
+        } else {
+            self.entries[index as usize].as_leaf_mut().next_of_this_size = Self::NON_EXISTANT_INDEX;
         }
         self.free_indices_for_orders[(order - LOWEST_ORDER) as usize] = Some(index);
     }
@@ -179,10 +185,15 @@ where
     }
 
     pub fn add_entry(&mut self, size: usize, address: usize) -> &mut Self {
+        assert!(
+            address % size.next_power_of_two() == 0,
+            "Address not naturally aligned"
+        );
         let index = self.find_unused_index();
         let first_unused_entry = &mut self.entries[index as usize];
         let order = Self::get_order(size);
         *first_unused_entry = BuddyEntry::Leaf(LeafBuddyEntry {
+            free: true,
             order,
             address,
             sibling: Self::NON_EXISTANT_INDEX,
@@ -200,6 +211,7 @@ where
         let right_child_index = self.find_unused_index();
         let old_entry = self.entries[index as usize].as_leaf_mut();
         let left_child = LeafBuddyEntry {
+            free: true,
             order: old_entry.order - 1,
             address: old_entry.address,
             sibling: right_child_index,
@@ -208,6 +220,7 @@ where
             previous_of_this_size: Self::NON_EXISTANT_INDEX,
         };
         let right_child = LeafBuddyEntry {
+            free: true,
             order: old_entry.order - 1,
             address: old_entry.address + Self::get_size(old_entry.order - 1),
             sibling: left_child_index,
@@ -232,18 +245,43 @@ where
     }
 
     fn append_to_allocated_list(&mut self, order: u8, index: u32) {
+        self.entries[index as usize]
+            .as_leaf_mut()
+            .previous_of_this_size = Self::NON_EXISTANT_INDEX;
         if let Some(previous_index) =
             self.allocated_indices_for_orders[(order - LOWEST_ORDER) as usize]
         {
             // Again, assuming leaf here is pretty safe (it should only fail if there is a bug somewhere else, in which case this is a good way of detecting it).
+            self.entries[index as usize].as_leaf_mut().next_of_this_size = previous_index;
             self.entries[previous_index as usize]
                 .as_leaf_mut()
-                .next_of_this_size = index;
-            self.entries[index as usize]
-                .as_leaf_mut()
-                .previous_of_this_size = previous_index;
+                .previous_of_this_size = index;
+        } else {
+            self.entries[index as usize].as_leaf_mut().next_of_this_size = Self::NON_EXISTANT_INDEX;
         }
         self.allocated_indices_for_orders[(order - LOWEST_ORDER) as usize] = Some(index);
+    }
+
+    fn remove_from_allocated_list(&mut self, index: u32) {
+        let entry = *self.entries[index as usize].as_leaf();
+        let order = entry.order;
+        if entry.previous_of_this_size == Self::NON_EXISTANT_INDEX {
+            if entry.next_of_this_size == Self::NON_EXISTANT_INDEX {
+                self.allocated_indices_for_orders[(order - LOWEST_ORDER) as usize] = None;
+            } else {
+                self.allocated_indices_for_orders[(order - LOWEST_ORDER) as usize] =
+                    Some(entry.next_of_this_size);
+            }
+        } else {
+            self.entries[entry.previous_of_this_size as usize]
+                .as_leaf_mut()
+                .next_of_this_size = entry.next_of_this_size;
+        }
+        if entry.next_of_this_size != Self::NON_EXISTANT_INDEX {
+            self.entries[entry.next_of_this_size as usize]
+                .as_leaf_mut()
+                .previous_of_this_size = entry.previous_of_this_size;
+        }
     }
 
     pub fn allocate(&mut self, size: usize) -> Option<usize> {
@@ -283,8 +321,90 @@ where
         };
         allocated_entry.map(|(entry, index)| {
             self.append_to_allocated_list(entry.as_leaf().order, index);
+            // Set the free field on the entry to false.
+            // Entry is a copy, so use the index to look it up.
+            self.entries[index as usize].as_leaf_mut().free = false;
             entry.as_leaf().address
         })
+    }
+
+    fn append_to_unused_list(&mut self, index: u32) {
+        if let Some(previous_index) = self.unused_entries {
+            self.entries[index as usize].as_unused_mut().next = previous_index;
+            self.entries[previous_index as usize]
+                .as_unused_mut()
+                .previous = index;
+        }
+        self.unused_entries = Some(index);
+    }
+
+    fn merge(&mut self, index: u32) {
+        let mut optional_index = Some(index);
+        while let Some(index) = optional_index {
+            let entry = *self.entries[index as usize].as_leaf();
+            if entry.sibling != Self::NON_EXISTANT_INDEX {
+                let sibling_index = entry.sibling;
+                if let BuddyEntry::Leaf(sibling) = self.entries[sibling_index as usize] && entry.free && sibling.free {
+                    let parent_address = usize::min(entry.address, sibling.address);
+                    let parent = *self.entries[entry.parent as usize].as_parent();
+                    let new_parent_entry = LeafBuddyEntry {
+                        free: true,
+                        order: entry.order + 1,
+                        address: parent_address,
+                        parent: parent.parent,
+                        sibling: parent.sibling,
+                        next_of_this_size: Self::NON_EXISTANT_INDEX,
+                        previous_of_this_size: Self::NON_EXISTANT_INDEX,
+                    };
+                    self.remove_from_free_list(index);
+                    self.remove_from_free_list(sibling_index);
+                    self.entries[index as usize] = BuddyEntry::Unused(UnusedBuddyEntry {
+                        next: Self::NON_EXISTANT_INDEX,
+                        previous: Self::NON_EXISTANT_INDEX,
+                    });
+                    self.entries[sibling_index as usize] = BuddyEntry::Unused(UnusedBuddyEntry {
+                        next: Self::NON_EXISTANT_INDEX,
+                        previous: Self::NON_EXISTANT_INDEX,
+                    });
+                    self.entries[entry.parent as usize] = BuddyEntry::Leaf(new_parent_entry);
+                    self.append_to_unused_list(index);
+                    self.append_to_unused_list(sibling_index);
+                    self.append_to_free_list(new_parent_entry.order, entry.parent);
+                    optional_index = Some(entry.parent);
+                } else {
+                    optional_index = None;
+                }
+            } else {
+                optional_index = None;
+            }
+        }
+    }
+
+    pub fn free(&mut self, size: usize, address: usize) {
+        if address % size != 0 {
+            panic!("Attempt to free non-aligned address: {}", address);
+        }
+        let order = Self::get_order(size);
+        // We unfortunately have to traverse the list of allocated chunks for this order to find our allocation.
+        // TODO: Maybe we could traverse as a binary tree from the root blocks (not exactly sure how to keep track of those properly though).
+        let mut optional_index = self.allocated_indices_for_orders[(order - LOWEST_ORDER) as usize];
+        while let Some(index) = optional_index {
+            let entry = self.entries[index as usize].as_leaf_mut();
+            if entry.address == address {
+                self.remove_from_allocated_list(index);
+                self.append_to_free_list(order, index);
+                self.entries[index as usize].as_leaf_mut().free = true;
+                self.merge(index);
+                return;
+            } else {
+                if entry.next_of_this_size != Self::NON_EXISTANT_INDEX {
+                    optional_index = Some(entry.next_of_this_size);
+                } else {
+                    optional_index = None;
+                }
+            }
+        }
+        panic!("Attempt to free address which was either not allocated (as this size) or already freed: {}", address);
     }
 }
 
@@ -303,5 +423,15 @@ mod test {
         assert_eq!(allocator.allocate(65536), Some(131072));
         assert_eq!(allocator.allocate(131072), Some(262144));
         assert_eq!(allocator.allocate(1048576), None);
+        assert_eq!(allocator.allocate(524288), Some(524288));
+        assert_eq!(allocator.allocate(524288), None);
+        allocator.free(65536, 0);
+        allocator.free(65536, 65536);
+        assert_eq!(allocator.allocate(131072), Some(0));
+        allocator.free(65536, 131072);
+        allocator.free(131072, 0);
+        allocator.free(131072, 262144);
+        allocator.free(524288, 524288);
+        assert_eq!(allocator.allocate(1048576), Some(0));
     }
 }
