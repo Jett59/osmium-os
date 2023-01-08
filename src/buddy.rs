@@ -23,7 +23,9 @@ struct UnusedBuddyEntry {
 }
 
 #[derive(Clone, Copy)]
+#[repr(u32)]
 enum BuddyEntry {
+    Uninitialized = 0,
     Unused(UnusedBuddyEntry),
     Parent(ParentBuddyEntry),
     Leaf(LeafBuddyEntry),
@@ -93,10 +95,7 @@ where
     /// Additionally, using assignment would mean (potentially) having to store one of these things on the stack, which may be impossible for large ones. Using a builder-style interface is the best I can think of.
     pub const fn unusable() -> Self {
         Self {
-            entries: [BuddyEntry::Unused(UnusedBuddyEntry {
-                next: 0,
-                previous: 0,
-            }); CAPACITY],
+            entries: [BuddyEntry::Uninitialized; CAPACITY],
             free_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             allocated_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             unused_entries: None,
