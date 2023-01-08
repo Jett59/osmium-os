@@ -329,11 +329,14 @@ where
     }
 
     fn append_to_unused_list(&mut self, index: u32) {
+        self.entries[index as usize].as_unused_mut().previous = Self::NON_EXISTANT_INDEX;
         if let Some(previous_index) = self.unused_entries {
             self.entries[index as usize].as_unused_mut().next = previous_index;
             self.entries[previous_index as usize]
                 .as_unused_mut()
                 .previous = index;
+        } else {
+            self.entries[index as usize].as_unused_mut().next = Self::NON_EXISTANT_INDEX;
         }
         self.unused_entries = Some(index);
     }
@@ -381,9 +384,7 @@ where
     }
 
     pub fn free(&mut self, size: usize, address: usize) {
-        if address % size != 0 {
-            panic!("Attempt to free non-aligned address: {}", address);
-        }
+        assert!(address % size == 0, "Attempt to free non-aligned address");
         let order = Self::get_order(size);
         // We unfortunately have to traverse the list of allocated chunks for this order to find our allocation.
         // TODO: Maybe we could traverse as a binary tree from the root blocks (not exactly sure how to keep track of those properly though).
@@ -417,6 +418,7 @@ mod test {
         let mut allocator: BuddyAllocator<64, 20, 16> = BuddyAllocator::unusable();
         allocator.all_unused();
         // Just a simple one for now: Put in a big entry and pull out a small entry or two or more than two.
+        // Then try some freeing and allocating stuff to make sure it coalesces properly.
         allocator.add_entry(1048576, 0);
         assert_eq!(allocator.allocate(65536), Some(0));
         assert_eq!(allocator.allocate(65536), Some(65536));
