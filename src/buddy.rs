@@ -23,7 +23,9 @@ struct UnusedBuddyEntry {
 }
 
 #[derive(Clone, Copy)]
+#[repr(u32)]
 enum BuddyEntry {
+    Uninitialized = 0,
     Unused(UnusedBuddyEntry),
     Parent(ParentBuddyEntry),
     Leaf(LeafBuddyEntry),
@@ -93,10 +95,7 @@ where
     /// Additionally, using assignment would mean (potentially) having to store one of these things on the stack, which may be impossible for large ones. Using a builder-style interface is the best I can think of.
     pub const fn unusable() -> Self {
         Self {
-            entries: [BuddyEntry::Unused(UnusedBuddyEntry {
-                next: 0,
-                previous: 0,
-            }); CAPACITY],
+            entries: [BuddyEntry::Uninitialized; CAPACITY],
             free_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             allocated_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             unused_entries: None,
@@ -111,12 +110,12 @@ where
             previous: Self::NON_EXISTANT_INDEX,
         });
         for i in 1..CAPACITY - 1 {
-            self.entries[i as usize] = BuddyEntry::Unused(UnusedBuddyEntry {
+            self.entries[i] = BuddyEntry::Unused(UnusedBuddyEntry {
                 next: (i + 1) as u32,
                 previous: (i - 1) as u32,
             });
         }
-        self.entries[(CAPACITY - 1) as usize] = BuddyEntry::Unused(UnusedBuddyEntry {
+        self.entries[CAPACITY - 1] = BuddyEntry::Unused(UnusedBuddyEntry {
             next: Self::NON_EXISTANT_INDEX,
             previous: (CAPACITY - 2) as u32,
         });
@@ -397,12 +396,10 @@ where
                 self.entries[index as usize].as_leaf_mut().free = true;
                 self.merge(index);
                 return;
+            } else if entry.next_of_this_size != Self::NON_EXISTANT_INDEX {
+                optional_index = Some(entry.next_of_this_size);
             } else {
-                if entry.next_of_this_size != Self::NON_EXISTANT_INDEX {
-                    optional_index = Some(entry.next_of_this_size);
-                } else {
-                    optional_index = None;
-                }
+                optional_index = None;
             }
         }
         panic!("Attempt to free address which was either not allocated (as this size) or already freed: {}", address);
