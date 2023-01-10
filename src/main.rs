@@ -22,6 +22,7 @@
 
 mod assert;
 mod buddy;
+mod heap;
 mod lazy_init;
 mod memory;
 mod paging;
