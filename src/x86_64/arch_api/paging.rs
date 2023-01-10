@@ -384,10 +384,10 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(0, 0);
-    let slice_in_low_memory = unsafe { core::slice::from_raw_parts(0 as *const u8, 4096) };
+    map_page(4096, 0);
+    let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
     assert_eq!(slice_in_low_memory, slice_in_high_memory);
-    unmap_page(0);
+    unmap_page(4096);
 }

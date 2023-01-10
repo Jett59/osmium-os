@@ -77,3 +77,6 @@ unsafe impl GlobalAlloc for HeapAllocator {
         }
     }
 }
+
+#[global_allocator]
+static GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {};
