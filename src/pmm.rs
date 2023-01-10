@@ -123,6 +123,12 @@ where
 
 // The size of a block (bit) in the bitmap allocator.
 pub const BLOCK_SIZE: usize = 65536;
+pub const LOG2_BLOCK_SIZE: u8 = BLOCK_SIZE.trailing_zeros() as u8;
+
+const_assert!(
+    1 << LOG2_BLOCK_SIZE == BLOCK_SIZE,
+    "BLOCK_SIZE must be a power of two"
+);
 
 const_assert!(
     PAGE_SIZE < BLOCK_SIZE && BLOCK_SIZE % PAGE_SIZE == 0,

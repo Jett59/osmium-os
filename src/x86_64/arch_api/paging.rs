@@ -122,7 +122,7 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
 }
 
 lazy_static! {
-    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, 16, 12> = {
+    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { pmm::LOG2_BLOCK_SIZE }, 12> = {
         static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
         unsafe { ACTUAL_ALLOCATOR.all_unused() }
     };
