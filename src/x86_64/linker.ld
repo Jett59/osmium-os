@@ -34,4 +34,6 @@ SECTIONS {
         *(common)
         *(common*)
     }
+
+    KERNEL_PHYSICAL_END = . - KERNEL_VIRTUAL_OFFSET;
 }
