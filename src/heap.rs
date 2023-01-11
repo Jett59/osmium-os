@@ -1,5 +1,7 @@
 use core::{alloc::GlobalAlloc, ptr::null_mut};
 
+use alloc::boxed::Box;
+
 use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
@@ -81,3 +83,26 @@ unsafe impl GlobalAlloc for HeapAllocator {
 #[cfg(not(test))]
 #[global_allocator]
 static GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {};
+
+// It's rather difficult to use the unit testing here since this bit depends rather a lot on paging which we can't manage very well in a hosted environment.
+
+pub fn sanity_check() {
+    // The one thing we can't let happen is the optimizer to optimize out these checks, which would be trivial to do.
+    // That is why we use #[inline(never)] all over the place.
+    #[inline(never)]
+    fn allocate_it<const SIZE: usize>() -> Box<[u8; SIZE]> {
+        unsafe { Box::new_zeroed().assume_init() }
+    }
+    #[inline(never)]
+    fn check_it<const SIZE: usize>(value: *const u8) {
+        let address = value as usize;
+        assert!(address >= VIRTUAL_HEAP_START);
+        assert!(address + SIZE <= VIRTUAL_HEAP_START + HEAP_SIZE);
+    }
+    // Allocate 1mb (for the large allocations case).
+    check_it::<0x100000>(allocate_it::<0x100000>().as_ptr());
+    // TODO: Uncomment when this feature is implemented.
+    // // Allocate 1kb (for the small allocations case).
+    // let value = allocate_it::<0x400>();
+    // check_it(&value);
+}

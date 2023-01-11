@@ -42,18 +42,11 @@ use core::panic::PanicInfo;
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-
 #[panic_handler]
 #[cfg(not(test))]
 fn kpanic(_info: &PanicInfo) -> ! {
     console::write_string("Panic!!!\n");
     loop {}
-}
-
-#[inline(never)]
-fn test_allocator() -> Box<[u8; 1048576]> {
-    unsafe { Box::new_zeroed().assume_init() }
 }
 
 #[no_mangle]
@@ -62,10 +55,7 @@ extern "C" fn kmain() -> ! {
     console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
     pmm::sanity_check();
-    let mut boxed_value = test_allocator();
-    for i in 0..boxed_value.len() {
-        boxed_value[i] = (i % 256) as u8;
-    }
+    heap::sanity_check();
     loop {}
 }
 
