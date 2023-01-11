@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, pmm};
 
 pub const PAGE_SIZE: usize = 4096;
@@ -332,6 +334,10 @@ fn is_page_table_present(indices: &PageTableIndices) -> bool {
     true
 }
 
+unsafe fn clear_page_cache(address: usize) {
+    asm!("invlpg [{}]", in(reg) address, options(nostack));
+}
+
 pub fn unmap_page(virtual_address: usize) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
@@ -365,6 +371,7 @@ pub fn unmap_page(virtual_address: usize) {
             indices.pml2_index,
             indices.pml1_index,
         );
+        clear_page_cache(virtual_address);
     }
 }
 
