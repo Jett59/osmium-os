@@ -368,6 +368,25 @@ pub fn unmap_page(virtual_address: usize) {
     }
 }
 
+pub fn get_physical_address(virtual_address: usize) -> usize {
+    unsafe {
+        let indices = deconstruct_virtual_address(virtual_address);
+        if !is_page_table_present(&indices) {
+            panic!("Attempt to get value of unmapped page!");
+        }
+        let entry = read_page_table_entry(
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+        if !entry.present {
+            panic!("Attempt to get value of unmapped page!");
+        }
+        entry.physical_address as usize + virtual_address % PAGE_SIZE
+    }
+}
+
 pub(super) fn initialize_paging() {
     // We must remove some of the mappings the startup code used (there is one which maps the first gigabyte exactly like the last, and one which maps the first 512g likewise).
     // First remove the mapping of the low 512g:

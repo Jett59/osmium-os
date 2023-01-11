@@ -6,8 +6,8 @@ use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
-    paging::{map_block, unmap_block},
-    pmm::{BLOCK_SIZE, LOG2_BLOCK_SIZE},
+    paging::{get_physical_address, map_block, unmap_block},
+    pmm::{mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -71,6 +71,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
         // Same logic as above.
         if size >= BLOCK_SIZE {
             for block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
+                mark_as_free(get_physical_address(block_address));
                 unmap_block(block_address);
             }
             HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(size, address);
