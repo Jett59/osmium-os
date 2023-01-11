@@ -2,12 +2,16 @@ use crate::{memory, pmm, x86_64::multiboot};
 
 use super::paging;
 
+#[cfg(not(test))]
 extern "C" {
     // The physical end of the kernel.
     // Note that this is not a pointer, it is actually the first thing after the kernel (in physical addressing), and therefore uses the unit type.
     #[allow(improper_ctypes)]
     static KERNEL_PHYSICAL_END: ();
 }
+
+#[cfg(test)]
+static mut KERNEL_PHYSICAL_END: () = (); // Mutable to make an unsafe block necessary.
 
 pub fn arch_init() {
     multiboot::parse_multiboot_structures();

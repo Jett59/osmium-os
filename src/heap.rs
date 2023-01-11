@@ -78,5 +78,6 @@ unsafe impl GlobalAlloc for HeapAllocator {
     }
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {};
