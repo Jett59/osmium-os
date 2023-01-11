@@ -94,13 +94,22 @@ pub fn sanity_check() {
         unsafe { Box::new_zeroed().assume_init() }
     }
     #[inline(never)]
-    fn check_it<const SIZE: usize>(value: *const u8) {
+    fn check_it<const SIZE: usize>(value: *mut u8) {
         let address = value as usize;
         assert!(address >= VIRTUAL_HEAP_START);
         assert!(address + SIZE <= VIRTUAL_HEAP_START + HEAP_SIZE);
+        // We should touch all of the memory to make sure it is all accessible (and writeable).
+        unsafe {
+            for i in 0..SIZE {
+                value.add(i).write_volatile(0);
+            }
+            for i in 0..SIZE {
+                assert!(value.add(i).read_volatile() == 0);
+            }
+        }
     }
     // Allocate 1mb (for the large allocations case).
-    check_it::<0x100000>(allocate_it::<0x100000>().as_ptr());
+    check_it::<0x100000>(allocate_it::<0x100000>().as_mut_ptr());
     // TODO: Uncomment when this feature is implemented.
     // // Allocate 1kb (for the small allocations case).
     // let value = allocate_it::<0x400>();
