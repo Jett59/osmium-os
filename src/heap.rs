@@ -54,9 +54,9 @@ unsafe impl GlobalAlloc for HeapAllocator {
                         return null_mut();
                     }
                 }
-                return address as *mut u8;
+                address as *mut u8
             } else {
-                return null_mut();
+                null_mut()
             }
         } else {
             todo!();
