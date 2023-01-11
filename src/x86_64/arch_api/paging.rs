@@ -122,7 +122,7 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
 }
 
 lazy_static! {
-    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, 16, 12> = {
+    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { pmm::LOG2_BLOCK_SIZE }, 12> = {
         static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
         unsafe { ACTUAL_ALLOCATOR.all_unused() }
     };
@@ -368,6 +368,25 @@ pub fn unmap_page(virtual_address: usize) {
     }
 }
 
+pub fn get_physical_address(virtual_address: usize) -> usize {
+    unsafe {
+        let indices = deconstruct_virtual_address(virtual_address);
+        if !is_page_table_present(&indices) {
+            panic!("Attempt to get value of unmapped page!");
+        }
+        let entry = read_page_table_entry(
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+            indices.pml1_index,
+        );
+        if !entry.present {
+            panic!("Attempt to get value of unmapped page!");
+        }
+        entry.physical_address as usize + virtual_address % PAGE_SIZE
+    }
+}
+
 pub(super) fn initialize_paging() {
     // We must remove some of the mappings the startup code used (there is one which maps the first gigabyte exactly like the last, and one which maps the first 512g likewise).
     // First remove the mapping of the low 512g:
@@ -384,10 +403,10 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(0, 0);
-    let slice_in_low_memory = unsafe { core::slice::from_raw_parts(0 as *const u8, 4096) };
+    map_page(4096, 0);
+    let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
     assert_eq!(slice_in_low_memory, slice_in_high_memory);
-    unmap_page(0);
+    unmap_page(4096);
 }

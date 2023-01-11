@@ -1,4 +1,4 @@
-pub use crate::arch_api::paging::{map_page, unmap_page, PAGE_SIZE};
+pub use crate::arch_api::paging::{get_physical_address, map_page, unmap_page, PAGE_SIZE};
 use crate::pmm::PAGES_PER_BLOCK;
 
 pub fn map_block(virtual_address: usize, physical_address: usize) {

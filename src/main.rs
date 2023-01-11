@@ -14,6 +14,7 @@
     const_maybe_uninit_write,
     const_maybe_uninit_array_assume_init,
     let_chains,
+    new_uninit,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
@@ -22,6 +23,7 @@
 
 mod assert;
 mod buddy;
+mod heap;
 mod lazy_init;
 mod memory;
 mod paging;
@@ -38,6 +40,8 @@ use arch_api::console;
 #[allow(unused_imports)]
 use core::panic::PanicInfo;
 
+extern crate alloc;
+
 #[panic_handler]
 #[cfg(not(test))]
 fn kpanic(_info: &PanicInfo) -> ! {
@@ -51,6 +55,7 @@ extern "C" fn kmain() -> ! {
     console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
     pmm::sanity_check();
+    heap::sanity_check();
     loop {}
 }
 
