@@ -1,4 +1,4 @@
-use core::{alloc::GlobalAlloc, ptr::null_mut};
+use core::{alloc::GlobalAlloc, intrinsics::size_of, ptr::null_mut};
 
 use alloc::boxed::Box;
 
@@ -35,6 +35,29 @@ lazy_static! {
         }
     };
 }
+
+#[derive(Clone, Copy)]
+struct SlabUnusedEntry {
+    // Indices are u16::MAX for non-existant.
+    next_index: u16,
+    previous_index: u16,
+}
+
+#[derive(Clone, Copy)]
+struct SlabHeadEntry<const SIZE: usize> {
+    next_of_this_size: *mut SlabEntry<SIZE>,
+    previous_of_this_size: *mut SlabEntry<SIZE>,
+    first_unused_entry: u16,
+}
+
+#[repr(C)] // Make sure the 'data' field is at offset 0
+union SlabEntry<const SIZE: usize> {
+    data: [u8; SIZE],
+    unused: SlabUnusedEntry,
+    head: SlabHeadEntry<SIZE>,
+}
+
+const MIN_SLAB_ENTRY_SIZE: usize = size_of::<SlabEntry<1>>().next_power_of_two();
 
 struct HeapAllocator;
 
