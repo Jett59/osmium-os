@@ -46,6 +46,7 @@ struct SlabHeadEntry<const SIZE: usize> {
     next_of_this_size: *mut SlabEntry<SIZE>,
     previous_of_this_size: *mut SlabEntry<SIZE>,
     first_unused_entry: u16,
+    allocated_count: u16,
 }
 
 #[repr(C)] // Make sure the 'data' field is at offset 0
@@ -112,6 +113,7 @@ impl SlabAllocator {
             next_of_this_size: null_mut(),
             previous_of_this_size: null_mut(),
             first_unused_entry: 1,
+            allocated_count: 0,
         };
         for i in 1..entry_count {
             entries[i].unused = SlabUnusedEntry {
@@ -161,6 +163,7 @@ impl SlabAllocator {
                 self.remove_entry_list(entry_list);
             }
             (*entry_list).head.first_unused_entry = first_unused_entry.unused.next_index;
+            (*entry_list).head.allocated_count += 1;
             first_unused_entry as *mut SlabEntry<SIZE> as *mut u8
         }
     }
@@ -168,6 +171,28 @@ impl SlabAllocator {
     pub fn allocate<const SIZE: usize>(&mut self) -> *mut u8 {
         let entry_list = self.get_partial_list::<SIZE>();
         self.allocate_from_list(entry_list)
+    }
+
+    pub fn free<const SIZE: usize>(&mut self, pointer: *mut u8) {
+        // It didn't really make sense to separate this into a separate function since the pointer to the list has to be determined from the pointer, so I just put the logic in a single function.
+        // If we align the pointer down to the nearest block, it should give us the pointer to the head of the block.
+        let entry_list = (pointer as usize & !(BLOCK_SIZE - 1)) as *mut SlabEntry<SIZE>;
+        let this_index = (pointer as usize - entry_list as usize) / SIZE;
+        let this_pointer = pointer as *mut SlabEntry<SIZE>;
+        unsafe {
+            (*this_pointer).unused = SlabUnusedEntry {
+                next_index: (*entry_list).head.first_unused_entry,
+            };
+            let old_first_unused_index = (*entry_list).head.first_unused_entry;
+            (*entry_list).head.first_unused_entry = this_index as u16;
+            (*entry_list).head.allocated_count -= 1;
+            // There are two transitions that can occur at this point: full -> partial and partial -> empty.
+            if (*entry_list).head.allocated_count == 0 {
+                Self::free_entry_list(entry_list);
+            } else if old_first_unused_index == u16::MAX {
+                self.remove_entry_list(entry_list);
+            }
+        }
     }
 }
 
@@ -200,7 +225,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             match size {
                 8 => SLAB_ALLOCATOR.allocate::<8>(),
                 16 => SLAB_ALLOCATOR.allocate::<16>(),
-                                32 => SLAB_ALLOCATOR.allocate::<32>(),
+                32 => SLAB_ALLOCATOR.allocate::<32>(),
                 64 => SLAB_ALLOCATOR.allocate::<64>(),
                 128 => SLAB_ALLOCATOR.allocate::<128>(),
                 256 => SLAB_ALLOCATOR.allocate::<256>(),
@@ -227,7 +252,23 @@ unsafe impl GlobalAlloc for HeapAllocator {
             }
             HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(size, address);
         } else {
-            todo!();
+            // Again, we have to match on the size.
+            match size {
+                                                8 => SLAB_ALLOCATOR.free::<8>(ptr),
+                16 => SLAB_ALLOCATOR.free::<16>(ptr),
+                32 => SLAB_ALLOCATOR.free::<32>(ptr),
+                64 => SLAB_ALLOCATOR.free::<64>(ptr),
+                128 => SLAB_ALLOCATOR.free::<128>(ptr),
+                256 => SLAB_ALLOCATOR.free::<256>(ptr),
+                512 => SLAB_ALLOCATOR.free::<512>(ptr),
+                1024 => SLAB_ALLOCATOR.free::<1024>(ptr),
+                2048 => SLAB_ALLOCATOR.free::<2048>(ptr),
+                4096 => SLAB_ALLOCATOR.free::<4096>(ptr),
+                8192 => SLAB_ALLOCATOR.free::<8192>(ptr),
+                16384 => SLAB_ALLOCATOR.free::<16384>(ptr),
+                32768 => SLAB_ALLOCATOR.free::<32768>(ptr),
+                _ => panic!("Invalid slab allocator size: {}", size),
+            }
         }
     }
 }
