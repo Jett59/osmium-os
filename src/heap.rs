@@ -59,7 +59,78 @@ union SlabEntry<const SIZE: usize> {
 
 const MIN_SLAB_ENTRY_SIZE: usize = size_of::<SlabEntry<1>>().next_power_of_two();
 
-struct HeapAllocator;
+struct SlabAllocator {
+    partial_lists: [Option<*mut SlabEntry<MIN_SLAB_ENTRY_SIZE>>; LOG2_HEAP_SIZE as usize],
+    // The empty ones are removed immediately and so are the full ones, so we just need to keep track of the partials.
+}
+
+// TODO: Add locking to the allocator so that this is actually safe.
+unsafe impl Sync for SlabAllocator {}
+
+struct HeapAllocator {
+    slab_allocator: SlabAllocator,
+}
+
+#[cfg(not(test))]
+#[global_allocator]
+static mut GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {
+    slab_allocator: SlabAllocator::new(),
+};
+
+impl SlabAllocator {
+    const fn new() -> Self {
+        Self {
+            partial_lists: [None; LOG2_HEAP_SIZE as usize],
+        }
+    }
+
+    fn allocate_entry_block<const SIZE: usize>() -> *mut SlabEntry<SIZE> {
+        unsafe {
+            // Rust doesn't let us use any kind of allocator api or anything, so this is the best I can think of.
+            // It is a bit of repetition, but it's not too bad.
+            let virtual_address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(BLOCK_SIZE);
+            if let Some(virtual_address) = virtual_address {
+                let physical_address = crate::pmm::allocate_block_address();
+                if let Some(physical_address) = physical_address {
+                    map_block(virtual_address, physical_address);
+                    return virtual_address as *mut SlabEntry<SIZE>;
+                }
+            }
+            panic!("Out of memory allocating slab entry block");
+        }
+    }
+
+    /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
+    fn initialize_entry_list<const SIZE: usize>(entry_list: *mut SlabEntry<SIZE>) {
+        let entry_count = BLOCK_SIZE / SIZE;
+        let entries = unsafe { core::slice::from_raw_parts_mut(entry_list, entry_count) };
+        entries[0].head = SlabHeadEntry {
+            next_of_this_size: null_mut(),
+            previous_of_this_size: null_mut(),
+            first_unused_entry: 1,
+        };
+        for i in 1..entry_count {
+            entries[i].unused = SlabUnusedEntry {
+                next_index: (i + 1) as u16,
+                previous_index: (i - 1) as u16,
+            };
+        }
+    }
+
+    fn get_partial_list<const SIZE: usize>(&mut self) -> *mut SlabEntry<SIZE> {
+        let index = SIZE.trailing_zeros();
+        if let Some(partial_list) = self.partial_lists[index as usize] {
+            // TODO: I don't think the intermediary cast should be necessary (maybe a compiler bug?)
+            partial_list as *mut u8 as *mut SlabEntry<SIZE>
+        } else {
+            let result = Self::allocate_entry_block::<SIZE>();
+            Self::initialize_entry_list(result);
+            self.partial_lists[index as usize] =
+                Some(result as *mut u8 as *mut SlabEntry<MIN_SLAB_ENTRY_SIZE>);
+            result
+        }
+    }
+}
 
 unsafe impl GlobalAlloc for HeapAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
@@ -103,10 +174,6 @@ unsafe impl GlobalAlloc for HeapAllocator {
         }
     }
 }
-
-#[cfg(not(test))]
-#[global_allocator]
-static GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {};
 
 // It's rather difficult to use the unit testing here since this bit depends rather a lot on paging which we can't manage very well in a hosted environment.
 
