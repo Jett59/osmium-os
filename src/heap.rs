@@ -101,7 +101,7 @@ impl SlabAllocator {
             let physical_address = get_physical_address(virtual_address);
             unmap_block(virtual_address);
             mark_as_free(physical_address);
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(virtual_address, BLOCK_SIZE);
+            HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(BLOCK_SIZE, virtual_address);
         }
     }
 
@@ -254,7 +254,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
         } else {
             // Again, we have to match on the size.
             match size {
-                                                8 => SLAB_ALLOCATOR.free::<8>(ptr),
+                8 => SLAB_ALLOCATOR.free::<8>(ptr),
                 16 => SLAB_ALLOCATOR.free::<16>(ptr),
                 32 => SLAB_ALLOCATOR.free::<32>(ptr),
                 64 => SLAB_ALLOCATOR.free::<64>(ptr),
@@ -299,8 +299,6 @@ pub fn sanity_check() {
     }
     // Allocate 1mb (for the large allocations case).
     check_it::<0x100000>(allocate_it::<0x100000>().as_mut_ptr());
-    // TODO: Uncomment when this feature is implemented.
-    // // Allocate 1kb (for the small allocations case).
-    // let value = allocate_it::<0x400>();
-    // check_it(&value);
+    // Allocate 1kb (for the small allocations case).
+    check_it::<0x400>(allocate_it::<0x400>().as_mut_ptr());
 }
