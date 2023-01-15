@@ -38,9 +38,7 @@ lazy_static! {
 
 #[derive(Clone, Copy)]
 struct SlabUnusedEntry {
-    // Indices are u16::MAX for non-existant.
-    next_index: u16,
-    previous_index: u16,
+    next_index: u16, // u16::MAX for non-existant.
 }
 
 #[derive(Clone, Copy)]
@@ -67,15 +65,11 @@ struct SlabAllocator {
 // TODO: Add locking to the allocator so that this is actually safe.
 unsafe impl Sync for SlabAllocator {}
 
-struct HeapAllocator {
-    slab_allocator: SlabAllocator,
-}
+struct HeapAllocator;
 
 #[cfg(not(test))]
 #[global_allocator]
-static mut GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {
-    slab_allocator: SlabAllocator::new(),
-};
+static mut GLOBAL_ALLOCATOR: HeapAllocator = HeapAllocator {};
 
 impl SlabAllocator {
     const fn new() -> Self {
@@ -84,7 +78,7 @@ impl SlabAllocator {
         }
     }
 
-    fn allocate_entry_block<const SIZE: usize>() -> *mut SlabEntry<SIZE> {
+    fn allocate_entry_list<const SIZE: usize>() -> *mut SlabEntry<SIZE> {
         unsafe {
             // Rust doesn't let us use any kind of allocator api or anything, so this is the best I can think of.
             // It is a bit of repetition, but it's not too bad.
@@ -100,6 +94,16 @@ impl SlabAllocator {
         }
     }
 
+    fn free_entry_list<const SIZE: usize>(entry_list: *mut SlabEntry<SIZE>) {
+        unsafe {
+            let virtual_address = entry_list as usize;
+            let physical_address = get_physical_address(virtual_address);
+            unmap_block(virtual_address);
+            mark_as_free(physical_address);
+            HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(virtual_address, BLOCK_SIZE);
+        }
+    }
+
     /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
     fn initialize_entry_list<const SIZE: usize>(entry_list: *mut SlabEntry<SIZE>) {
         let entry_count = BLOCK_SIZE / SIZE;
@@ -112,7 +116,6 @@ impl SlabAllocator {
         for i in 1..entry_count {
             entries[i].unused = SlabUnusedEntry {
                 next_index: (i + 1) as u16,
-                previous_index: (i - 1) as u16,
             };
         }
     }
@@ -123,14 +126,52 @@ impl SlabAllocator {
             // TODO: I don't think the intermediary cast should be necessary (maybe a compiler bug?)
             partial_list as *mut u8 as *mut SlabEntry<SIZE>
         } else {
-            let result = Self::allocate_entry_block::<SIZE>();
+            let result = Self::allocate_entry_list::<SIZE>();
             Self::initialize_entry_list(result);
             self.partial_lists[index as usize] =
                 Some(result as *mut u8 as *mut SlabEntry<MIN_SLAB_ENTRY_SIZE>);
             result
         }
     }
+
+    fn remove_entry_list<const SIZE: usize>(&mut self, entry_list: *mut SlabEntry<SIZE>) {
+        unsafe {
+            let head = &mut (*entry_list).head;
+            if head.next_of_this_size != null_mut() {
+                (*head.next_of_this_size).head.previous_of_this_size = head.previous_of_this_size;
+            }
+            if head.previous_of_this_size != null_mut() {
+                (*head.previous_of_this_size).head.next_of_this_size = head.next_of_this_size;
+            } else {
+                let index = SIZE.trailing_zeros();
+                self.partial_lists[index as usize] = None;
+            }
+        }
+    }
+
+    fn allocate_from_list<const SIZE: usize>(
+        &mut self,
+        entry_list: *mut SlabEntry<SIZE>,
+    ) -> *mut u8 {
+        unsafe {
+            let first_unused_entry_index = (*entry_list).head.first_unused_entry;
+            assert!(first_unused_entry_index != u16::MAX); // In this case it shouldn't be in the partial list.
+            let first_unused_entry = &mut *entry_list.add(first_unused_entry_index as usize);
+            if first_unused_entry.unused.next_index == u16::MAX {
+                self.remove_entry_list(entry_list);
+            }
+            (*entry_list).head.first_unused_entry = first_unused_entry.unused.next_index;
+            first_unused_entry as *mut SlabEntry<SIZE> as *mut u8
+        }
+    }
+
+    pub fn allocate<const SIZE: usize>(&mut self) -> *mut u8 {
+        let entry_list = self.get_partial_list::<SIZE>();
+        self.allocate_from_list(entry_list)
+    }
 }
+
+static mut SLAB_ALLOCATOR: SlabAllocator = SlabAllocator::new();
 
 unsafe impl GlobalAlloc for HeapAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
@@ -155,7 +196,23 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 null_mut()
             }
         } else {
-            todo!();
+            // This is a little annoying, but I don't think there is a better approach and it isn't really that bad.
+            match size {
+                8 => SLAB_ALLOCATOR.allocate::<8>(),
+                16 => SLAB_ALLOCATOR.allocate::<16>(),
+                                32 => SLAB_ALLOCATOR.allocate::<32>(),
+                64 => SLAB_ALLOCATOR.allocate::<64>(),
+                128 => SLAB_ALLOCATOR.allocate::<128>(),
+                256 => SLAB_ALLOCATOR.allocate::<256>(),
+                512 => SLAB_ALLOCATOR.allocate::<512>(),
+                1024 => SLAB_ALLOCATOR.allocate::<1024>(),
+                2048 => SLAB_ALLOCATOR.allocate::<2048>(),
+                4096 => SLAB_ALLOCATOR.allocate::<4096>(),
+                8192 => SLAB_ALLOCATOR.allocate::<8192>(),
+                16384 => SLAB_ALLOCATOR.allocate::<16384>(),
+                32768 => SLAB_ALLOCATOR.allocate::<32768>(),
+                _ => panic!("Invalid slab allocator size: {}", size),
+            }
         }
     }
 
