@@ -146,7 +146,13 @@ impl SlabAllocator {
                 (*head.previous_of_this_size).head.next_of_this_size = head.next_of_this_size;
             } else {
                 let index = SIZE.trailing_zeros();
-                self.partial_lists[index as usize] = None;
+                if head.next_of_this_size != null_mut() {
+                    self.partial_lists[index as usize] = Some(
+                        head.next_of_this_size as *mut u8 as *mut SlabEntry<MIN_SLAB_ENTRY_SIZE>,
+                    );
+                } else {
+                    self.partial_lists[index as usize] = None;
+                }
             }
         }
     }
@@ -203,7 +209,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
         // If the allocation is for less than the size of a block, we use a different algorithm.
         // Otherwise we simply allocate the required amount of virtual memory and map it to freshly allocated physical memory.
         let size = layout.size().next_power_of_two();
-        // Buddy allocators align memory to its size, so we shouldn't have to worry about alignment here.
+        // All of our algorithms align objects to their size, so this should be no problem.
         assert!(layout.align() <= size);
         if size >= BLOCK_SIZE {
             let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size);
@@ -221,6 +227,8 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 null_mut()
             }
         } else {
+            // We must make sure the size is at least the minimum supported size, otherwise bad things will happen.
+            let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // This is a little annoying, but I don't think there is a better approach and it isn't really that bad.
             match size {
                 8 => SLAB_ALLOCATOR.allocate::<8>(),
@@ -252,6 +260,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             }
             HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(size, address);
         } else {
+            let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // Again, we have to match on the size.
             match size {
                 8 => SLAB_ALLOCATOR.free::<8>(ptr),
