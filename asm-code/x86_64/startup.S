@@ -53,7 +53,7 @@ mov %eax, pml3 + (4096 - 16)
 /*also put a reference to pml4 in itself for recursive mapping*/
 mov $pml4, %eax
 or $3, %eax
-mov %eax, pml4 + 2048 /*257th entry*/
+mov %eax, pml4 + 2048 /*256th entry*/
 
 mov $pml4, %eax
 mov %eax, %cr3
@@ -79,6 +79,11 @@ jmp $8, $_start64
 _start64:
 lea high_gdt_pointer(%rip), %rax
 lgdt (%rax)
+
+/* Enable write-protect. This means that read-only pages are not writable in kernel mode and is very important, both for security and COW. */
+mov %cr0, %rax
+or $(1 << 16), %rax
+mov %rax, %cr0
 
 add $KERNEL_VIRTUAL_OFFSET, %rbx /*remember that we have a physical address*/
 mov %rbx, mbi_pointer
