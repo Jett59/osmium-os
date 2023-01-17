@@ -1,4 +1,4 @@
-use core::{alloc::GlobalAlloc, intrinsics::size_of, ptr::null_mut};
+use core::{alloc::GlobalAlloc, intrinsics::size_of, ops::Deref, ptr::null_mut};
 
 use alloc::boxed::Box;
 
@@ -279,6 +279,49 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 _ => panic!("Invalid slab allocator size: {}", size),
             }
         }
+    }
+}
+
+pub struct PhysicalAddressHandle<'lifetime> {
+    data: &'lifetime [u8],
+    pointer: *mut u8,
+    size: usize,
+}
+
+impl Deref for PhysicalAddressHandle<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.data
+    }
+}
+
+impl Drop for PhysicalAddressHandle<'_> {
+    fn drop(&mut self) {
+        unmap_physical_memory(self.pointer, self.size);
+    }
+}
+
+fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
+    let address = unsafe { HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size).unwrap() };
+    for (virtual_block_address, physical_block_address) in (address..(address + size))
+        .step_by(BLOCK_SIZE)
+        .zip((physical_address..(physical_address + size)).step_by(BLOCK_SIZE))
+    {
+        map_block(virtual_block_address, physical_block_address);
+    }
+    let data = unsafe { core::slice::from_raw_parts_mut(address as *mut u8, size) };
+    PhysicalAddressHandle {
+        data,
+        pointer: address as *mut u8,
+        size,
+    }
+}
+
+fn unmap_physical_memory(pointer: *mut u8, size: usize) {
+    let address = pointer as usize;
+    for block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
+        unmap_block(block_address);
     }
 }
 
