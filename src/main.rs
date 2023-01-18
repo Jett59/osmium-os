@@ -23,6 +23,7 @@
 
 mod assert;
 mod buddy;
+mod console;
 mod framebuffer;
 mod heap;
 mod lazy_init;
@@ -52,8 +53,8 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     pmm::sanity_check();
     heap::sanity_check();
-    for (index, character) in "Hello, World!".chars().enumerate() {
-        framebuffer::draw_character(character, index * 10, 0);
+    for i in 0.. {
+        console::write_string((" ".repeat(i % 20) + "*\n").as_str());
     }
     loop {}
 }

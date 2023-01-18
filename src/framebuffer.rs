@@ -34,6 +34,10 @@ pub fn init(frame_buffer: FrameBuffer) {
     }
 }
 
+pub fn get_screen_dimensions() -> (usize, usize) {
+    unsafe { (FRAME_BUFFER.width, FRAME_BUFFER.height) }
+}
+
 static FONT: &[u8] = include_bytes!("font.psf");
 
 #[repr(C)]
@@ -83,4 +87,9 @@ pub fn draw_character(character: char, x: usize, y: usize) {
             }
         }
     }
+}
+
+pub fn get_character_dimensions() -> (usize, usize) {
+    let font_header = get_font_header();
+    (font_header.width as usize, font_header.height as usize)
 }

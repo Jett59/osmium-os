@@ -194,6 +194,7 @@ impl SlabAllocator {
             (*entry_list).head.allocated_count -= 1;
             // There are two transitions that can occur at this point: full -> partial and partial -> empty.
             if (*entry_list).head.allocated_count == 0 {
+                self.remove_entry_list(entry_list);
                 Self::free_entry_list(entry_list);
             } else if old_first_unused_index == u16::MAX {
                 self.remove_entry_list(entry_list);
