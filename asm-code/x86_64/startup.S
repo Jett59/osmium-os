@@ -11,6 +11,15 @@ multiboot_header:
 .long 0x100000000 - (MULTIBOOT2_MAGIC + MULTIBOOT2_ARCHITECTURE + (multiboot_header_end - multiboot_header)) /*Checksum*/
 /*Tags*/
 
+/* Framebuffer tag */
+.align 8
+.short 5 /*Type*/
+.short 0 /*Flags*/
+.long 20 /*Size*/
+.long 0 /*Width, 0 = no preference*/
+.long 0 /*Height, 0 = no preference*/
+.long 32 /*Bits per pixel*/
+
 /*End tag*/
 .align 8
 .short 0 /*Type*/
