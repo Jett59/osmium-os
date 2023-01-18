@@ -13,7 +13,7 @@ pub struct FrameBuffer {
 }
 
 static mut FRAME_BUFFER: FrameBuffer = FrameBuffer {
-    // By setting width and height to 0 we ensure that no-one will ever try to write to the framebuffer.
+    // By setting width and height to 0 we ensure that no-one will try to write to the framebuffer until it is initialized properly.
     width: 0,
     height: 0,
     pitch: 0,
@@ -61,6 +61,13 @@ fn get_font_header() -> &'static PsfHeader {
 /// This function doesn't support unicode, which is a deliberate design decision as using it would needlessly complicate this function, which is only designed for kernel logging anyway.
 pub fn draw_character(character: char, x: usize, y: usize) {
     let font_header = get_font_header();
+    unsafe {
+        if FRAME_BUFFER.width < x + font_header.width as usize
+            || FRAME_BUFFER.height < y + font_header.height as usize
+        {
+            return;
+        }
+    }
     let top_left_pixel =
         unsafe { y * FRAME_BUFFER.pitch + x * FRAME_BUFFER.bytes_per_pixel as usize };
     let bytes_per_row = (font_header.width + 7) / 8;
