@@ -1,7 +1,5 @@
 use crate::x86_64::vga;
 
-//static FONT: &'static [u8] = include_bytes!("../../font.psf");
-
 pub fn clear() {
     vga::clear();
 }

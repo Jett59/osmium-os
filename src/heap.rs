@@ -288,6 +288,18 @@ pub struct PhysicalAddressHandle<'lifetime> {
     size: usize,
 }
 
+impl<'lifetime> PhysicalAddressHandle<'lifetime> {
+    pub fn get_slice(handle: &Self) -> &[u8] {
+        handle.data
+    }
+
+    pub fn leak(handle: Self) -> &'lifetime[u8] {
+        let data = handle.data;
+        core::mem::forget(handle);
+        data
+    }
+}
+
 impl Deref for PhysicalAddressHandle<'_> {
     type Target = [u8];
 
@@ -302,7 +314,7 @@ impl Drop for PhysicalAddressHandle<'_> {
     }
 }
 
-fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
+pub fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
     let address = unsafe { HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size).unwrap() };
     for (virtual_block_address, physical_block_address) in (address..(address + size))
         .step_by(BLOCK_SIZE)

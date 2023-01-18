@@ -23,6 +23,7 @@
 
 mod assert;
 mod buddy;
+mod framebuffer;
 mod heap;
 mod lazy_init;
 mod memory;
