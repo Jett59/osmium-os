@@ -33,6 +33,8 @@ mod pmm;
 
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
+use console::get_console_dimensions;
+use framebuffer::get_character_dimensions;
 #[cfg(target_arch = "x86_64")]
 pub use x86_64::arch_api;
 
@@ -54,7 +56,9 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     pmm::sanity_check();
     heap::sanity_check();
-    console::write_string("Initialized the screen (obviously)\n");
+    for i in 0.. {
+        console::write_string((" ".repeat(i % (get_console_dimensions().0 - 1)) + "*\n").as_str())
+    }
     loop {}
 }
 
