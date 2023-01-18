@@ -61,6 +61,11 @@ fn get_font_header() -> &'static PsfHeader {
 /// This function doesn't support unicode, which is a deliberate design decision as using it would needlessly complicate this function, which is only designed for kernel logging anyway.
 pub fn draw_character(character: char, x: usize, y: usize) {
     let font_header = get_font_header();
+    let character = if (character as u32) < font_header.glyph_count {
+        character
+    } else {
+        '\0'
+    };
     unsafe {
         if FRAME_BUFFER.width < x + font_header.width as usize
             || FRAME_BUFFER.height < y + font_header.height as usize
