@@ -93,7 +93,8 @@ struct MbiFrameBufferTag {
 impl Validateable for MbiFrameBufferTag {
     fn validate(&self) -> bool {
         self.base_tag.tag_type == MBI_TAG_FRAME_BUFFER
-            && self.base_tag.size >= size_of::<MbiFrameBufferTag>() as u32
+        // If we are an rgb framebuffer tag, we should have exactly the size of this structure. Otherwise we don't know.
+            && (self.framebuffer_type != 1 || self.base_tag.size == size_of::<MbiFrameBufferTag>() as u32)
             && self.bits_per_pixel % 8 == 0
             && self.pitch >= self.width * self.bits_per_pixel as u32 / 8
     }
