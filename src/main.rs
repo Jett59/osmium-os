@@ -53,9 +53,7 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     pmm::sanity_check();
     heap::sanity_check();
-    for i in 0.. {
-        console::write_string((" ".repeat(i % 20) + "*\n").as_str());
-    }
+    console::write_string("Initialized the screen (obviously)\n");
     loop {}
 }
 
