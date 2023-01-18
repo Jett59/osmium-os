@@ -127,43 +127,43 @@ pub fn parse_multiboot_structures() {
                 unsafe { reinterpret_memory(tag_memory).unwrap() };
             frame_buffer = Some(frame_buffer_tag);
         }
-        if let Some(frame_buffer) = frame_buffer {
-            parse_frame_buffer(frame_buffer);
-        }
     }
-
-    #[repr(C, packed)]
-    struct MemoryMapEntry {
-        base_address: u64,
-        length: u64,
-        entry_type: u32,
-        _reserved: u32,
+    if let Some(frame_buffer) = frame_buffer {
+        parse_frame_buffer(frame_buffer);
     }
+}
 
-    impl Validateable for MemoryMapEntry {
-        fn validate(&self) -> bool {
-            // The length must not be zero and the end address must be less than the limit on the physical address space (56 bits)
-            self.length > 0 && self.base_address + self.length < (1 << 56)
-        }
+#[repr(C, packed)]
+struct MemoryMapEntry {
+    base_address: u64,
+    length: u64,
+    entry_type: u32,
+    _reserved: u32,
+}
+
+impl Validateable for MemoryMapEntry {
+    fn validate(&self) -> bool {
+        // The length must not be zero and the end address must be less than the limit on the physical address space (56 bits)
+        self.length > 0 && self.base_address + self.length < (1 << 56)
     }
+}
 
-    fn parse_memory_map(memory_map: &MbiMemoryMapTag, tag_memory: &[u8]) {
-        let entry_area_size = memory_map.base_tag.size - size_of::<MbiMemoryMapTag>() as u32;
-        let entry_area = &tag_memory[size_of::<MbiMemoryMapTag>()..];
-        let entry_size = memory_map.entry_size;
-        let entry_count = entry_area_size / entry_size;
-        for i in 0..entry_count {
-            let entry_memory = &entry_area[entry_size as usize * i as usize..];
-            let entry: &MemoryMapEntry = unsafe { reinterpret_memory(entry_memory).unwrap() };
-            // Type 1 means available, so therefore we should mark them as such in the PMM (by default everything is used).
-            if entry.entry_type == 1 {
-                let starting_address = align_address_up(entry.base_address as usize, BLOCK_SIZE);
-                let ending_address = align_address_down(
-                    entry.base_address as usize + entry.length as usize,
-                    BLOCK_SIZE,
-                );
-                mark_range_as_free(starting_address, ending_address);
-            }
+fn parse_memory_map(memory_map: &MbiMemoryMapTag, tag_memory: &[u8]) {
+    let entry_area_size = memory_map.base_tag.size - size_of::<MbiMemoryMapTag>() as u32;
+    let entry_area = &tag_memory[size_of::<MbiMemoryMapTag>()..];
+    let entry_size = memory_map.entry_size;
+    let entry_count = entry_area_size / entry_size;
+    for i in 0..entry_count {
+        let entry_memory = &entry_area[entry_size as usize * i as usize..];
+        let entry: &MemoryMapEntry = unsafe { reinterpret_memory(entry_memory).unwrap() };
+        // Type 1 means available, so therefore we should mark them as such in the PMM (by default everything is used).
+        if entry.entry_type == 1 {
+            let starting_address = align_address_up(entry.base_address as usize, BLOCK_SIZE);
+            let ending_address = align_address_down(
+                entry.base_address as usize + entry.length as usize,
+                BLOCK_SIZE,
+            );
+            mark_range_as_free(starting_address, ending_address);
         }
     }
 }
@@ -172,10 +172,10 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
     // The frame buffer may still be marked as valid even if it dosn'doesn't use RGB mode.
     if frame_buffer.framebuffer_type == 1 {
         framebuffer::init(FrameBuffer {
-            width: frame_buffer.width,
-            height: frame_buffer.height,
-            pitch: frame_buffer.pitch,
-            bytes_per_pixel: frame_buffer.bits_per_pixel as u32 / 8,
+            width: frame_buffer.width as usize,
+            height: frame_buffer.height as usize,
+            pitch: frame_buffer.pitch as usize,
+            bytes_per_pixel: frame_buffer.bits_per_pixel / 8,
             red_byte: frame_buffer.red_position / 8,
             green_byte: frame_buffer.green_position / 8,
             blue_byte: frame_buffer.blue_position / 8,
@@ -186,6 +186,6 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
                 );
                 PhysicalAddressHandle::leak(physical_address_handle)
             },
-        })
+        });
     }
 }

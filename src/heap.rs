@@ -283,7 +283,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
 }
 
 pub struct PhysicalAddressHandle<'lifetime> {
-    data: &'lifetime [u8],
+    data: &'lifetime mut [u8],
     pointer: *mut u8,
     size: usize,
 }
@@ -293,10 +293,11 @@ impl<'lifetime> PhysicalAddressHandle<'lifetime> {
         handle.data
     }
 
-    pub fn leak(handle: Self) -> &'lifetime[u8] {
-        let data = handle.data;
+    pub fn leak(handle: Self) -> &'lifetime mut [u8] {
+        let data_pointer = handle.data.as_mut_ptr();
+        let data_size = handle.data.len();
         core::mem::forget(handle);
-        data
+        unsafe { core::slice::from_raw_parts_mut(data_pointer, data_size) }
     }
 }
 

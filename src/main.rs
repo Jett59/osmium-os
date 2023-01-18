@@ -57,6 +57,9 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     pmm::sanity_check();
     heap::sanity_check();
+    for (index, character) in "Hello, World!".chars().enumerate() {
+        framebuffer::draw_character(character, index * 10, 0);
+    }
     loop {}
 }
 
