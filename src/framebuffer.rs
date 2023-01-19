@@ -139,6 +139,10 @@ pub fn draw_character(character: char, x: usize, y: usize) {
     } else {
         '\0'
     };
+    let (screen_width, screen_height) = get_screen_dimensions();
+    if x + character_width > screen_width || y + character_height > screen_height {
+        return;
+    }
     let font_header = get_font_header();
     let character_cache_offset = get_character_cache_offset(character as usize);
     let character_cache = unsafe { &CHARACTER_CACHE[character_cache_offset..] };
