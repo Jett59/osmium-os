@@ -4,8 +4,8 @@ OBJECTS=$(SOURCES:.S=.o)
 AS=clang -target $(ARCH)-unknown-elf
 ASFLAGS=-g
 
-libasm-$(ARCH).a: ../.config $(OBJECTS) Makefile
+libasm-$(ARCH).a: $(OBJECTS) Makefile
 	ar r $@ $(OBJECTS)
 
-%.o: %.S ../.config Makefile
+%.o: %.S Makefile
 	$(AS) $(ASFLAGS) -c -o $@ $<
