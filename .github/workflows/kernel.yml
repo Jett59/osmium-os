@@ -9,13 +9,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  runs-on: ubuntu-latest
   build:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./kernel
-
-  steps:
-    - uses: actions/checkout@v3
-    - name: Run tests
-      run: cargo test --verbose --target x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: cargo test --verbose --target x86_64-unknown-linux-gnu
