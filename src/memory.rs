@@ -174,7 +174,7 @@ mod test {
 
     #[test]
     fn constant_array_test() {
-        let array1: [u8; 42] = constant_initialized_array(&|| 1 * 10 + 2);
+        let array1: [u8; 42] = constant_initialized_array(&|| 12);
         assert_eq!(array1, [12; 42]);
         // Lets try it on a non-copy type (an atomic).
         let array2: [AtomicU8; 42] = constant_initialized_array(&|| AtomicU8::from(108));

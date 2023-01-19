@@ -115,8 +115,8 @@ impl SlabAllocator {
             first_unused_entry: 1,
             allocated_count: 0,
         };
-        for i in 1..entry_count {
-            entries[i].unused = SlabUnusedEntry {
+        for (i, entry) in entries.iter_mut().skip(1).enumerate() {
+            entry.unused = SlabUnusedEntry {
                 next_index: (i + 1) as u16,
             };
         }
@@ -139,14 +139,14 @@ impl SlabAllocator {
     fn remove_entry_list<const SIZE: usize>(&mut self, entry_list: *mut SlabEntry<SIZE>) {
         unsafe {
             let head = &mut (*entry_list).head;
-            if head.next_of_this_size != null_mut() {
+            if !head.next_of_this_size.is_null() {
                 (*head.next_of_this_size).head.previous_of_this_size = head.previous_of_this_size;
             }
-            if head.previous_of_this_size != null_mut() {
+            if !head.previous_of_this_size.is_null() {
                 (*head.previous_of_this_size).head.next_of_this_size = head.next_of_this_size;
             } else {
                 let index = SIZE.trailing_zeros();
-                if head.next_of_this_size != null_mut() {
+                if !head.next_of_this_size.is_null() {
                     self.partial_lists[index as usize] = Some(
                         head.next_of_this_size as *mut u8 as *mut SlabEntry<MIN_SLAB_ENTRY_SIZE>,
                     );

@@ -46,10 +46,15 @@ fn possibly_scroll() {
                 if source_line_length < console_dimensions.0 {
                     destination[source_line_length] = '\n';
                 }
-                for x in 0..usize::max(source_line_length, old_destination_line_length) {
+                for (x, source_char) in source
+                    .iter()
+                    .enumerate()
+                    // Only really works because source is longer than it needs to be.
+                    .take(usize::max(source_line_length, old_destination_line_length))
+                {
                     font_renderer::draw_character(
                         if x < source_line_length {
-                            source[x]
+                            *source_char
                         } else {
                             ' '
                         },
