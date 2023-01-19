@@ -2,16 +2,20 @@ name: Rust
 
 on:
   push:
+    paths:
+      - 'kernel/**'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  runs-on: ubuntu-latest
   build:
+    defaults:
+      run:
+        working-directory: ./kernel
 
-    runs-on: ubuntu-latest
-
-    steps:
+  steps:
     - uses: actions/checkout@v3
     - name: Run tests
       run: cargo test --verbose --target x86_64-unknown-linux-gnu
