@@ -24,6 +24,8 @@
 mod assert;
 mod buddy;
 mod console;
+mod font;
+mod font_renderer;
 mod framebuffer;
 mod heap;
 mod lazy_init;
@@ -55,6 +57,10 @@ extern "C" fn kmain() -> ! {
     pmm::sanity_check();
     heap::sanity_check();
     console::write_string("Initialized the display (obviously)");
+    for i in 0.. {
+        console::write_string("-".repeat(i % 50).as_str());
+        console::write_character('\n');
+    }
     loop {}
 }
 

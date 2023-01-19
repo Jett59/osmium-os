@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 
 use crate::{
-    framebuffer::{self, get_character_dimensions, get_screen_dimensions},
+    font::get_character_dimensions, font_renderer, framebuffer::get_screen_dimensions,
     lazy_init::lazy_static,
 };
 
@@ -46,8 +46,8 @@ fn possibly_scroll() {
                 if source_line_length < console_dimensions.0 {
                     destination[source_line_length] = '\n';
                 }
-                for x in 0..usize::max(old_destination_line_length, source_line_length) {
-                    framebuffer::draw_character(
+                for x in 0..usize::max(source_line_length, old_destination_line_length) {
+                    font_renderer::draw_character(
                         if x < source_line_length {
                             source[x]
                         } else {
@@ -61,7 +61,7 @@ fn possibly_scroll() {
             // Now clear out the last row.
             for x in 0..console_dimensions.0 {
                 CONSOLE_BACKBUFFER[(console_dimensions.1 - 1) * console_dimensions.0 + x] = ' ';
-                framebuffer::draw_character(
+                font_renderer::draw_character(
                     ' ',
                     x * get_character_dimensions().0,
                     (console_dimensions.1 - 1) * get_character_dimensions().1,
@@ -86,7 +86,7 @@ pub fn write_character(character: char) {
             possibly_scroll();
         }
     } else {
-        framebuffer::draw_character(
+        font_renderer::draw_character(
             character,
             x * get_character_dimensions().0,
             y * get_character_dimensions().1,
