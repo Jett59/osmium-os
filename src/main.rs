@@ -34,7 +34,6 @@ mod pmm;
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
 use console::get_console_dimensions;
-use framebuffer::get_character_dimensions;
 #[cfg(target_arch = "x86_64")]
 pub use x86_64::arch_api;
 

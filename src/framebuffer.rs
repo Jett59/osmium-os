@@ -1,3 +1,7 @@
+use alloc::boxed::Box;
+
+use crate::lazy_init::lazy_static;
+
 pub struct FrameBuffer {
     pub width: usize,
     pub height: usize,
@@ -56,25 +60,48 @@ fn get_font_header() -> &'static PsfHeader {
     unsafe { &*(FONT.as_ptr() as *const PsfHeader) }
 }
 
-/// Draws the given character on the screen at the given position (in pixels).
+// We cache the rendered versions of the characters here since they will be redrawn rather a lot (especially during scrolling).
+
+fn get_character_cache_offset(glyph_index: usize) -> usize {
+    let font_header = get_font_header();
+    unsafe {
+        glyph_index
+            * font_header.width as usize
+            * font_header.height as usize
+            * FRAME_BUFFER.bytes_per_pixel as usize
+    }
+}
+
+lazy_static! {
+    static ref CHARACTER_CACHE: Box<[u8]> = {
+        let font_header = get_font_header();
+        let mut result = unsafe {
+            Box::new_zeroed_slice(get_character_cache_offset(font_header.glyph_count as usize))
+                .assume_init()
+        };
+        for i in 0..font_header.glyph_count as u32 {
+            unsafe {
+                render_character(
+                    char::from_u32_unchecked(i),
+                    &mut result[get_character_cache_offset(i as usize)
+                        ..get_character_cache_offset(i as usize + 1)],
+                )
+            };
+        }
+        result
+    };
+}
+
+/// Renders the given character in the given buffer.
 ///
-/// This function doesn't support unicode, which is a deliberate design decision as using it would needlessly complicate this function, which is only designed for kernel logging anyway.
-pub fn draw_character(character: char, x: usize, y: usize) {
+/// This function doesn't support the unicode table since it is only meant for kernel logging and besides, the character cache is too small for unicode.
+fn render_character(character: char, buffer: &mut [u8]) {
     let font_header = get_font_header();
     let character = if (character as u32) < font_header.glyph_count {
         character
     } else {
         '\0'
     };
-    unsafe {
-        if FRAME_BUFFER.width < x + font_header.width as usize
-            || FRAME_BUFFER.height < y + font_header.height as usize
-        {
-            return;
-        }
-    }
-    let top_left_pixel =
-        unsafe { y * FRAME_BUFFER.pitch + x * FRAME_BUFFER.bytes_per_pixel as usize };
     let bytes_per_row = (font_header.width + 7) / 8;
     for glyph_y in 0..font_header.height {
         for glyph_x in 0..font_header.width {
@@ -88,14 +115,13 @@ pub fn draw_character(character: char, x: usize, y: usize) {
             // This is a bit limiting, but I think it is ok.
             let color = if bit { 0xFF } else { 0x00 };
             let pixel_index = unsafe {
-                top_left_pixel
-                    + glyph_y as usize * FRAME_BUFFER.pitch
-                    + glyph_x as usize * FRAME_BUFFER.bytes_per_pixel as usize
+                (glyph_y as usize * font_header.width as usize + glyph_x as usize)
+                    * FRAME_BUFFER.bytes_per_pixel as usize
             };
             unsafe {
-                FRAME_BUFFER.pixels[pixel_index + FRAME_BUFFER.red_byte as usize] = color;
-                FRAME_BUFFER.pixels[pixel_index + FRAME_BUFFER.green_byte as usize] = color;
-                FRAME_BUFFER.pixels[pixel_index + FRAME_BUFFER.blue_byte as usize] = color;
+                buffer[pixel_index + FRAME_BUFFER.red_byte as usize] = color;
+                buffer[pixel_index + FRAME_BUFFER.green_byte as usize] = color;
+                buffer[pixel_index + FRAME_BUFFER.blue_byte as usize] = color;
             }
         }
     }
@@ -104,4 +130,29 @@ pub fn draw_character(character: char, x: usize, y: usize) {
 pub fn get_character_dimensions() -> (usize, usize) {
     let font_header = get_font_header();
     (font_header.width as usize, font_header.height as usize)
+}
+
+pub fn draw_character(character: char, x: usize, y: usize) {
+    let (character_width, character_height) = get_character_dimensions();
+    let character = if (character as u32) < get_font_header().glyph_count {
+        character
+    } else {
+        '\0'
+    };
+    let font_header = get_font_header();
+    let character_cache_offset = get_character_cache_offset(character as usize);
+    let character_cache = unsafe { &CHARACTER_CACHE[character_cache_offset..] };
+    for row in 0..character_height {
+        let row_pixel_cache = unsafe {
+            &character_cache[row * character_width * FRAME_BUFFER.bytes_per_pixel as usize
+                ..(row + 1) * character_width * FRAME_BUFFER.bytes_per_pixel as usize]
+        };
+        let row_pixels = unsafe {
+            &mut FRAME_BUFFER.pixels[(y + row) * FRAME_BUFFER.pitch as usize
+                + x * FRAME_BUFFER.bytes_per_pixel as usize
+                ..(y + row) * FRAME_BUFFER.pitch as usize
+                    + (x + font_header.width as usize) * FRAME_BUFFER.bytes_per_pixel as usize]
+        };
+        row_pixels.copy_from_slice(row_pixel_cache);
+    }
 }
