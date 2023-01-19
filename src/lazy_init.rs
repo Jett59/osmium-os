@@ -28,7 +28,7 @@ impl<'initializer, T: Sized + Sync> Deref for LazilyInitialized<'initializer, T>
     fn deref(&self) -> &T {
         // TODO: Make safe (see above)
         unsafe {
-            if self.value.get().as_ref().is_none() {
+            if self.value.get().as_ref().unwrap().is_none() {
                 *self.value.get() = Some((self.initializer)());
             }
             self.value.get().as_ref().unwrap().as_ref().unwrap()

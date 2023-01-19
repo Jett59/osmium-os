@@ -23,6 +23,10 @@
 
 mod assert;
 mod buddy;
+mod console;
+mod font;
+mod font_renderer;
+mod framebuffer;
 mod heap;
 mod lazy_init;
 mod memory;
@@ -34,8 +38,6 @@ mod x86_64;
 #[cfg(target_arch = "x86_64")]
 pub use x86_64::arch_api;
 
-use arch_api::console;
-
 // Needed to silence rust-analyzer which uses test mode, where this is unused because the panic handler is conditionally excluded in test mode
 #[allow(unused_imports)]
 use core::panic::PanicInfo;
@@ -45,17 +47,20 @@ extern crate alloc;
 #[panic_handler]
 #[cfg(not(test))]
 fn kpanic(_info: &PanicInfo) -> ! {
-    console::write_string("Panic!!!\n");
+    console::write_string("Kpanic!");
     loop {}
 }
 
 #[no_mangle]
 extern "C" fn kmain() -> ! {
-    console::clear();
-    console::write_string("Hello, World!\n");
     arch_api::init::arch_init();
     pmm::sanity_check();
     heap::sanity_check();
+    console::write_string("Initialized the display (obviously)");
+    for i in 0.. {
+        console::write_string("-".repeat(i % 50).as_str());
+        console::write_character('\n');
+    }
     loop {}
 }
 

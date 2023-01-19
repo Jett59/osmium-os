@@ -115,8 +115,8 @@ impl SlabAllocator {
             first_unused_entry: 1,
             allocated_count: 0,
         };
-        for i in 1..entry_count {
-            entries[i].unused = SlabUnusedEntry {
+        for (i, entry) in entries.iter_mut().skip(1).enumerate() {
+            entry.unused = SlabUnusedEntry {
                 next_index: (i + 1) as u16,
             };
         }
@@ -139,14 +139,14 @@ impl SlabAllocator {
     fn remove_entry_list<const SIZE: usize>(&mut self, entry_list: *mut SlabEntry<SIZE>) {
         unsafe {
             let head = &mut (*entry_list).head;
-            if head.next_of_this_size != null_mut() {
+            if !head.next_of_this_size.is_null() {
                 (*head.next_of_this_size).head.previous_of_this_size = head.previous_of_this_size;
             }
-            if head.previous_of_this_size != null_mut() {
+            if !head.previous_of_this_size.is_null() {
                 (*head.previous_of_this_size).head.next_of_this_size = head.next_of_this_size;
             } else {
                 let index = SIZE.trailing_zeros();
-                if head.next_of_this_size != null_mut() {
+                if !head.next_of_this_size.is_null() {
                     self.partial_lists[index as usize] = Some(
                         head.next_of_this_size as *mut u8 as *mut SlabEntry<MIN_SLAB_ENTRY_SIZE>,
                     );
@@ -194,6 +194,7 @@ impl SlabAllocator {
             (*entry_list).head.allocated_count -= 1;
             // There are two transitions that can occur at this point: full -> partial and partial -> empty.
             if (*entry_list).head.allocated_count == 0 {
+                self.remove_entry_list(entry_list);
                 Self::free_entry_list(entry_list);
             } else if old_first_unused_index == u16::MAX {
                 self.remove_entry_list(entry_list);
@@ -283,9 +284,22 @@ unsafe impl GlobalAlloc for HeapAllocator {
 }
 
 pub struct PhysicalAddressHandle<'lifetime> {
-    data: &'lifetime [u8],
+    data: &'lifetime mut [u8],
     pointer: *mut u8,
     size: usize,
+}
+
+impl<'lifetime> PhysicalAddressHandle<'lifetime> {
+    pub fn get_slice(handle: &Self) -> &[u8] {
+        handle.data
+    }
+
+    pub fn leak(handle: Self) -> &'lifetime mut [u8] {
+        let data_pointer = handle.data.as_mut_ptr();
+        let data_size = handle.data.len();
+        core::mem::forget(handle);
+        unsafe { core::slice::from_raw_parts_mut(data_pointer, data_size) }
+    }
 }
 
 impl Deref for PhysicalAddressHandle<'_> {
@@ -302,7 +316,7 @@ impl Drop for PhysicalAddressHandle<'_> {
     }
 }
 
-fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
+pub fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
     let address = unsafe { HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size).unwrap() };
     for (virtual_block_address, physical_block_address) in (address..(address + size))
         .step_by(BLOCK_SIZE)
