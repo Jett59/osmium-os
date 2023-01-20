@@ -17,4 +17,3 @@ export PROFILE_OPTION
 cd kernel && ./build.sh && cd ..
 
 ./build-$ARCH.sh
-

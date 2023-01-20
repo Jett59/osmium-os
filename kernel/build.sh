@@ -12,4 +12,4 @@ rm -f build/target
 ln -s `realpath target/$ARCH/$PROFILE` build/target
 
 cp build/target/osmium build/osmium
-strip build/osmium
+llvm-strip build/osmium
