@@ -33,10 +33,10 @@ mod memory;
 mod paging;
 mod pmm;
 
-#[cfg(target_arch = "x86_64")]
-mod x86_64;
-#[cfg(target_arch = "x86_64")]
-pub use x86_64::arch_api;
+#[cfg_attr(target_arch = "x86_64", path = "x86_64/mod.rs")]
+mod arch;
+
+pub use arch::arch_api;
 
 // Needed to silence rust-analyzer which uses test mode, where this is unused because the panic handler is conditionally excluded in test mode
 #[allow(unused_imports)]

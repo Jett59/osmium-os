@@ -1,6 +1,6 @@
-use crate::{memory, pmm, x86_64::multiboot};
+use crate::{memory, pmm};
 
-use super::paging;
+use super::{super::multiboot, paging};
 
 #[cfg(not(test))]
 extern "C" {
