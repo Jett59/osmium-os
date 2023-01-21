@@ -15,5 +15,6 @@ fi
 export PROFILE_OPTION
 
 cd kernel && ./build.sh && cd ..
+cd bootloader && ./build.sh && cd ..
 
 ./build-$ARCH.sh
