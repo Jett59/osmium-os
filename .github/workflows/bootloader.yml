@@ -1,4 +1,4 @@
-name: Rust
+name: bootloader-build
 
 on:
   push:
