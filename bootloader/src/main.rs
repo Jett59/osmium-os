@@ -13,9 +13,9 @@ fn main(handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let boot_services = system_table.boot_services();
     let loaded_image = boot_services.open_protocol_exclusive::<LoadedImage>(handle).unwrap();
-    let (info, info2) = loaded_image.info();
+    let (_, info) = loaded_image.info();
 
-    uefi_services::println!("Loaded Image: ${info2}");
+    uefi_services::println!("Loaded Image: {info}");
 
     loop {}
 }
