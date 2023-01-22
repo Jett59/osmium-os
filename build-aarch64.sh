@@ -14,3 +14,8 @@ mmd -i build/osmium.img ::/EFI
 mmd -i build/osmium.img ::/EFI/BOOT
 mcopy -i build/osmium.img bootloader/build/bootloader.efi ::/EFI/BOOT/BOOTAA64.EFI
 
+echo "[kernel]" > build/boot.toml
+echo "prop1 = \"hello\"" >> build/boot.toml
+mmd -i build/osmium.img ::/boot
+mmd -i build/osmium.img ::/boot/osmium
+mcopy -i build/osmium.img build/boot.toml ::/boot/osmium/boot.toml
