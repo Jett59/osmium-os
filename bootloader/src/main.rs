@@ -3,10 +3,16 @@
 #![feature(abi_efiapi)]
 #![allow(stable_features)]
 
+mod config;
+
 extern crate alloc;
+
 use alloc::{vec, string::String};
 use uefi::{prelude::*, proto::{media::file::{FileMode, FileAttribute, FileInfo, File}}};
 use uefi::{Result};
+
+use crate::config::config_from_str;
+use crate::config::Config;
 
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
@@ -35,8 +41,11 @@ fn read_config(image: Handle, boot_services: &BootServices) -> Result {
 
     let mut buffer = vec![0u8; file_size];
     let _size = file.read(&mut buffer).unwrap();
-    let config = String::from_utf8_lossy(&buffer);
-    uefi_services::println!("{config}");
+    let config_string = String::from_utf8(buffer).unwrap();
+    let config: Config = config_from_str(config_string).unwrap();
+
+    let kernel_version = config.kernel.version;
+    uefi_services::println!("Kernel Version: {kernel_version}");
 
     return Ok(());
 }
