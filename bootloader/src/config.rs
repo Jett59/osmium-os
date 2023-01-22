@@ -1,43 +1,84 @@
-use alloc::string::{String, ToString};
-use uefi::Error;
+use core::fmt::{Display, Formatter};
 
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
+#[derive(Debug, Default)]
 pub struct Config {
-    pub kernel: KernelConfig,
+    pub timeout: u32,
+    pub default_entry: String,
+    pub entries: Vec<ConfigEntry>,
 }
 
-pub struct KernelConfig {
-    pub version: String,
+#[derive(Debug, Default)]
+pub struct ConfigEntry {
+    pub label: String,
+    pub kernel_path: String,
 }
 
-pub fn config_from_str(config_string: String) -> Result<Config, Error> {
-    //TODO: Figure out how to dynamically create the config struct without serde (which can't compile without std lib)
-    //need to work out how to introspect struct properties with macros / traits to do this
-
-    let mut config: Config = Config {
-        kernel: KernelConfig {
-            version: "0.0.0".to_string()
+impl ConfigEntry {
+    pub fn new(label: String) -> Self {
+        ConfigEntry {
+            label,
+            kernel_path: String::new(),
         }
-    };
+    }
+}
 
-    let mut section: &str = "";
-    config_string.lines().for_each(|line| {
+#[derive(Debug)]
+pub enum ParseConfigError {
+    UnknownKey(String),
+}
+
+impl Display for ParseConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ParseConfigError::UnknownKey(key) => write!(f, "Unknown key: {}", key),
+        }
+    }
+}
+
+pub fn parse_config(config_string: &str) -> Result<Config, ParseConfigError> {
+    let mut config: Config = Default::default();
+    let mut current_entry = None;
+
+    for line in config_string
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+    {
         if line.starts_with("[") && line.ends_with("]") {
-            section = line.trim_matches(|c| c == '[' || c == ']');
-        } else if section.len() > 0 {
-            let key = line.split("=").next().unwrap().trim();
-            let value = line.split("=").last().unwrap().trim();
-            match section {
-                "kernel" => {
-                    match key {
-                        "version" => {
-                            config.kernel.version = value.trim_end_matches(|c| c == '"').trim_start_matches(|c| c == '"').to_string();
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
+            if let Some(previous_entry) = current_entry {
+                config.entries.push(previous_entry);
+            }
+            let label = line[1..line.len() - 1].trim().to_string();
+            current_entry = Some(ConfigEntry::new(label));
+        } else if let Some(ref mut entry) = current_entry {
+            let mut parts = line.splitn(2, '=');
+            let key = parts.next().unwrap().trim();
+            let value = parts.next().unwrap().trim();
+
+            match key {
+                "kernel" => entry.kernel_path = value.trim_matches('"').to_string(),
+                _ => return Err(ParseConfigError::UnknownKey(key.to_string())),
+            }
+        } else {
+            let mut parts = line.splitn(2, '=');
+            let key = parts.next().unwrap().trim();
+            let value = parts.next().unwrap().trim();
+
+            match key {
+                "timeout" => config.timeout = value.parse().unwrap(),
+                "default" => config.default_entry = value.to_string(),
+                _ => return Err(ParseConfigError::UnknownKey(key.to_string())),
             }
         }
-    });
+    }
+    if let Some(previous_entry) = current_entry {
+        config.entries.push(previous_entry);
+    }
+
     Ok(config)
 }
