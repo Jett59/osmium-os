@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
+set +x
 
 mkdir -p ./build/uefi_firmware
 cd ./build/uefi_firmware
@@ -8,4 +9,4 @@ curl -L https://github.com/pftf/RPi4/releases/download/v1.34/RPi4_UEFI_Firmware_
 unzip uefi_firmware.zip
 rm -f uefi_firmware.zip
 
-
+mcopy -i ../osmium.img ./* ::
