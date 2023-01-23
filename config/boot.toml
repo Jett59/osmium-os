@@ -1,3 +1,4 @@
+[boot]
 timeout = 5
 default = "osmium"
 
