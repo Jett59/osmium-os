@@ -9,12 +9,13 @@ mod toml;
 extern crate alloc;
 
 use alloc::vec;
+use alloc::vec::Vec;
 use config::Config;
-use uefi::Result;
 use uefi::{
     prelude::*,
     proto::media::file::{File, FileAttribute, FileInfo, FileMode},
 };
+use uefi::{CStr16, Result};
 use uefi_services::println;
 
 use crate::config::parse_config;
@@ -29,9 +30,9 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let boot_services = system_table.boot_services();
     let config = read_config(image, boot_services).unwrap();
-    
+
     println!("Loading kernel from {}", config.default_entry);
-    
+
     //find entry with default_entry label
     let entry = config
         .entries
@@ -47,16 +48,11 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     loop {}
 }
 
-fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
-    uefi_services::println!("Reading config file");
+fn read_file(image: Handle, boot_services: &BootServices, name: &CStr16) -> Result<Vec<u8>> {
     let mut fs = boot_services.get_image_file_system(image)?;
     let mut root = fs.open_volume()?;
     let mut file = root
-        .open(
-            cstr16!("\\boot\\osmium\\boot.toml"),
-            FileMode::Read,
-            FileAttribute::empty(),
-        )?
+        .open(name, FileMode::Read, FileAttribute::empty())?
         .into_regular_file()
         .unwrap();
 
@@ -65,8 +61,17 @@ fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
     let file_size = file_info.file_size() as usize;
 
     let mut buffer = vec![0u8; file_size];
-    let _size = file.read(&mut buffer).unwrap();
-    let config_string = core::str::from_utf8(&buffer).unwrap();
+    file.read(&mut buffer).unwrap();
+
+    Ok(buffer)
+}
+
+fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
+    uefi_services::println!("Reading config file");
+
+    let bytes = read_file(image, boot_services, cstr16!("\\boot\\osmium\\boot.toml"))?;
+
+    let config_string = core::str::from_utf8(&bytes).unwrap();
     let config = parse_config(config_string);
 
     Ok(config)
