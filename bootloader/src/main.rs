@@ -1,9 +1,8 @@
 #![no_main]
 #![no_std]
-#![feature(abi_efiapi)]
-#![allow(stable_features)]
 
 mod config;
+mod elf;
 mod toml;
 
 extern crate alloc;
@@ -26,8 +25,6 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     system_table.stdout().clear().unwrap();
 
-    uefi_services::println!("Hello, Osmium World!");
-
     let boot_services = system_table.boot_services();
     let config = read_config(image, boot_services).unwrap();
 
@@ -43,7 +40,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     boot_services.stall((config.timeout * 1_000_000) as usize);
 
-    println!("TODO: Load Kernel Now!!");
+    load_kernel(image, boot_services, entry.kernel_path.as_str()).unwrap();
 
     loop {}
 }
@@ -67,12 +64,24 @@ fn read_file(image: Handle, boot_services: &BootServices, name: &CStr16) -> Resu
 }
 
 fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
-    uefi_services::println!("Reading config file");
-
     let bytes = read_file(image, boot_services, cstr16!("\\boot\\osmium\\boot.toml"))?;
 
     let config_string = core::str::from_utf8(&bytes).unwrap();
     let config = parse_config(config_string);
 
     Ok(config)
+}
+
+/// If this function succeeds, it will never return.
+fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Result {
+    let path = path.replace('/', "\\");
+    let mut path_buffer = vec![0u16; path.len() + 1]; // Includes null terminator.
+    let kernel_binary = read_file(
+        image,
+        boot_services,
+        &CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
+    )?;
+    let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
+    uefi_services::println!("Kernel elf: {:#?}", elf);
+    Ok(())
 }
