@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![feature(cstr_from_bytes_until_nul)]
 
 mod config;
 mod elf;
@@ -82,6 +83,6 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
         &CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
-    uefi_services::println!("Kernel elf: {:#?}", elf);
+    uefi_services::println!("Kernel elf: {:?}", elf);
     Ok(())
 }

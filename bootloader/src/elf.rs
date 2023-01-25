@@ -1,4 +1,5 @@
 use core::{
+    ffi::CStr,
     fmt::{Display, Formatter},
     mem::size_of,
 };
@@ -59,11 +60,13 @@ pub enum ElfValidationError {
         field: &'static str,
         expected: String,
         actual: String,
+        index: usize,
     },
     InvalidSectionHeaderEntry {
         field: &'static str,
         expected: String,
         actual: String,
+        index: usize,
     },
 }
 
@@ -85,22 +88,24 @@ impl Display for ElfValidationError {
                 field,
                 expected,
                 actual,
+                index,
             } => {
                 write!(
                     f,
-                    "Invalid ELF program header entry: {} should be {}, but is {}",
-                    field, expected, actual
+                    "Invalid ELF program header entry: {} should be {}, but is {} (index {})",
+                    field, expected, actual, index
                 )
             }
             ElfValidationError::InvalidSectionHeaderEntry {
                 field,
                 expected,
                 actual,
+                index,
             } => {
                 write!(
                     f,
-                    "Invalid ELF section header entry: {} should be {}, but is {}",
-                    field, expected, actual
+                    "Invalid ELF section header entry: {} should be {}, but is {} (index {})",
+                    field, expected, actual, index
                 )
             }
         }
@@ -183,12 +188,12 @@ struct ProgramHeaderEntry {
 // A version of the program header which is in a nicer format.
 #[derive(Debug)]
 pub struct LoadableSegment {
-    readable: bool,
-    writable: bool,
-    executable: bool,
-    offset: usize,
-    virtual_address: usize,
-    size_in_file: usize,
+    pub readable: bool,
+    pub writable: bool,
+    pub executable: bool,
+    pub file_offset: usize,
+    pub virtual_address: usize,
+    pub size_in_file: usize,
     size_in_memory: usize,
 }
 
@@ -207,6 +212,7 @@ fn read_program_header(
                 field: "size",
                 expected: format!("<= {}", bytes.len() - entry_offset),
                 actual: format!("{}", program_header_entry_size),
+                index: i,
             });
         }
         let entry = unsafe { &*(bytes[entry_offset..].as_ptr() as *const ProgramHeaderEntry) };
@@ -218,13 +224,14 @@ fn read_program_header(
                 field: "file_size",
                 expected: format!("<= {}", bytes.len() - entry.offset as usize),
                 actual: format!("{}", entry.file_size),
+                index: i,
             });
         }
         segments.push(LoadableSegment {
             readable: entry.flags & 4 != 0,
             writable: entry.flags & 2 != 0,
             executable: entry.flags & 1 != 0,
-            offset: entry.offset as usize,
+            file_offset: entry.offset as usize,
             virtual_address: entry.virtual_address as usize,
             size_in_file: entry.file_size as usize,
             size_in_memory: entry.memory_size as usize,
@@ -233,9 +240,134 @@ fn read_program_header(
     Ok(segments)
 }
 
+#[cfg(target_pointer_width = "64")]
+#[repr(C)]
+struct SectionHeaderEntry {
+    name: u32, // Offset into the section header string table.
+    section_type: u32,
+    flags: u64,
+    virtual_address: u64,
+    file_offset: u64,
+    size: u64,
+    link: u32, // Link to another section
+    info: u32,
+    address_alignment: u64,
+    entry_size: u64, // Only applicable if this is a table.
+}
+
+// A version of the section header which is in a nicer format.
+#[derive(Debug)]
+pub struct Section {
+    pub name: String,
+    pub file_offset: usize,
+    pub virtual_address: usize,
+    pub size: usize,
+    pub present_in_file: bool, // true = progbits, false = nobits
+}
+
+const SECTION_TYPE_PROGBITS: u32 = 1;
+const SECTION_TYPE_NOBITS: u32 = 8;
+
+fn read_section_header(
+    elf_header: &ElfHeader,
+    bytes: &[u8],
+) -> Result<Vec<Section>, ElfValidationError> {
+    let mut sections = Vec::with_capacity(elf_header.section_header_entry_count as usize);
+    let section_header_offset = elf_header.section_header_offset as usize;
+    let section_header_entry_size = elf_header.section_header_entry_size as usize;
+    let section_header_entry_count = elf_header.section_header_entry_count as usize;
+    let string_section_index = elf_header.section_header_name_table_index as usize;
+    let string_section_offset =
+        section_header_offset + string_section_index * section_header_entry_size;
+    if string_section_offset + section_header_entry_size > bytes.len() {
+        return Err(ElfValidationError::InvalidSectionHeaderEntry {
+            field: "size",
+            expected: format!("<= {}", bytes.len() - string_section_offset),
+            actual: format!("{}", section_header_entry_size),
+            index: string_section_index,
+        });
+    }
+    let string_section_entry =
+        unsafe { &*(bytes[string_section_offset..].as_ptr() as *const SectionHeaderEntry) };
+    if string_section_entry.file_offset as usize + string_section_entry.size as usize > bytes.len()
+    {
+        return Err(ElfValidationError::InvalidSectionHeaderEntry {
+            field: "size",
+            expected: format!(
+                "<= {}",
+                bytes.len() - string_section_entry.file_offset as usize
+            ),
+            actual: format!("{}", string_section_entry.size),
+            index: string_section_index,
+        });
+    }
+    let string_section_bytes = &bytes[string_section_entry.file_offset as usize
+        ..string_section_entry.file_offset as usize + string_section_entry.size as usize];
+    for i in 0..section_header_entry_count {
+        let entry_offset = section_header_offset + i * section_header_entry_size;
+        if entry_offset + section_header_entry_size > bytes.len() {
+            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+                field: "section_header_entry_size",
+                expected: format!("<= {}", bytes.len() - entry_offset),
+                actual: format!("{}", section_header_entry_size),
+                index: i,
+            });
+        }
+        let entry = unsafe { &*(bytes[entry_offset..].as_ptr() as *const SectionHeaderEntry) };
+        if entry.section_type != SECTION_TYPE_PROGBITS && entry.section_type != SECTION_TYPE_NOBITS
+        {
+            continue;
+        }
+        // nobits entries don't need to fit into the file
+        if entry.section_type == SECTION_TYPE_PROGBITS
+            && entry.file_offset as usize + entry.size as usize > bytes.len()
+        {
+            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+                field: "size",
+                expected: format!("<= {}", bytes.len() - entry.file_offset as usize),
+                actual: format!("{}", entry.size),
+                index: i,
+            });
+        }
+        let name_offset = entry.name;
+        if name_offset as usize >= string_section_bytes.len() {
+            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+                field: "name",
+                expected: format!("< {}", string_section_bytes.len()),
+                actual: format!("{}", name_offset),
+                index: i,
+            });
+        }
+        let name = CStr::from_bytes_until_nul(&string_section_bytes[name_offset as usize..])
+            .map_err(|_| ElfValidationError::InvalidSectionHeaderEntry {
+                field: "name",
+                expected: "valid UTF-8".to_string(),
+                actual: "invalid UTF-8".to_string(),
+                index: i,
+            })?
+            .to_str()
+            .map_err(|_| ElfValidationError::InvalidSectionHeaderEntry {
+                field: "name",
+                expected: "valid UTF-8".to_string(),
+                actual: "invalid UTF-8".to_string(),
+                index: i,
+            })?
+            .to_string();
+        sections.push(Section {
+            name,
+            file_offset: entry.file_offset as usize,
+            virtual_address: entry.virtual_address as usize,
+            size: entry.size as usize,
+            present_in_file: entry.section_type == SECTION_TYPE_PROGBITS,
+        });
+    }
+    Ok(sections)
+}
+
 #[derive(Debug)]
 pub struct ElfBinary {
-    loadable_segments: Vec<LoadableSegment>,
+    pub loadable_segments: Vec<LoadableSegment>,
+    pub sections: Vec<Section>,
 }
 
 pub fn load_elf(bytes: &[u8]) -> Result<ElfBinary, ElfValidationError> {
@@ -249,5 +381,9 @@ pub fn load_elf(bytes: &[u8]) -> Result<ElfBinary, ElfValidationError> {
     let header = unsafe { &*(bytes.as_ptr() as *const ElfHeader) };
     validate_header(header)?;
     let loadable_segments = read_program_header(header, bytes)?;
-    Ok(ElfBinary { loadable_segments })
+    let sections = read_section_header(header, bytes)?;
+    Ok(ElfBinary {
+        loadable_segments,
+        sections,
+    })
 }
