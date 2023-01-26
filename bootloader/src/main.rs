@@ -84,5 +84,15 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
     uefi_services::println!("Kernel elf: {:?}", elf);
+    //print the bytes in the beryllium section - find the section by iterating and filtering on name
+    let beryllium_section = elf
+        .sections
+        .iter()
+        .find(|section| section.name == ".beryllium")
+        .unwrap();
+    let beryllium_bytes = &kernel_binary[beryllium_section.file_offset as usize
+        ..(beryllium_section.file_offset + beryllium_section.size) as usize];
+    uefi_services::println!("Beryllium Check: {:?}", core::str::from_utf8(beryllium_bytes).unwrap());
+    
     Ok(())
 }
