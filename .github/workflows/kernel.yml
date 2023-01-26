@@ -28,6 +28,7 @@ jobs:
           rustup toolchain install nightly
           rustup default nightly
           rustup target add ${{ matrix.target }}-unknown-linux-gnu
+          rustup component add rust-src --toolchain nightly-${{ matrix.target }}-unknown-linux-gnu
       - name: Test
         run: |
           cargo test --verbose --target ${{ matrix.target }}-unknown-linux-gnu
