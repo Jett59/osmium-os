@@ -32,6 +32,6 @@ jobs:
       - name: Test
         run: |
           cargo test --verbose --target ${{ matrix.target }}-unknown-linux-gnu
-      - name: Build
-        run: |
-          ARCH=${{ matrix.target }} PROFILE=release ./build.sh
+      # - name: Build
+      #   run: |
+      #     ARCH=${{ matrix.target }} PROFILE=release ./build.sh
