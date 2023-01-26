@@ -14,8 +14,8 @@ jobs:
     strategy:
       matrix:
         target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+          - x86_64
+          - aarch64
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,11 +27,9 @@ jobs:
           toolchain: nightly
           target: ${{ matrix.target }}
           override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: test
-          args: --verbose --target ${{ matrix.target }}
+      - name: Test
+        run: |
+          cargo test --verbose --target ${{ matrix.target }}-unknown-linux-gnu
       - name: Build
         run: |
-          ./build.sh
+          ARCH=${{ matrix.target }} PROFILE=release ./build.sh
