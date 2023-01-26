@@ -89,10 +89,18 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
         .sections
         .iter()
         .find(|section| section.name == ".beryllium")
-        .unwrap();
-    let beryllium_bytes = &kernel_binary[beryllium_section.file_offset as usize
-        ..(beryllium_section.file_offset + beryllium_section.size) as usize];
-    uefi_services::println!("Beryllium Check: {:?}", core::str::from_utf8(beryllium_bytes).unwrap());
-    
+        .expect("Beryllium signature not found");
+    assert!(
+        beryllium_section.size >= 16,
+        "Beryllium signature not found"
+    );
+    let beryllium_bytes = &kernel_binary
+        [beryllium_section.file_offset as usize..(beryllium_section.file_offset + 16) as usize];
+        assert!(beryllium_bytes == b"Beryllium Ready!", "Beryllium signature not found");
+    uefi_services::println!(
+        "{}",
+        core::str::from_utf8(beryllium_bytes).unwrap()
+    );
+
     Ok(())
 }
