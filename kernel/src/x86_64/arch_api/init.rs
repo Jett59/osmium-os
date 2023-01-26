@@ -1,4 +1,4 @@
-use crate::{memory, pmm};
+use crate::{memory, phyical_memory_manager};
 
 use super::{super::multiboot, paging};
 
@@ -16,11 +16,11 @@ static mut KERNEL_PHYSICAL_END: () = (); // Mutable to make an unsafe block nece
 pub fn arch_init() {
     multiboot::parse_multiboot_structures();
     // Unless we really want to have difficulties in the near future (possibly as soon as the very next function), we must tell people not to use the kernel's memory as a heap.]
-    pmm::mark_range_as_used(
+    phyical_memory_manager::mark_range_as_used(
         0,
         memory::align_address_up(
             unsafe { &KERNEL_PHYSICAL_END as *const () as usize },
-            pmm::BLOCK_SIZE,
+            phyical_memory_manager::BLOCK_SIZE,
         ),
     );
     paging::initialize_paging();

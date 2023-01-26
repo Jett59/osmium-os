@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, pmm};
+use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, phyical_memory_manager};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -124,7 +124,7 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
 }
 
 lazy_static! {
-    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { pmm::LOG2_BLOCK_SIZE }, 12> = {
+    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { phyical_memory_manager::LOG2_BLOCK_SIZE }, 12> = {
         static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
         unsafe { ACTUAL_ALLOCATOR.all_unused() }
     };
@@ -136,8 +136,8 @@ fn allocate_page_table() -> usize {
             allocated_page
         } else {
             PAGE_TABLE_ALLOCATION_POOL.add_entry(
-                pmm::BLOCK_SIZE,
-                pmm::allocate_block_address()
+                phyical_memory_manager::BLOCK_SIZE,
+                phyical_memory_manager::allocate_block_address()
                     .expect("Failed to get physical memory for page tables"),
             );
             PAGE_TABLE_ALLOCATION_POOL
@@ -149,9 +149,9 @@ fn allocate_page_table() -> usize {
 fn free_page_table(address: usize) {
     unsafe {
         PAGE_TABLE_ALLOCATION_POOL.free(4096, address);
-        // If this merged into a 64 kb block, return it to the PMM so it can be used by someone else.
-        if let Some(free_block) = PAGE_TABLE_ALLOCATION_POOL.allocate(pmm::BLOCK_SIZE) {
-            pmm::mark_as_free(free_block);
+        // If this merged into a 64 kb block, return it to the phyical memory manager (PMM) so it can be used by someone else.
+        if let Some(free_block) = PAGE_TABLE_ALLOCATION_POOL.allocate(phyical_memory_manager::BLOCK_SIZE) {
+            phyical_memory_manager::mark_as_free(free_block);
         }
     }
 }
