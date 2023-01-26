@@ -7,7 +7,7 @@ use crate::{
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
     paging::{get_physical_address, map_block, unmap_block},
-    pmm::{mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
+    physical_memory_manager::{mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -91,7 +91,7 @@ impl SlabAllocator {
             // It is a bit of repetition, but it's not too bad.
             let virtual_address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(BLOCK_SIZE);
             if let Some(virtual_address) = virtual_address {
-                let physical_address = crate::pmm::allocate_block_address();
+                let physical_address = crate::physical_memory_manager::allocate_block_address();
                 if let Some(physical_address) = physical_address {
                     map_block(virtual_address, physical_address);
                     return virtual_address as *mut SlabEntry<SIZE>;
@@ -222,7 +222,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size);
             if let Some(address) = address {
                 for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
-                    let physical_block_address = crate::pmm::allocate_block_address();
+                    let physical_block_address = crate::physical_memory_manager::allocate_block_address();
                     if let Some(physical_address) = physical_block_address {
                         map_block(virtual_block_address, physical_address);
                     } else {

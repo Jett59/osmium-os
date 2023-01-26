@@ -31,7 +31,7 @@ mod heap;
 mod lazy_init;
 mod memory;
 mod paging;
-mod pmm;
+mod physical_memory_manager;
 
 #[cfg_attr(target_arch = "x86_64", path = "x86_64/mod.rs")]
 #[cfg_attr(target_arch = "aarch64", path = "aarch64/mod.rs")]
@@ -55,7 +55,7 @@ fn kpanic(_info: &PanicInfo) -> ! {
 #[no_mangle]
 extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
-    pmm::sanity_check();
+    physical_memory_manager::sanity_check();
     heap::sanity_check();
     console::write_string("Initialized the display (obviously)");
     for i in 0.. {
