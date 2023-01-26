@@ -11,6 +11,9 @@ env:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        arch: ["x86_64", "aarch64"]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -18,5 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run tests
-        run: cargo test --verbose --target x86_64-unknown-linux-gnu
+        run: cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu
+      - name: Build
+        run: ARCH=${{ matrix.arch }} PROFILE=release ./build.sh
 
