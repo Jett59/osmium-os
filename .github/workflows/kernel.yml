@@ -27,7 +27,7 @@ jobs:
           rustup show
           rustup toolchain install nightly
           rustup override set nightly
-          rustup target add nightly-${{ matrix.target }}-unknown-linux-gnu
+          rustup target add rust-src nightly-${{ matrix.target }}-unknown-linux-gnu
       - name: Test
         run: |
           cargo test --verbose --target ${{ matrix.target }}-unknown-linux-gnu
