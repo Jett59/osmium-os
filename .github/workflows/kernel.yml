@@ -26,6 +26,7 @@ jobs:
         with:
           toolchain: nightly
           target: ${{ matrix.target }}
+          args: --no-default-features
           override: true
       - name: Test
         run: |
