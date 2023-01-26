@@ -22,12 +22,12 @@ jobs:
         working-directory: ./kernel
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          target: ${{ matrix.target }}
-          args: --no-default-features
-          override: true
+      - name: Setup Rust
+        run: |
+          rustup show
+          rustup toolchain install nightly
+          rustup override set nightly
+          rustup target add ${{ matrix.target }}-unknown-linux-gnu
       - name: Test
         run: |
           cargo test --verbose --target ${{ matrix.target }}-unknown-linux-gnu
