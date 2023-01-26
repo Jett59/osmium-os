@@ -25,8 +25,8 @@ jobs:
       - name: Setup Rust
         run: |
           rustup show
-          rustup toolchain install nightly
-          rustup default nightly
+          rustup toolchain install nightly-${{ matrix.target }}-unknown-linux-gnu
+          rustup default nightly-${{ matrix.target }}-unknown-linux-gnu
           rustup target add ${{ matrix.target }}-unknown-linux-gnu
           rustup component add rust-src --toolchain nightly-${{ matrix.target }}-unknown-linux-gnu
       - name: Test
