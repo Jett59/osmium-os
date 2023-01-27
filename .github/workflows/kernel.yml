@@ -33,7 +33,7 @@ jobs:
 
       - name: Test
         run: |
-          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Zbuild-std=core,alloc
+          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Zbuild-std=core,alloc,test
 
       - run: sudo apt-get install -y llvm # For the tools (llvm-strip etc.)
 
