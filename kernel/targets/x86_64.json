@@ -25,6 +25,7 @@
     "target-c-int-width": "32",
     "target-endian": "little",
     "target-pointer-width": "64",
+    "panic-strategy": "abort",
     "max-atomic-width": 64,
     "executables": true
 }
