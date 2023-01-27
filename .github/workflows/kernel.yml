@@ -27,15 +27,16 @@ jobs:
           rustup toolchain install nightly
           rustup component add rust-src
 
-      - name: install Qemu if necessary
-        if: ${{ matrix.arch }} != x86_64
+      - name: install Qemu
         run: sudo apt-get install -y qemu-user
 
+      - run: sudo apt-get install -y llvm lld # For the tools (llvm-strip etc.)
+
       - name: Test
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=lld
         run: |
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
-
-      - run: sudo apt-get install -y llvm # For the tools (llvm-strip etc.)
 
       - name: Build
         run: |
