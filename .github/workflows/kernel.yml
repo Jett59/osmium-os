@@ -34,7 +34,7 @@ jobs:
 
       - name: Test
         env:
-          RUSTFLAGS: -C linker=clang -C linker-flavor=clang -C linker-arg -fuse-ld=lld
+          RUSTFLAGS: -C linker=clang -C linker-flavor=clang -C linker-arg=-fuse-ld=lld
         run: |
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
 
