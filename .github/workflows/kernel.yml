@@ -38,7 +38,7 @@ jobs:
 
       - name: Get additional RUSTFLAGS for cross compilation
         if: matrix.arch == 'aarch64'
-        run: echo "CROSS_COMPILE_RUSTFLAGS=-C link-arg=--sysroot=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
+        run: echo "CROSS_COMPILE_RUSTFLAGS=-C link-arg=--sysroot=/usr/aarch64-linux-gnu -C link-arg=-Wl,--sysroot=/" >> $GITHUB_ENV
 
       - name: Test
         env:
