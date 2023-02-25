@@ -34,7 +34,7 @@ jobs:
 
       - name: install aarch64 C library
         if: matrix.arch == 'aarch64'
-        run: sudo apt-get install -y libc6-dev-arm64-cross
+        run: sudo apt-get install -y libc6-dev-arm64-cross libgcc-12-dev-arm64-cross
 
       - name: Get additional RUSTFLAGS for cross compilation
         if: matrix.arch == 'aarch64'
