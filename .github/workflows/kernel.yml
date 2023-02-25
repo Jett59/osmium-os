@@ -33,7 +33,7 @@ jobs:
       - run: sudo apt-get install -y llvm lld # For the tools (llvm-strip etc.)
 
       - name: install aarch64 C library
-      if: ${{ matrix.arch }} == 'aarch64'
+        if: ${{ matrix.arch }} == 'aarch64'
         run: sudo apt-get install -y libc6-dev-arm64-cross
 
       - name: Test
