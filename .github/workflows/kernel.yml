@@ -45,7 +45,7 @@ jobs:
         run: |
           echo "#!/bin/sh" >> ld-aarch64.sh
           echo "# Fake ld-linux-aarch64.so.1 which passes some parameters to the real one under /usr/aarch64-linux-gnu" >> ld-aarch64.sh
-          echo "/usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 --library-path /usr/aarch64-linux-gnu/lib" >> ld-aarch64.sh
+          echo "/usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 --library-path /usr/aarch64-linux-gnu/lib $@" >> ld-aarch64.sh
           sudo cp ld-aarch64.sh /lib/ld-linux-aarch64.so.1
 
       - name: Test
