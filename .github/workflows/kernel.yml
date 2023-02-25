@@ -33,12 +33,16 @@ jobs:
       - run: sudo apt-get install -y llvm lld # For the tools (llvm-strip etc.)
 
       - name: install aarch64 C library
-        if: ${{ matrix.arch }} == 'aarch64'
+        if: matrix.arch == 'aarch64'
         run: sudo apt-get install -y libc6-dev-arm64-cross
+
+      - name: Get additional RUSTFLAGS for cross compilation
+        if: matrix.arch == 'aarch64'
+        run: echo "{CROSS_COMPILE_RUSTFLAGS}=-C link-arg=-sysroot=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
 
       - name: Test
         env:
-          RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu -C link-arg=-L/usr/aarch64-linux-gnu/lib
+          RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu ${CROSS_COMPILE_RUSTFLAGS}
         run: |
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
 
