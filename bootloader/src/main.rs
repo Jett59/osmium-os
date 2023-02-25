@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(cstr_from_bytes_until_nul)]
 
 mod config;
 mod elf;
@@ -96,11 +95,11 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
     );
     let beryllium_bytes = &kernel_binary
         [beryllium_section.file_offset as usize..(beryllium_section.file_offset + 16) as usize];
-        assert!(beryllium_bytes == b"Beryllium Ready!", "Beryllium signature not found");
-    uefi_services::println!(
-        "{}",
-        core::str::from_utf8(beryllium_bytes).unwrap()
+    assert!(
+        beryllium_bytes == b"Beryllium Ready!",
+        "Beryllium signature not found"
     );
+    uefi_services::println!("{}", core::str::from_utf8(beryllium_bytes).unwrap());
 
     Ok(())
 }

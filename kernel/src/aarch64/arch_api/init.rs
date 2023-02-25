@@ -1,4 +1,4 @@
-use crate::arch::beryllium::BootRequestTagType;
+use crate::arch::beryllium::{BootRequestTagType, StackPointerTag};
 use crate::arch_api::stack::Stack;
 use core::mem::size_of;
 
