@@ -34,10 +34,10 @@ jobs:
 
       - name: Test
         env:
-          RUSTFLAGS: -C link-arg=-fuse-ld=lld
+          RUSTFLAGS: -C linker=rust-lld -C linker-flavor=ld.lld
         run: |
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
 
       - name: Build
         run: |
-          ARCH=${{ matrix.arch }} PROFILE=release PROFILE_OPTION=--release ./build.sh
+          ARCH=${{ matrix.arch }} PROFILE=release PROFILE_OPTION=--release SOURCED_CONFIG=y ./build.sh
