@@ -38,7 +38,7 @@ jobs:
 
       - name: Test
         env:
-          RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu -C linker-arg=-L/usr/aarch64-linux-gnu/lib
+          RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu -C link-arg=-L/usr/aarch64-linux-gnu/lib
         run: |
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
 
