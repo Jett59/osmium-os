@@ -27,7 +27,7 @@ jobs:
           rustup toolchain install nightly
           rustup component add rust-src
 
-      - run: sudo apt-get install -y llvm lld # For the tools (llvm-strip etc.)
+      - run: sudo apt-get install -y llvm lld
 
       - name: install aarch64 C library
         if: matrix.arch == 'aarch64'
@@ -48,16 +48,16 @@ jobs:
           >> test.sh
           chmod +x test.sh
 
-      - name: run test binary in docker
+      - name: run test binary in docker (non-native)
         if: matrix.arch == 'aarch64'
         uses: addnab/docker-run-action@v3
         with:
           image: ubuntu:22.04
           options: -v ${{ github.workspace }}:/code --platform linux/arm64
-        run: |
-          cd /code && ./test.sh
+          run: |
+            cd /code && ./test.sh
 
-      - name: run tests natively
+      - name: run tests natively (x86_64 only)
         if: matrix.arch == 'x86_64'
         run: ./test.sh
 
