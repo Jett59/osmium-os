@@ -44,7 +44,7 @@ jobs:
           echo "#!/bin/sh" >> test.sh
           echo -n "./" >> test.sh
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind --no-run 2>&1 | tee out.log
-          grep "Executable" out.log | sed -r -e 's/^.*\((.*)\)$/\1/' >> test.sh
+          grep "Executable" out.log | realpath --relative-to=. $(sed -r -e 's/^.*[\(`](.*)[\)`]$/\1/') >> test.sh
           chmod +x test.sh
 
       - name: run test binary in docker (non-native)
