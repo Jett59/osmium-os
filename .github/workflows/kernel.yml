@@ -49,7 +49,7 @@ jobs:
 
       - name: run test binary in docker (non-native)
         if: matrix.arch == 'aarch64'
-        run: docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace ubuntu:22.04 "cd /workspace && ./test.sh"
+        run: docker run --rm --platform linux/arm64 -v ${{ github.workspace }}:/workspace --workdir /workspace ubuntu:22.04 test.sh
 
       - name: run tests natively (x86_64 only)
         if: matrix.arch == 'x86_64'
