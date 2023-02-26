@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - run: sudo apt install -y qemu-user
+
       - name: test aarch64 docker
         run: |
           docker run --rm --platform linux/arm64 ubuntu:22.04 echo hello
