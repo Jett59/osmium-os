@@ -43,9 +43,8 @@ jobs:
         run: |
           echo "#!/bin/sh" >> test.sh
           echo -n "./" >> test.sh
-          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind --no-run \
-          2>&1 | grep "Executable" | sed -r -e 's/^.*\((.*)\)$/\1/' \
-          >> test.sh
+          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind --no-run 2>&1 | tee out.log
+         grep "Executable" out.log | sed -r -e 's/^.*\((.*)\)$/\1/' >> test.sh
           chmod +x test.sh
 
       - name: run test binary in docker (non-native)
@@ -53,9 +52,8 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: ubuntu:22.04
-          options: -v ${{ github.workspace }}:/code --platform linux/arm64
-          run: |
-            cd /code && ./test.sh
+          options: --platform linux/arm64
+          run: ./test.sh
 
       - name: run tests natively (x86_64 only)
         if: matrix.arch == 'x86_64'
