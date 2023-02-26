@@ -27,9 +27,6 @@ jobs:
           rustup toolchain install nightly
           rustup component add rust-src
 
-      - name: install Qemu
-        run: sudo apt-get install -y qemu-user
-
       - run: sudo apt-get install -y llvm lld # For the tools (llvm-strip etc.)
 
       - name: install aarch64 C library
@@ -38,13 +35,31 @@ jobs:
 
       - name: Get additional RUSTFLAGS for cross compilation
         if: matrix.arch == 'aarch64'
-        run: echo "CROSS_COMPILE_RUSTFLAGS=-C link-arg=--sysroot=/usr/aarch64-linux-gnu -C link-arg=-Wl,--sysroot=/ -C link-arg=-static" >> $GITHUB_ENV
+        run: echo "CROSS_COMPILE_RUSTFLAGS=-C link-arg=--sysroot=/usr/aarch64-linux-gnu -C link-arg=-Wl,--sysroot=/" >> $GITHUB_ENV
 
-      - name: Test
+      - name: build test binary
         env:
           RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu ${{ env.CROSS_COMPILE_RUSTFLAGS }}
         run: |
-          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind
+          echo "#!/bin/sh" >> test.sh
+          echo -n "./" >> test.sh
+          cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind --no-run \
+          2>&1 | grep "Executable" | sed -r -e 's/^.*\((.*)\)$/\1/' \
+          >> test.sh
+          chmod +x test.sh
+
+      - name: run test binary in docker
+        if: matrix.arch == 'aarch64'
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ubuntu:22.04
+          options: -v ${{ github.workspace }}:/code --platform linux/arm64
+        run: |
+          cd /code && ./test.sh
+
+      - name: run tests natively
+        if: matrix.arch == 'x86_64'
+        run: ./test.sh
 
       - name: Build
         run: |
