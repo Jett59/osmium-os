@@ -41,9 +41,8 @@ jobs:
         env:
           RUSTFLAGS: -C linker=clang -C linker-flavor=gcc -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.arch }}-unknown-linux-gnu ${{ env.CROSS_COMPILE_RUSTFLAGS }}
         run: |
-          echo "#!/bin/sh" >> test.sh
-          echo "echo hello world" >> test.sh
-          echo -n "./" >> test.sh
+          echo '#!/bin/sh' >> test.sh
+          echo -n ''./'' >> test.sh
           cargo test --verbose --target ${{ matrix.arch }}-unknown-linux-gnu -Z build-std=core,alloc,test,panic_unwind --no-run 2>&1 | tee out.log
           grep "Executable" out.log | realpath --relative-to=. $(sed -r -e 's/^.*[\(`](.*)[\)`]$/\1/') >> test.sh
           chmod +x test.sh
