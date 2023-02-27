@@ -77,4 +77,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: osmium-${{ matrix.arch }}
-          path: ./build/target/osmium
+          path: kernel/build/target/osmium
