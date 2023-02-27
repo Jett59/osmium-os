@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 uefi = { version = "0.19.0", features = ["alloc", "global_allocator", "panic-on-logger-errors", "logger"] }
-uefi-services = "0.16.0"
+uefi-services = { version = "0.16.0", default-features = false }

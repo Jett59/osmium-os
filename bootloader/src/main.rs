@@ -19,6 +19,12 @@ use uefi_services::println;
 
 use crate::config::parse_config;
 
+#[cfg_attr(not(test), panic_handler)]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    uefi_services::println!("{}", info);
+    loop {}
+}
+
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut system_table).unwrap();
