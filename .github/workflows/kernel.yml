@@ -79,6 +79,7 @@ jobs:
           ls
           ls build
           ls target
+          file build/target/osmium
 
       - name: upload kernel as artifact
         uses: actions/upload-artifact@v3
