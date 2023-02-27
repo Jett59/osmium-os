@@ -77,4 +77,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: osmium-${{ matrix.arch }}
-          path: kernel/build/target/osmium
+          # The upload-artifact action doesn't respect the default working directory
+          path: kernel/target/${{ matrix.arch }}/release/osmium
