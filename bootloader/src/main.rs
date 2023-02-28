@@ -1,6 +1,7 @@
 #![no_main]
 #![no_std]
 
+mod beryllium;
 mod config;
 mod elf;
 mod toml;
@@ -76,13 +77,12 @@ fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
 fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Result {
     let path = path.replace('/', "\\");
     let mut path_buffer = vec![0u16; path.len() + 1]; // Includes null terminator.
-    let kernel_binary = read_file(
+    let mut kernel_binary = read_file(
         image,
         boot_services,
         &CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
-    uefi_services::println!("Kernel elf: {:?}", elf);
     //print the bytes in the beryllium section - find the section by iterating and filtering on name
     let beryllium_section = elf
         .sections
@@ -93,13 +93,16 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
         beryllium_section.size >= 16,
         "Beryllium signature not found"
     );
-    let beryllium_bytes = &kernel_binary
-        [beryllium_section.file_offset as usize..(beryllium_section.file_offset + 16) as usize];
+    let beryllium_bytes = &mut kernel_binary[beryllium_section.file_offset as usize
+        ..(beryllium_section.file_offset + beryllium_section.size) as usize];
+    let beryllium_signature = &beryllium_bytes[..16];
     assert!(
-        beryllium_bytes == b"Beryllium Ready!",
+        beryllium_signature == b"Beryllium Ready!",
         "Beryllium signature not found"
     );
-    uefi_services::println!("{}", core::str::from_utf8(beryllium_bytes).unwrap());
+    let tag_bytes = &mut beryllium_bytes[16..];
+    let tags = beryllium::parse_tags(tag_bytes);
+    println!("Tags: {:#?}", tags);
 
     Ok(())
 }
