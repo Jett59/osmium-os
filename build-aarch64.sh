@@ -5,7 +5,9 @@ set -e
 
 mkdir -p build
 
-cd bootloader && ./build.sh && cd ..
+cd bootloader
+./build.sh
+cd ..
 
 # Ref: https://superuser.com/questions/1657478/how-make-a-bootable-iso-for-my-uefi-application-bare-bones#comment2537987_1657538
 dd if=/dev/zero of=build/osmium.img bs=48000000 count=1
