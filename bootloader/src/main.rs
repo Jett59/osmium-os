@@ -8,40 +8,30 @@ mod toml;
 
 extern crate alloc;
 
+use core::ptr::null_mut;
+
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
 use uefi::{
     prelude::*,
-    proto::{media::file::{File, FileAttribute, FileInfo, FileMode}, device_path::text::DevicePathToText, console::gop::GraphicsOutput}, table::boot::{self, OpenProtocolAttributes, OpenProtocolParams},
+    proto::{media::file::{File, FileAttribute, FileInfo, FileMode}, device_path::text::DevicePathToText, console::gop::{GraphicsOutput, ModeInfo, FrameBuffer, PixelFormat}}, table::boot::{self, OpenProtocolAttributes, OpenProtocolParams},
 };
 use uefi::{CStr16, Result};
 use uefi_services::println;
 
 use crate::config::parse_config;
 
-//Function to get the mode from the graphics output protocol
-fn get_mode(graphicsOutputProtocol: &GraphicsOutput) -> Result {
-    let mode = graphicsOutputProtocol.current_mode_info();
-    println!("Got handle {:#?}", mode);
-    Ok(())
-}
 
-//Function to get the frame buffer from the graphics output protocol
-fn get_frame_buffer(graphicsOutputProtocol: &GraphicsOutput) -> Result {
-    // let frame_buffer = graphicsOutputProtocol.frame_buffer();
-    // println!("Got handle {:#?}", frame_buffer);
-    Ok(())
+struct GraphicsInfo {
+    mode: ModeInfo,
+    frame_buffer_ptr: *mut u8
 }
 
 //Function to get the handle for the graphics output protocol
-fn graphics(image: Handle, boot_services: &BootServices) -> Result {
+fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo> {
     let handle = boot_services.get_handle_for_protocol::<GraphicsOutput>().unwrap();
-    println!("Got handle {:#?}", handle);
-    //open the graphics output protocol
-    println!("About to open protocol");
-    //open the graphics output protocol
-    let graphicsOutputProtocol = unsafe {
+    let mut graphics_output_protocol = unsafe {
         boot_services.open_protocol::<GraphicsOutput>(
             OpenProtocolParams {
                 handle,
@@ -51,14 +41,20 @@ fn graphics(image: Handle, boot_services: &BootServices) -> Result {
             OpenProtocolAttributes::GetProtocol,
         )
     }.unwrap();
-    println!("Opened protocol");
 
-    //get the mode
-    get_mode(&graphicsOutputProtocol).unwrap();
-    //get the frame buffer
-    get_frame_buffer(&graphicsOutputProtocol).unwrap();
+    //query modes
+    let modes = graphics_output_protocol.modes();
+    println!("Number of modes: {}", modes.len());
+    //iterate
+    for mode in modes.filter(|mode| mode.info().pixel_format() != PixelFormat::BltOnly) {
+        println!("Mode: {:?}", mode.info());
+    }
+    
+    let mode = graphics_output_protocol.current_mode_info();
+    // let mut frame_buffer = graphics_output_protocol.frame_buffer();
+    // let frame_buffer_ptr = frame_buffer.as_mut_ptr();
 
-    Ok(())
+    Ok(GraphicsInfo { mode, frame_buffer_ptr: null_mut() })
 }
 
 #[entry]
