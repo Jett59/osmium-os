@@ -13,12 +13,53 @@ use alloc::vec::Vec;
 use config::Config;
 use uefi::{
     prelude::*,
-    proto::media::file::{File, FileAttribute, FileInfo, FileMode},
+    proto::{media::file::{File, FileAttribute, FileInfo, FileMode}, device_path::text::DevicePathToText, console::gop::GraphicsOutput}, table::boot::{self, OpenProtocolAttributes, OpenProtocolParams},
 };
 use uefi::{CStr16, Result};
 use uefi_services::println;
 
 use crate::config::parse_config;
+
+//Function to get the mode from the graphics output protocol
+fn get_mode(graphicsOutputProtocol: &GraphicsOutput) -> Result {
+    let mode = graphicsOutputProtocol.current_mode_info();
+    println!("Got handle {:#?}", mode);
+    Ok(())
+}
+
+//Function to get the frame buffer from the graphics output protocol
+fn get_frame_buffer(graphicsOutputProtocol: &GraphicsOutput) -> Result {
+    // let frame_buffer = graphicsOutputProtocol.frame_buffer();
+    // println!("Got handle {:#?}", frame_buffer);
+    Ok(())
+}
+
+//Function to get the handle for the graphics output protocol
+fn graphics(image: Handle, boot_services: &BootServices) -> Result {
+    let handle = boot_services.get_handle_for_protocol::<GraphicsOutput>().unwrap();
+    println!("Got handle {:#?}", handle);
+    //open the graphics output protocol
+    println!("About to open protocol");
+    //open the graphics output protocol
+    let graphicsOutputProtocol = unsafe {
+        boot_services.open_protocol::<GraphicsOutput>(
+            OpenProtocolParams {
+                handle,
+                agent: image,
+                controller: None,
+            },
+            OpenProtocolAttributes::GetProtocol,
+        )
+    }.unwrap();
+    println!("Opened protocol");
+
+    //get the mode
+    get_mode(&graphicsOutputProtocol).unwrap();
+    //get the frame buffer
+    get_frame_buffer(&graphicsOutputProtocol).unwrap();
+
+    Ok(())
+}
 
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
@@ -27,6 +68,9 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     system_table.stdout().clear().unwrap();
 
     let boot_services = system_table.boot_services();
+
+    graphics(image, boot_services).unwrap();
+
     let config = read_config(image, boot_services).unwrap();
 
     println!("Loading kernel from {}", config.default_entry);
@@ -102,7 +146,7 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
     );
     let tag_bytes = &mut beryllium_bytes[16..];
     let tags = beryllium::parse_tags(tag_bytes);
-    println!("Tags: {:#?}", tags);
+    // println!("Tags: {:#?}", tags);
 
     Ok(())
 }
