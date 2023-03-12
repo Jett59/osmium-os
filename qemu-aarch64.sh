@@ -17,4 +17,4 @@ do
 done
 
 echo "Launching qemu..."
-qemu-system-aarch64 -machine virt -cpu cortex-a57 -drive file=build/flash0.img,format=raw,if=pflash -hda build/osmium.img -serial stdio -device virtio-gpu $@
+qemu-system-aarch64 -machine virt -cpu cortex-a57 -drive file=build/flash0.img,format=raw,if=pflash -hda build/osmium.img -serial stdio -device ramfb $@
