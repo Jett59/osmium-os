@@ -14,7 +14,7 @@ use config::Config;
 use uefi::{
     prelude::*,
     proto::{
-        console::gop::{BltOp, BltPixel, GraphicsOutput, ModeInfo, PixelFormat},
+        console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
         media::file::{File, FileAttribute, FileInfo, FileMode},
     },
     table::boot::{OpenProtocolAttributes, OpenProtocolParams},
@@ -45,11 +45,6 @@ fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo>
         )
     }
     .unwrap();
-    graphics_output_protocol.blt(BltOp::VideoFill {
-        color: BltPixel::new(255, 100, 0),
-        dest: (0, 0),
-        dims: (100, 100),
-    });
 
     //query modes
     let modes = graphics_output_protocol.modes();
@@ -159,8 +154,8 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
         let graphics = graphics(image, boot_services).unwrap();
         println!("Graphics mode: {:?}", graphics.mode);
         frame_buffer_tag.address = graphics.frame_buffer_ptr as usize;
-        frame_buffer_tag.width = graphics.mode.resolution().0;
-        frame_buffer_tag.height = graphics.mode.resolution().1;
+        frame_buffer_tag.width = graphics.mode.resolution().0 as u32;
+        frame_buffer_tag.height = graphics.mode.resolution().1 as u32;
         match graphics.mode.pixel_format() {
             PixelFormat::Bgr => {
                 frame_buffer_tag.bits_per_pixel = 32;
@@ -181,7 +176,8 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
                 panic!("BltOnly pixel format is not supported");
             }
         }
-        frame_buffer_tag.pitch = graphics.mode.stride() * frame_buffer_tag.bits_per_pixel / 8;
+        frame_buffer_tag.pitch =
+            graphics.mode.stride() as u32 * frame_buffer_tag.bits_per_pixel / 8;
     }
 
     Ok(())
