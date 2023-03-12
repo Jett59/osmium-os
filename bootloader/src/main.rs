@@ -8,29 +8,32 @@ mod toml;
 
 extern crate alloc;
 
-use core::ptr::null_mut;
-
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
 use uefi::{
     prelude::*,
-    proto::{media::file::{File, FileAttribute, FileInfo, FileMode}, device_path::text::DevicePathToText, console::gop::{GraphicsOutput, ModeInfo, FrameBuffer, PixelFormat}}, table::boot::{self, OpenProtocolAttributes, OpenProtocolParams},
+    proto::{
+        console::gop::{BltOp, BltPixel, GraphicsOutput, ModeInfo, PixelFormat},
+        media::file::{File, FileAttribute, FileInfo, FileMode},
+    },
+    table::boot::{OpenProtocolAttributes, OpenProtocolParams},
 };
 use uefi::{CStr16, Result};
 use uefi_services::println;
 
 use crate::config::parse_config;
 
-
 struct GraphicsInfo {
     mode: ModeInfo,
-    frame_buffer_ptr: *mut u8
+    frame_buffer_ptr: *mut u8,
 }
 
 //Function to get the handle for the graphics output protocol
 fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo> {
-    let handle = boot_services.get_handle_for_protocol::<GraphicsOutput>().unwrap();
+    let handle = boot_services
+        .get_handle_for_protocol::<GraphicsOutput>()
+        .unwrap();
     let mut graphics_output_protocol = unsafe {
         boot_services.open_protocol::<GraphicsOutput>(
             OpenProtocolParams {
@@ -40,7 +43,13 @@ fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo>
             },
             OpenProtocolAttributes::GetProtocol,
         )
-    }.unwrap();
+    }
+    .unwrap();
+    graphics_output_protocol.blt(BltOp::VideoFill {
+        color: BltPixel::new(255, 100, 0),
+        dest: (0, 0),
+        dims: (100, 100),
+    });
 
     //query modes
     let modes = graphics_output_protocol.modes();
@@ -49,12 +58,15 @@ fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo>
     for mode in modes.filter(|mode| mode.info().pixel_format() != PixelFormat::BltOnly) {
         println!("Mode: {:?}", mode.info());
     }
-    
-    let mode = graphics_output_protocol.current_mode_info();
-    // let mut frame_buffer = graphics_output_protocol.frame_buffer();
-    // let frame_buffer_ptr = frame_buffer.as_mut_ptr();
 
-    Ok(GraphicsInfo { mode, frame_buffer_ptr: null_mut() })
+    let mode = graphics_output_protocol.current_mode_info();
+    let mut frame_buffer = graphics_output_protocol.frame_buffer();
+    let frame_buffer_ptr = frame_buffer.as_mut_ptr();
+
+    Ok(GraphicsInfo {
+        mode,
+        frame_buffer_ptr,
+    })
 }
 
 #[entry]
@@ -65,7 +77,23 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let boot_services = system_table.boot_services();
 
-    graphics(image, boot_services).unwrap();
+    let graphics = graphics(image, boot_services).unwrap();
+    for y in 0..graphics.mode.resolution().1 {
+        for x in 0..graphics.mode.resolution().0 {
+            let pixel = unsafe {
+                graphics
+                    .frame_buffer_ptr
+                    .add(y * graphics.mode.stride() * 4 + x * 4)
+            };
+            unsafe {
+                if *pixel == 0x00 {
+                    *pixel = 0xFF;
+                } else {
+                    *pixel = 0x00;
+                }
+            }
+        }
+    }
 
     let config = read_config(image, boot_services).unwrap();
 
