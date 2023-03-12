@@ -53,18 +53,22 @@ fn graphics(image: Handle, boot_services: &BootServices) -> Result<GraphicsInfo>
 
     //query modes
     let modes = graphics_output_protocol.modes();
-    println!("Number of modes: {}", modes.len());
-    //iterate
-    for mode in modes.filter(|mode| mode.info().pixel_format() != PixelFormat::BltOnly) {
-        println!("Mode: {:?}", mode.info());
-    }
 
-    let mode = graphics_output_protocol.current_mode_info();
+    //filter on modes that are not PixelFormat::BltOnly and return the info of the largest one
+    let mode = modes
+        .filter(|mode| mode.info().pixel_format() != PixelFormat::BltOnly)
+        .max_by_key(|mode| mode.info().resolution().0 * mode.info().resolution().1)
+        .unwrap();
+    
+    //set the mode
+    graphics_output_protocol.set_mode(&mode)?;
+
+    //Get the frame buffer
     let mut frame_buffer = graphics_output_protocol.frame_buffer();
     let frame_buffer_ptr = frame_buffer.as_mut_ptr();
 
     Ok(GraphicsInfo {
-        mode,
+        mode: *mode.info(),
         frame_buffer_ptr,
     })
 }
@@ -76,25 +80,6 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     system_table.stdout().clear().unwrap();
 
     let boot_services = system_table.boot_services();
-
-    let graphics = graphics(image, boot_services).unwrap();
-    for y in 0..graphics.mode.resolution().1 {
-        for x in 0..graphics.mode.resolution().0 {
-            let pixel = unsafe {
-                graphics
-                    .frame_buffer_ptr
-                    .add(y * graphics.mode.stride() * 4 + x * 4)
-            };
-            unsafe {
-                if *pixel == 0x00 {
-                    *pixel = 0xFF;
-                } else {
-                    *pixel = 0x00;
-                }
-            }
-        }
-    }
-
     let config = read_config(image, boot_services).unwrap();
 
     println!("Loading kernel from {}", config.default_entry);
@@ -169,6 +154,12 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
     );
     let tag_bytes = &mut beryllium_bytes[16..];
     let tags = beryllium::parse_tags(tag_bytes);
+
+
+    let graphics = graphics(image, boot_services).unwrap();
+    println!("Graphics mode: {:?}", graphics.mode);
+
+
     // println!("Tags: {:#?}", tags);
 
     Ok(())
