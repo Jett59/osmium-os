@@ -1,11 +1,12 @@
 #![no_main]
 #![no_std]
 
+#[cfg_attr(target_arch = "aarch64", path = "aarch64/mod.rs")]
+mod arch;
 mod beryllium;
 mod config;
 mod elf;
 mod toml;
-mod paging;
 
 extern crate alloc;
 
@@ -74,6 +75,8 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut system_table).unwrap();
 
     system_table.stdout().clear().unwrap();
+
+    arch::check_environment();
 
     let boot_services = system_table.boot_services();
     let config = read_config(image, boot_services).unwrap();

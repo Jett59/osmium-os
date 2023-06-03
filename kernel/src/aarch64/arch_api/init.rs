@@ -5,7 +5,7 @@ use crate::heap::{map_physical_memory, PhysicalAddressHandle};
 use core::mem::size_of;
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
-static mut STACK: Stack = Default::default();
+static mut STACK: Stack = Stack::default();
 #[link_section = ".beryllium"]
 #[no_mangle]
 pub static mut STACK_POINTER_TAG: StackPointerTag = StackPointerTag {

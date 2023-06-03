@@ -9,10 +9,8 @@ impl Stack {
     pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.data.as_mut_ptr()
     }
-}
 
-impl const Default for Stack {
-    fn default() -> Self {
+    pub const fn default() -> Self {
         Self {
             data: [0; STACK_SIZE],
         }

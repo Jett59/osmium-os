@@ -16,13 +16,18 @@ where
     bits: [AtomicUsize; get_bitmap_size(BITS)],
 }
 
+/// This shouldn't exist. It only does because I need a const fn to create a zeroed AtomicUsize, and Rust decided that Default shouldn't be const.
+const fn zero_atomic_usize() -> AtomicUsize {
+    AtomicUsize::new(0)
+}
+
 impl<const BITS: usize> MemoryBitmapAllocator<BITS>
 where
     [(); get_bitmap_size(BITS)]:,
 {
     pub const fn new() -> Self {
         Self {
-            bits: constant_initialized_array(&AtomicUsize::default),
+            bits: constant_initialized_array(&zero_atomic_usize),
         }
     }
 
