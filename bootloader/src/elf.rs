@@ -194,7 +194,7 @@ pub struct LoadableSegment {
     pub file_offset: usize,
     pub virtual_address: usize,
     pub size_in_file: usize,
-    size_in_memory: usize,
+    pub size_in_memory: usize,
 }
 
 fn read_program_header(
@@ -368,6 +368,8 @@ fn read_section_header(
 pub struct ElfBinary {
     pub loadable_segments: Vec<LoadableSegment>,
     pub sections: Vec<Section>,
+
+    pub entrypoint: usize,
 }
 
 pub fn load_elf(bytes: &[u8]) -> Result<ElfBinary, ElfValidationError> {
@@ -385,5 +387,6 @@ pub fn load_elf(bytes: &[u8]) -> Result<ElfBinary, ElfValidationError> {
     Ok(ElfBinary {
         loadable_segments,
         sections,
+        entrypoint: header.entrypoint as usize,
     })
 }

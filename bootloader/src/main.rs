@@ -10,6 +10,8 @@ mod toml;
 
 extern crate alloc;
 
+use core::slice;
+
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
@@ -24,7 +26,7 @@ use uefi::{
 use uefi::{CStr16, Result};
 use uefi_services::println;
 
-use crate::config::parse_config;
+use crate::{arch::PageAllocator, config::parse_config};
 
 struct GraphicsInfo {
     mode: ModeInfo,
@@ -93,7 +95,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     boot_services.stall((config.timeout * 1_000_000) as usize);
 
-    load_kernel(image, boot_services, entry.kernel_path.as_str()).unwrap();
+    load_kernel(image, system_table, entry.kernel_path.as_str()).unwrap();
 
     loop {}
 }
@@ -126,7 +128,9 @@ fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
 }
 
 /// If this function succeeds, it will never return.
-fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Result {
+fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Result {
+    let boot_services = system_table.boot_services();
+
     let path = path.replace('/', "\\");
     let mut path_buffer = vec![0u16; path.len() + 1]; // Includes null terminator.
     let mut kernel_binary = read_file(
@@ -191,7 +195,58 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
             .ok()
     };
 
-    let page_tables = arch::PageTables::new(&mut page_allocator);
+    let entrypoint = elf.entrypoint as usize;
+    let stack_tag = tags
+        .stack_pointer
+        .expect("Stack tag not found in kernel binary")
+        .clone();
 
-    Ok(())
+    let mut page_tables = arch::PageTables::new(&mut page_allocator);
+
+    for segment in elf.loadable_segments {
+        let allocated_memory = page_allocator
+            .allocate(arch::page_align_up(segment.size_in_memory) / arch::PAGE_SIZE)
+            .unwrap();
+        unsafe {
+            // Copy the bytes.
+            let src = kernel_binary.as_ptr().add(segment.file_offset as usize);
+            allocated_memory.copy_from(src, segment.size_in_file);
+            // And zero out the rest.
+            allocated_memory
+                .add(segment.size_in_file)
+                .write_bytes(0, segment.size_in_memory - segment.size_in_file);
+        }
+
+        page_tables.map(
+            &mut page_allocator,
+            segment.virtual_address,
+            allocated_memory as usize,
+            segment.size_in_memory,
+            segment.writable,
+            segment.executable,
+        );
+    }
+
+    // Allocate space for the memory map.
+    // It says that we should allocate more space than we need just in case it grows in the meantime, so we do twice as much as we have been told.
+    let memory_map_size = boot_services.memory_map_size().map_size * 2;
+    let memory_map = page_allocator
+        .allocate(arch::page_align_up(memory_map_size) / arch::PAGE_SIZE)
+        .unwrap();
+
+    unsafe {
+        system_table
+            .exit_boot_services(
+                image,
+                slice::from_raw_parts_mut(memory_map, memory_map_size),
+            )
+            .unwrap();
+    }
+
+    arch::enter_kernel(
+        entrypoint,
+        stack_tag.base as usize,
+        stack_tag.memory_size,
+        &page_tables,
+    );
 }

@@ -20,13 +20,13 @@ bitflags! {
 }
 
 const PAGE_BITS: usize = 12;
-const PAGE_SIZE: usize = 1 << PAGE_BITS;
+pub const PAGE_SIZE: usize = 1 << PAGE_BITS;
 const PAGE_TABLE_ENTRY_COUNT: usize = 512;
 
 const ADDRESS_MASK: u64 = 0x0000_ffff_ffff_f000;
 
 #[repr(C)]
-struct PageTable {
+pub struct PageTable {
     entries: [u64; PAGE_TABLE_ENTRY_COUNT],
 }
 
@@ -191,4 +191,18 @@ impl PageTables {
             }
         }
     }
+
+    pub fn get_lower(&self) -> &PageTable {
+        self.low_half
+    }
+    pub fn get_upper(&self) -> &PageTable {
+        self.high_half
+    }
+}
+
+pub fn page_align_down(address: usize) -> usize {
+    address & !0xfff
+}
+pub fn page_align_up(address: usize) -> usize {
+    page_align_down(address + PAGE_SIZE - 1)
 }

@@ -1,7 +1,12 @@
 mod paging;
 mod registers;
+mod transition;
 
 pub use paging::PageAllocator;
+
+pub use paging::page_align_down;
+pub use paging::page_align_up;
+pub use paging::PAGE_SIZE;
 
 pub fn check_environment() {
     assert!(
@@ -29,12 +34,20 @@ impl PageTables {
     ) {
         let mut flags = paging::PageTableFlags::VALID | paging::PageTableFlags::NORMAL_MEMORY;
         if !writable {
-            flags.insert(paging::PageTableFlags::READ_ONLY);
+            flags |= paging::PageTableFlags::READ_ONLY;
         }
         if !executable {
-            flags.insert(paging::PageTableFlags::EXECUTE_NEVER);
+            flags |= paging::PageTableFlags::EXECUTE_NEVER;
         }
         self.0
             .map(allocator, virtual_address, physical_address, length, flags);
     }
+
+    pub(self) fn inner(&self) -> &paging::PageTables {
+        &self.0
+    }
+}
+
+pub fn enter_kernel(entrypoint: usize, stack_base: usize, stack_size: usize, page_tables: &PageTables) -> ! {
+    transition::enter_kernel(entrypoint, stack_base + stack_size, page_tables.inner());
 }

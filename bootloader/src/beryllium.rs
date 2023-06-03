@@ -1,5 +1,5 @@
 #[repr(u32)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BootRequestTagType {
     StackPointer = 0,
     MemoryMap = 1,
@@ -15,7 +15,7 @@ pub struct TagHeader {
 }
 
 #[repr(C, align(8))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StackPointerTag {
     pub tag_type: BootRequestTagType, // = BootRequestTagType::StackPointer
     pub size: u16,                    // = 24 (64-bit) or 16 (32-bit)

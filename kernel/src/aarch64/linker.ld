@@ -4,7 +4,7 @@ KERNEL_VIRTUAL_ADDRESS = 0xffffffff80000000;
 
 SECTIONS {
     . = KERNEL_VIRTUAL_ADDRESS + SIZEOF_HEADERS;
-    .beryllium : {
+    .beryllium : ALIGN(4k) {
         BYTE(66) 
         BYTE(101)
         BYTE(114)
@@ -23,16 +23,16 @@ SECTIONS {
         BYTE(33)
         KEEP(*(.beryllium))
     }
-    .text : {
+    .text : ALIGN(4k) {
         *(.text*)
     }
-    .rodata : {
+    .rodata : ALIGN(4k) {
         *(.rodata*)
     }
-    .data : {
+    .data : ALIGN(4k) {
         *(.data*)
     }
-    .bss : {
+    .bss : ALIGN(4k) {
         *(.bss*)
     }
     /DISCARD/ : {

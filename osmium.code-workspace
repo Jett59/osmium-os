@@ -15,8 +15,7 @@
 	],
 	"settings": {
 		"rust-analyzer.check.targets": [
-			"aarch64-unknown-linux-gnu",
-			"x86_64-unknown-linux-gnu"
+			"aarch64-unknown-linux-gnu"
 		],
 		"rust-analyzer.check.extraArgs": [
 			"-Zbuild-std=core,alloc,test,panic_unwind"
