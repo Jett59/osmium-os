@@ -19,7 +19,7 @@ use uefi::{
         console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
         media::file::{File, FileAttribute, FileInfo, FileMode},
     },
-    table::boot::{OpenProtocolAttributes, OpenProtocolParams},
+    table::boot::{AllocateType, MemoryType, OpenProtocolAttributes, OpenProtocolParams},
 };
 use uefi::{CStr16, Result};
 use uefi_services::println;
@@ -183,6 +183,15 @@ fn load_kernel(image: Handle, boot_services: &BootServices, path: &str) -> Resul
         frame_buffer_tag.pitch =
             graphics.mode.stride() as u32 * frame_buffer_tag.bits_per_pixel / 8;
     }
+
+    let mut page_allocator = |page_count| {
+        boot_services
+            .allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, page_count)
+            .map(|address| address as *mut u8)
+            .ok()
+    };
+
+    let page_tables = arch::PageTables::new(&mut page_allocator);
 
     Ok(())
 }

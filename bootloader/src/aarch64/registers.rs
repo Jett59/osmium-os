@@ -14,7 +14,7 @@ pub fn current_el() -> ExceptionLevel {
     unsafe {
         asm!("mrs {:x}, CurrentEL", out(reg) el, options(nomem, nostack));
     }
-    match ((el >> 2) & 0b11) {
+    match (el >> 2) & 0b11 {
         0 => ExceptionLevel::EL0,
         1 => ExceptionLevel::EL1,
         2 => ExceptionLevel::EL2,
