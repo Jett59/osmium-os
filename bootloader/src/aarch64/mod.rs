@@ -32,7 +32,10 @@ impl PageTables {
         writable: bool,
         executable: bool,
     ) {
-        let mut flags = paging::PageTableFlags::VALID | paging::PageTableFlags::NORMAL_MEMORY;
+        let mut flags = paging::PageTableFlags::VALID
+            | paging::PageTableFlags::NORMAL_MEMORY
+            | paging::PageTableFlags::NOT_BLOCK
+            | paging::PageTableFlags::ACCESS;
         if !writable {
             flags |= paging::PageTableFlags::READ_ONLY;
         }
@@ -48,6 +51,11 @@ impl PageTables {
     }
 }
 
-pub fn enter_kernel(entrypoint: usize, stack_base: usize, stack_size: usize, page_tables: &PageTables) -> ! {
+pub fn enter_kernel(
+    entrypoint: usize,
+    stack_base: usize,
+    stack_size: usize,
+    page_tables: &PageTables,
+) -> ! {
     transition::enter_kernel(entrypoint, stack_base + stack_size, page_tables.inner());
 }

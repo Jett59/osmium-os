@@ -13,7 +13,7 @@ bitflags! {
         const USER_ACCESSIBLE = 1 << 6;
         const READ_ONLY = 1 << 7;
 
-        const ACCESSED = 1 << 10;
+        const ACCESS = 1 << 10;
 
         const EXECUTE_NEVER = 3 << 53;
     }
@@ -77,6 +77,7 @@ impl PageTable {
         allocator: &mut Allocator,
         index: usize,
     ) {
+        crate::println!("Creating subtable with index {index}");
         if self.is_valid(index) {
             panic!("Subtable already exists");
         }

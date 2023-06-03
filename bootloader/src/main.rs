@@ -216,7 +216,6 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
                 .add(segment.size_in_file)
                 .write_bytes(0, segment.size_in_memory - segment.size_in_file);
         }
-
         page_tables.map(
             &mut page_allocator,
             segment.virtual_address,
