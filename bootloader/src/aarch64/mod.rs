@@ -1,7 +1,9 @@
 mod registers;
 
 pub fn check_environment() {
-    if registers::current_el() != registers::ExceptionLevel::EL1 {
-        unsafe { registers::switch_to_el1() };
-    }
+    assert!(
+        registers::current_el() == registers::ExceptionLevel::EL1
+            || registers::current_el() == registers::ExceptionLevel::EL2,
+        "Must be running at EL1 or EL2"
+    );
 }
