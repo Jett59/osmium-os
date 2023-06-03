@@ -5,6 +5,7 @@ mod beryllium;
 mod config;
 mod elf;
 mod toml;
+mod paging;
 
 extern crate alloc;
 
