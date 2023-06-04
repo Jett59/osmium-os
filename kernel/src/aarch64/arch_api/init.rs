@@ -33,9 +33,13 @@ pub static mut FRAME_BUFFER_TAG: FrameBufferTag = FrameBufferTag {
 };
 
 pub fn arch_init() {
-    unsafe {
-        core::slice::from_raw_parts_mut(FRAME_BUFFER_TAG.address as *mut u8, FRAME_BUFFER_TAG.pitch as usize * FRAME_BUFFER_TAG.height as usize).fill(0xff);
-    }
+            unsafe {
+            core::slice::from_raw_parts_mut(
+                FRAME_BUFFER_TAG.address as *mut u8,
+                (FRAME_BUFFER_TAG.pitch * FRAME_BUFFER_TAG.height) as usize,
+            )
+            .fill(0xff)
+        };
     unsafe {
         framebuffer::init(framebuffer::FrameBuffer {
             width: FRAME_BUFFER_TAG.width as usize,

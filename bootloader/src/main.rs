@@ -233,14 +233,14 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         .allocate(arch::page_align_up(memory_map_size) / arch::PAGE_SIZE)
         .unwrap();
 
-    /*unsafe {
+    unsafe {
         system_table
             .exit_boot_services(
                 image,
                 slice::from_raw_parts_mut(memory_map, memory_map_size),
             )
             .unwrap();
-    }*/
+    }
 
     arch::enter_kernel(
         entrypoint,
