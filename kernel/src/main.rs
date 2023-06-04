@@ -25,7 +25,6 @@ mod assert;
 mod buddy;
 mod console;
 mod font_renderer;
-mod framebuffer;
 mod heap;
 mod lazy_init;
 mod memory;

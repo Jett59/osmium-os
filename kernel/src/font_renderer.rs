@@ -1,10 +1,9 @@
 use alloc::boxed::Box;
 use common::font::{get_character_dimensions, get_glyph_bitmap, get_glyph_count};
-
+use common::framebuffer::{
+    get_bytes_per_pixel, get_pixel_row, get_rgb_byte_positions, get_screen_dimensions,
+};
 use crate::{
-    framebuffer::{
-        get_bytes_per_pixel, get_pixel_row, get_rgb_byte_positions, get_screen_dimensions,
-    },
     lazy_init::lazy_static,
 };
 

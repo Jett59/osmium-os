@@ -1,6 +1,7 @@
+use common::framebuffer;
+
 use crate::arch::beryllium::{BootRequestTagType, FrameBufferTag, StackPointerTag};
 use crate::arch_api::stack::Stack;
-use crate::framebuffer;
 use crate::heap::{map_physical_memory, PhysicalAddressHandle};
 use core::mem::size_of;
 
