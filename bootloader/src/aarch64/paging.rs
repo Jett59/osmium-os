@@ -77,7 +77,6 @@ impl PageTable {
         allocator: &mut Allocator,
         index: usize,
     ) {
-        crate::println!("Creating subtable with index {index}");
         if self.is_valid(index) {
             panic!("Subtable already exists");
         }
