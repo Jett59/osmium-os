@@ -12,6 +12,26 @@ pub struct FrameBuffer {
     pub pixels: &'static mut [u8],
 }
 
+pub struct PixelFormat {
+    pub bytes_per_pixel: u8,
+    pub red_byte: u8,
+    pub green_byte: u8,
+    pub blue_byte: u8,
+}
+
+impl Default for PixelFormat {
+
+    fn default() -> Self {
+        let u8{red_byte, green_byte, blue_byte} = get_rgb_byte_positions();
+        PixelFormat {
+            bytes_per_pixel: get_bytes_per_pixel(),
+            red_byte,
+            green_byte,
+            blue_byte,
+        }
+    }
+}
+
 static mut FRAME_BUFFER: FrameBuffer = FrameBuffer {
     // By setting width and height to 0 we ensure that no-one will try to write to the framebuffer until it is initialized properly.
     width: 0,
