@@ -1,7 +1,10 @@
 use alloc::boxed::Box;
+use common::font::get_character_dimensions;
 
-use crate::{
-    font::get_character_dimensions, font_renderer, framebuffer::get_screen_dimensions,
+
+use crate::{    
+    font_renderer,
+    framebuffer::get_screen_dimensions,
     lazy_init::lazy_static,
 };
 
