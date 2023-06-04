@@ -1,11 +1,7 @@
+use crate::lazy_init::lazy_static;
 use alloc::boxed::Box;
-use common::font::{get_character_dimensions, get_glyph_bitmap, get_glyph_count};
-use common::framebuffer::{
-    get_bytes_per_pixel, get_pixel_row, get_rgb_byte_positions, get_screen_dimensions,
-};
-use crate::{
-    lazy_init::lazy_static,
-};
+use common::font::{get_character_dimensions, get_glyph_count, render_character};
+use common::framebuffer::{get_bytes_per_pixel, get_pixel_row, get_screen_dimensions, PixelFormat};
 
 // We cache the rendered versions of the characters here since they will be redrawn rather a lot (especially during scrolling).
 fn get_character_cache_offset(glyph_index: usize) -> usize {
@@ -23,6 +19,7 @@ lazy_static! {
                 render_character(
                     char::from_u32_unchecked(i as u32),
                     &mut result[get_character_cache_offset(i)..get_character_cache_offset(i + 1)],
+                    PixelFormat::default(),
                 )
             };
         }

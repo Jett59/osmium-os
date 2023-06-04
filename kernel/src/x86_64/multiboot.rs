@@ -1,7 +1,6 @@
 use core::mem::size_of;
 
 use crate::{
-    framebuffer::{self, FrameBuffer},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
@@ -9,6 +8,7 @@ use crate::{
     },
     physical_memory_manager::{mark_range_as_free, BLOCK_SIZE},
 };
+use common::framebuffer::{self, FrameBuffer};
 
 #[repr(C, packed)]
 struct MbiHeader {
