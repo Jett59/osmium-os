@@ -1,6 +1,7 @@
-use crate::{assert::const_assert, memory::constant_initialized_array, paging::PAGE_SIZE};
+use crate::{assert::const_assert, paging::PAGE_SIZE};
 use core::{
     intrinsics::size_of,
+    mem::MaybeUninit,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -16,18 +17,21 @@ where
     bits: [AtomicUsize; get_bitmap_size(BITS)],
 }
 
-/// This shouldn't exist. It only does because I need a const fn to create a zeroed AtomicUsize, and Rust decided that Default shouldn't be const.
-const fn zero_atomic_usize() -> AtomicUsize {
-    AtomicUsize::new(0)
-}
-
 impl<const BITS: usize> MemoryBitmapAllocator<BITS>
 where
     [(); get_bitmap_size(BITS)]:,
 {
     pub const fn new() -> Self {
+        // A bit of a dirty hack, but there is no easy way to create a zero-initialised array of AtomicUsizes in a const context.
+        let mut result = MaybeUninit::uninit_array();
+        // And there is also no for loop, so we do a range manually.
+        let mut i = 0;
+        while i < get_bitmap_size(BITS) {
+            result[i] = MaybeUninit::new(AtomicUsize::new(0));
+            i += 1;
+        }
         Self {
-            bits: constant_initialized_array(&zero_atomic_usize),
+            bits: unsafe { MaybeUninit::array_assume_init(result) },
         }
     }
 

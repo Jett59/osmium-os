@@ -1,4 +1,4 @@
-use core::{mem::MaybeUninit, slice};
+use core::slice;
 
 pub trait Validateable {
     // Ensure that an instance of this type is valid. This is used to ensure that
@@ -100,29 +100,8 @@ pub fn align_address_up(address: usize, alignment: usize) -> usize {
     (address + alignment - 1) & !(alignment - 1)
 }
 
-pub const fn constant_initialized_array<
-    T,
-    const SIZE: usize,
-    InitializationFunction: ~const Fn() -> T,
->(
-    initialization_function: &InitializationFunction,
-) -> [T; SIZE] {
-    unsafe {
-        let mut result: [MaybeUninit<T>; SIZE] = MaybeUninit::uninit_array();
-        // We can't use a for loop in a const function yet.
-        let mut i = 0;
-        while i < SIZE {
-            result[i].write(initialization_function());
-            i += 1;
-        }
-        MaybeUninit::array_assume_init(result)
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use core::sync::atomic::{AtomicU8, Ordering};
-
     use super::*;
 
     #[test]
@@ -170,14 +149,5 @@ mod test {
         assert_eq!(align_address_up(1, 8), 8);
         assert_eq!(align_address_down(8, 8), 8);
         assert_eq!(align_address_up(8, 8), 8);
-    }
-
-    #[test]
-    fn constant_array_test() {
-        let array1: [u8; 42] = constant_initialized_array(&|| 12);
-        assert_eq!(array1, [12; 42]);
-        // Lets try it on a non-copy type (an atomic).
-        let array2: [AtomicU8; 42] = constant_initialized_array(&|| AtomicU8::from(108));
-        assert_eq!(array2[7].load(Ordering::SeqCst), 108);
     }
 }
