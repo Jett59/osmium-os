@@ -1,5 +1,6 @@
 #[repr(u32)]
 #[derive(Debug, Clone)]
+#[allow(unused)]
 pub enum BootRequestTagType {
     StackPointer = 0,
     MemoryMap = 1,
@@ -82,7 +83,7 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
         frame_buffer: None,
     };
     let mut remaining_bytes = tags;
-    while remaining_bytes.len() > 0 {
+    while !remaining_bytes.is_empty() {
         let header = unsafe { &*(remaining_bytes.as_ptr() as *const TagHeader) };
         assert!(header.size % 8 == 0);
         match header.tag_type {

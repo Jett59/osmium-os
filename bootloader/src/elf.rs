@@ -51,18 +51,18 @@ const CURRENT_ENDIAN: u8 = 2;
 
 #[derive(Debug)]
 pub enum ElfValidationError {
-    InvalidHeader {
+    Header {
         field: &'static str,
         expected: String,
         actual: String,
     },
-    InvalidProgramHeaderEntry {
+    ProgramHeaderEntry {
         field: &'static str,
         expected: String,
         actual: String,
         index: usize,
     },
-    InvalidSectionHeaderEntry {
+    SectionHeaderEntry {
         field: &'static str,
         expected: String,
         actual: String,
@@ -73,7 +73,7 @@ pub enum ElfValidationError {
 impl Display for ElfValidationError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            ElfValidationError::InvalidHeader {
+            ElfValidationError::Header {
                 field,
                 expected,
                 actual,
@@ -84,7 +84,7 @@ impl Display for ElfValidationError {
                     field, expected, actual
                 )
             }
-            ElfValidationError::InvalidProgramHeaderEntry {
+            ElfValidationError::ProgramHeaderEntry {
                 field,
                 expected,
                 actual,
@@ -96,7 +96,7 @@ impl Display for ElfValidationError {
                     field, expected, actual, index
                 )
             }
-            ElfValidationError::InvalidSectionHeaderEntry {
+            ElfValidationError::SectionHeaderEntry {
                 field,
                 expected,
                 actual,
@@ -114,56 +114,56 @@ impl Display for ElfValidationError {
 
 fn validate_header(header: &ElfHeader) -> Result<(), ElfValidationError> {
     if header.signature != [0x7f, b'E', b'L', b'F'] {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "signature",
             expected: "[7f, 45, 4c, 46]".to_string(),
             actual: format!("{:x?}", header.signature),
         });
     }
     if header.bits != CURRENT_BITS {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "bits",
             expected: CURRENT_BITS.to_string(),
             actual: header.bits.to_string(),
         });
     }
     if header.endian != CURRENT_ENDIAN {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "endian",
             expected: CURRENT_ENDIAN.to_string(),
             actual: header.endian.to_string(),
         });
     }
     if header.header_version != 1 {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "header_version",
             expected: "1".to_string(),
             actual: header.header_version.to_string(),
         });
     }
     if header.abi != 0 {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "abi",
             expected: "0".to_string(),
             actual: header.abi.to_string(),
         });
     }
     if header.file_type != 2 {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "type",
             expected: "2".to_string(),
             actual: header.file_type.to_string(),
         });
     }
     if header.machine != CURRENT_MACHINE_ID {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "machine",
             expected: format!("{:#x}", CURRENT_MACHINE_ID),
             actual: format!("{:#x}", header.machine),
         });
     }
     if header.version != 1 {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "version",
             expected: "1".to_string(),
             actual: header.version.to_string(),
@@ -208,7 +208,7 @@ fn read_program_header(
     for i in 0..program_header_entry_count {
         let entry_offset = program_header_offset + i * program_header_entry_size;
         if entry_offset + program_header_entry_size > bytes.len() {
-            return Err(ElfValidationError::InvalidProgramHeaderEntry {
+            return Err(ElfValidationError::ProgramHeaderEntry {
                 field: "size",
                 expected: format!("<= {}", bytes.len() - entry_offset),
                 actual: format!("{}", program_header_entry_size),
@@ -220,7 +220,7 @@ fn read_program_header(
             continue;
         }
         if entry.offset as usize + entry.file_size as usize > bytes.len() {
-            return Err(ElfValidationError::InvalidProgramHeaderEntry {
+            return Err(ElfValidationError::ProgramHeaderEntry {
                 field: "file_size",
                 expected: format!("<= {}", bytes.len() - entry.offset as usize),
                 actual: format!("{}", entry.file_size),
@@ -280,7 +280,7 @@ fn read_section_header(
     let string_section_offset =
         section_header_offset + string_section_index * section_header_entry_size;
     if string_section_offset + section_header_entry_size > bytes.len() {
-        return Err(ElfValidationError::InvalidSectionHeaderEntry {
+        return Err(ElfValidationError::SectionHeaderEntry {
             field: "size",
             expected: format!("<= {}", bytes.len() - string_section_offset),
             actual: format!("{}", section_header_entry_size),
@@ -291,7 +291,7 @@ fn read_section_header(
         unsafe { &*(bytes[string_section_offset..].as_ptr() as *const SectionHeaderEntry) };
     if string_section_entry.file_offset as usize + string_section_entry.size as usize > bytes.len()
     {
-        return Err(ElfValidationError::InvalidSectionHeaderEntry {
+        return Err(ElfValidationError::SectionHeaderEntry {
             field: "size",
             expected: format!(
                 "<= {}",
@@ -306,7 +306,7 @@ fn read_section_header(
     for i in 0..section_header_entry_count {
         let entry_offset = section_header_offset + i * section_header_entry_size;
         if entry_offset + section_header_entry_size > bytes.len() {
-            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+            return Err(ElfValidationError::SectionHeaderEntry {
                 field: "section_header_entry_size",
                 expected: format!("<= {}", bytes.len() - entry_offset),
                 actual: format!("{}", section_header_entry_size),
@@ -322,7 +322,7 @@ fn read_section_header(
         if entry.section_type == SECTION_TYPE_PROGBITS
             && entry.file_offset as usize + entry.size as usize > bytes.len()
         {
-            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+            return Err(ElfValidationError::SectionHeaderEntry {
                 field: "size",
                 expected: format!("<= {}", bytes.len() - entry.file_offset as usize),
                 actual: format!("{}", entry.size),
@@ -331,7 +331,7 @@ fn read_section_header(
         }
         let name_offset = entry.name;
         if name_offset as usize >= string_section_bytes.len() {
-            return Err(ElfValidationError::InvalidSectionHeaderEntry {
+            return Err(ElfValidationError::SectionHeaderEntry {
                 field: "name",
                 expected: format!("< {}", string_section_bytes.len()),
                 actual: format!("{}", name_offset),
@@ -339,14 +339,14 @@ fn read_section_header(
             });
         }
         let name = CStr::from_bytes_until_nul(&string_section_bytes[name_offset as usize..])
-            .map_err(|_| ElfValidationError::InvalidSectionHeaderEntry {
+            .map_err(|_| ElfValidationError::SectionHeaderEntry {
                 field: "name",
                 expected: "valid UTF-8".to_string(),
                 actual: "invalid UTF-8".to_string(),
                 index: i,
             })?
             .to_str()
-            .map_err(|_| ElfValidationError::InvalidSectionHeaderEntry {
+            .map_err(|_| ElfValidationError::SectionHeaderEntry {
                 field: "name",
                 expected: "valid UTF-8".to_string(),
                 actual: "invalid UTF-8".to_string(),
@@ -374,7 +374,7 @@ pub struct ElfBinary {
 
 pub fn load_elf(bytes: &[u8]) -> Result<ElfBinary, ElfValidationError> {
     if bytes.len() < size_of::<ElfHeader>() {
-        return Err(ElfValidationError::InvalidHeader {
+        return Err(ElfValidationError::Header {
             field: "size",
             expected: format!(">= {}", size_of::<ElfHeader>()),
             actual: format!("{}", bytes.len()),

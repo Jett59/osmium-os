@@ -1,0 +1,14 @@
+{
+    "folders": [
+        {
+            "path": "bootloader"
+        }
+    ],
+    "settings": {
+        "rust-analyzer.cargo.target": "aarch64-unknown-uefi",
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.check.targets": [
+            "aarch64-unknown-uefi"
+        ]
+    }
+}

@@ -10,17 +10,12 @@ mod toml;
 
 extern crate alloc;
 
-use core::slice;
-
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
 use uefi::{
     prelude::*,
-    proto::{
-        console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
-        media::file::{File, FileAttribute, FileInfo, FileMode},
-    },
+    proto::console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
     table::boot::{AllocateType, MemoryType, OpenProtocolAttributes, OpenProtocolParams},
 };
 use uefi::{CStr16, Result};
@@ -102,20 +97,11 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
 fn read_file(image: Handle, boot_services: &BootServices, name: &CStr16) -> Result<Vec<u8>> {
     let mut fs = boot_services.get_image_file_system(image)?;
-    let mut root = fs.open_volume()?;
-    let mut file = root
-        .open(name, FileMode::Read, FileAttribute::empty())?
-        .into_regular_file()
-        .unwrap();
-
-    let mut info_buffer = vec![0; 128];
-    let file_info = file.get_info::<FileInfo>(&mut info_buffer).unwrap();
-    let file_size = file_info.file_size() as usize;
-
-    let mut buffer = vec![0u8; file_size];
-    file.read(&mut buffer).unwrap();
-
-    Ok(buffer)
+    fs.read(name).map_err(|error| match error {
+        uefi::fs::Error::Io(io_error) => io_error.uefi_error,
+        uefi::fs::Error::Path(_) => uefi::Error::new(Status::INVALID_PARAMETER, ()),
+        uefi::fs::Error::Utf8Encoding(_) => uefi::Error::new(Status::INVALID_PARAMETER, ()),
+    })
 }
 
 fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
@@ -136,7 +122,7 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
     let mut kernel_binary = read_file(
         image,
         boot_services,
-        &CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
+        CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
     let beryllium_section = elf
@@ -209,7 +195,7 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
             .unwrap();
         unsafe {
             // Copy the bytes.
-            let src = kernel_binary.as_ptr().add(segment.file_offset as usize);
+            let src = kernel_binary.as_ptr().add(segment.file_offset);
             allocated_memory.copy_from(src, segment.size_in_file);
             // And zero out the rest.
             allocated_memory
@@ -226,21 +212,9 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         );
     }
 
-    // Allocate space for the memory map.
-    // It says that we should allocate more space than we need just in case it grows in the meantime, so we do twice as much as we have been told.
-    let memory_map_size = boot_services.memory_map_size().map_size * 2;
-    let memory_map = page_allocator
-        .allocate(arch::page_align_up(memory_map_size) / arch::PAGE_SIZE)
-        .unwrap();
+    let (_runtime_table, _memory_map) = system_table.exit_boot_services();
 
-    unsafe {
-        system_table
-            .exit_boot_services(
-                image,
-                slice::from_raw_parts_mut(memory_map, memory_map_size),
-            )
-            .unwrap();
-    }
+    // TODO: Create the kernel's memory map and pass it to the kernel.
 
     arch::enter_kernel(
         entrypoint,

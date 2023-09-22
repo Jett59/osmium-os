@@ -10,11 +10,11 @@ pub fn parse_toml(file_contents: &str) -> BTreeMap<String, BTreeMap<String, Stri
 
     let mut current_section = "".to_string();
     for line in lines {
-        if line.starts_with("[") {
+        if line.starts_with('[') {
             current_section = line[1..line.len()-1].to_string();
             results.insert(current_section.clone(), BTreeMap::new());
         } else {
-            let mut key_value = line.split("=");
+            let mut key_value = line.split('=');
             let key = key_value.next().unwrap().trim();
             let value = clean_value(key_value.next().unwrap());
             results.get_mut(&current_section).unwrap().insert(

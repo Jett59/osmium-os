@@ -55,10 +55,6 @@ impl PageTable {
         page_table
     }
 
-    pub unsafe fn from_pointer(pointer: *mut Self) -> &'static mut Self {
-        &mut *pointer
-    }
-
     pub fn is_valid(&self, index: usize) -> bool {
         self.entries[index] & PageTableFlags::VALID.bits() != 0
     }
@@ -192,9 +188,6 @@ impl PageTables {
         }
     }
 
-    pub fn get_lower(&self) -> &PageTable {
-        self.low_half
-    }
     pub fn get_upper(&self) -> &PageTable {
         self.high_half
     }

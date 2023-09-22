@@ -4,26 +4,7 @@
             "path": "."
         },
         {
-            "path": "common"
-        },
-        {
-            "path": "bootloader"
-        },
-        {
-            "path": "kernel"
-        },
-        {
             "path": ".github"
         }
     ],
-    "settings": {
-        "rust-analyzer.check.targets": [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-unknown-linux-gnu"
-        ],
-        "rust-analyzer.check.extraArgs": [
-            "-Zbuild-std=core,alloc,test,panic_unwind"
-        ],
-        "rust-analyzer.cargo.target": "aarch64-unknown-linux-gnu"
-    }
 }

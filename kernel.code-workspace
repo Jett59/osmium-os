@@ -1,0 +1,15 @@
+{
+    "folders": [
+        {
+            "path": "kernel"
+        },
+    ],
+    "settings": {
+        "rust-analyzer.cargo.target": "aarch64-unknown-linux-gnu",
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.check.targets": [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu"
+        ]
+    }
+}
