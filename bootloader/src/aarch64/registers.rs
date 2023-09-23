@@ -85,6 +85,20 @@ pub fn set_ttbr1_el1(ttbr1: u64) {
     }
 }
 
+bitflags! {
+    pub struct HCR: u64 {
+        const SWIO = 1 << 1;
+        const RW = 1 << 31;
+    }
+}
+
+#[inline(always)]
+pub fn set_hcr_el2(hcr: HCR) {
+    unsafe {
+        asm!("msr hcr_el2, {:x}", in(reg) hcr.bits(), options(nomem, nostack));
+    }
+}
+
 #[inline(always)]
 pub fn mask_exceptions() {
     unsafe {
