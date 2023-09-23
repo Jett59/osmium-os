@@ -12,11 +12,6 @@ use crate::arch::registers::current_el;
 
 pub fn check_environment() {
     uefi_services::println!("Running at {:?}", current_el());
-    unsafe {
-        let mut mair: u64 = 0;
-        core::arch::asm!("mrs {:x}, mair_el2", out(reg) mair, options(nomem, nostack));
-        uefi_services::println!("MAIR_EL2: {:x}", mair);
-    }
     assert!(
         registers::current_el() == registers::ExceptionLevel::EL1
             || registers::current_el() == registers::ExceptionLevel::EL2,

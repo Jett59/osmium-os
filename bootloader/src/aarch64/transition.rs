@@ -27,6 +27,8 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &PageT
             msr spsr_el2, x0
             mov x0, #0x1
             msr sctlr_el1, x0
+            DSB SY
+            ISB
             eret
             ",
                 stack_pointer = in(reg) stack_pointer,
@@ -41,6 +43,8 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &PageT
                 "
             mov sp, {stack_pointer}
             mov x0, {entrypoint}
+            DSB SY
+            ISB
             br x0
             ",
                 stack_pointer = in(reg) stack_pointer,
