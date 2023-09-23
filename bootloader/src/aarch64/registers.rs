@@ -46,8 +46,8 @@ pub fn set_tcr_el1(tcr: TCR) {
 bitflags! {
     #[derive(Debug, Copy, Clone)]
     pub struct MAIR: u8 {
-        const DEVICE = 0b0000;
-        const NORMAL_WRITE_BACK = 0b1111;
+        const DEVICE = 0b00000000;
+        const NORMAL_WRITE_BACK = 0b11111111;
     }
 }
 
