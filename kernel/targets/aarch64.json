@@ -25,5 +25,6 @@
     "target-endian": "little",
     "target-pointer-width": "64",
     "panic-strategy": "abort",
+    "relocation-model": "static",
     "executables": true
 }
