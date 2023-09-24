@@ -1,3 +1,5 @@
+use core::mem::size_of;
+
 #[repr(u32)]
 #[derive(Debug, Clone)]
 #[allow(unused)]
@@ -43,14 +45,59 @@ pub struct MemoryMapEntry {
     pub memory_type: MemoryMapEntryType,
 }
 
+impl TryFrom<&[u8]> for &MemoryMapEntry {
+    type Error = &'static str;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() != size_of::<MemoryMapEntry>() {
+            return Err("Invalid memory map entry size");
+        }
+        unsafe {
+            let result = &*(value.as_ptr() as *const MemoryMapEntry);
+            MemoryMapEntryType::try_from(result.memory_type as u32)?;
+            Ok(result)
+        }
+    }
+}
+
+impl TryFrom<&mut [u8]> for &mut MemoryMapEntry {
+    type Error = &'static str;
+
+    fn try_from(value: &mut [u8]) -> Result<Self, Self::Error> {
+        if value.len() != size_of::<MemoryMapEntry>() {
+            return Err("Invalid memory map entry size");
+        }
+        unsafe {
+            let result = &mut *(value.as_ptr() as *mut MemoryMapEntry);
+            MemoryMapEntryType::try_from(result.memory_type as u32)?;
+            Ok(result)
+        }
+    }
+}
+
 #[repr(u32)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MemoryMapEntryType {
     Reserved = 0,
     Available = 1,
     EfiRuntime = 2,
     AcpiReclaimable = 3,
     Kernel = 4,
+}
+
+impl TryFrom<u32> for MemoryMapEntryType {
+    type Error = &'static str;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(MemoryMapEntryType::Reserved),
+            1 => Ok(MemoryMapEntryType::Available),
+            2 => Ok(MemoryMapEntryType::EfiRuntime),
+            3 => Ok(MemoryMapEntryType::AcpiReclaimable),
+            4 => Ok(MemoryMapEntryType::Kernel),
+            _ => Err("Invalid memory map entry type"),
+        }
+    }
 }
 
 #[repr(C, align(8))]
@@ -72,17 +119,24 @@ pub struct FrameBufferTag {
 #[derive(Debug)]
 pub struct BerylliumInfo<'lifetime> {
     pub stack_pointer: Option<&'lifetime StackPointerTag>,
+    pub stack_pointer_offset: Option<usize>,
     pub memory_map: Option<&'lifetime mut MemoryMapTag>,
+    pub memory_map_offset: Option<usize>,
     pub frame_buffer: Option<&'lifetime mut FrameBufferTag>,
+    pub frame_buffer_offset: Option<usize>,
 }
 
 pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
     let mut result = BerylliumInfo {
         stack_pointer: None,
+        stack_pointer_offset: None,
         memory_map: None,
+        memory_map_offset: None,
         frame_buffer: None,
+        frame_buffer_offset: None,
     };
     let mut remaining_bytes = tags;
+    let mut current_offset = 0;
     while !remaining_bytes.is_empty() {
         let header = unsafe { &*(remaining_bytes.as_ptr() as *const TagHeader) };
         assert!(header.size % 8 == 0);
@@ -95,6 +149,7 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
                 }
                 result.stack_pointer =
                     Some(unsafe { &*(remaining_bytes.as_ptr() as *const StackPointerTag) });
+                result.stack_pointer_offset = Some(current_offset);
             }
             BootRequestTagType::MemoryMap => {
                 if cfg!(target_pointer_width = "64") {
@@ -104,6 +159,7 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
                 }
                 result.memory_map =
                     Some(unsafe { &mut *(remaining_bytes.as_mut_ptr() as *mut MemoryMapTag) });
+                result.memory_map_offset = Some(current_offset);
             }
             BootRequestTagType::FrameBuffer => {
                 if cfg!(target_pointer_width = "64") {
@@ -113,9 +169,11 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
                 }
                 result.frame_buffer =
                     Some(unsafe { &mut *(remaining_bytes.as_mut_ptr() as *mut FrameBufferTag) });
+                result.frame_buffer_offset = Some(current_offset);
             }
         }
         remaining_bytes = &mut remaining_bytes[header.size as usize..];
+        current_offset += header.size as usize;
     }
     result
 }

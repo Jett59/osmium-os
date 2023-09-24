@@ -10,6 +10,8 @@ mod toml;
 
 extern crate alloc;
 
+use core::{mem::size_of, slice};
+
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
@@ -21,7 +23,11 @@ use uefi::{
 use uefi::{CStr16, Result};
 use uefi_services::println;
 
-use crate::{arch::PageAllocator, config::parse_config};
+use crate::{
+    arch::{page_align_up, PageAllocator, PAGE_SIZE},
+    beryllium::{MemoryMapEntry, MemoryMapEntryType, MemoryMapTag},
+    config::parse_config,
+};
 
 struct GraphicsInfo {
     mode: ModeInfo,
@@ -125,6 +131,16 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
+
+    // Since the memory map has to go after the kernel (according to the spec), we find the end of the kernel and map it there.
+    let memory_map_virtual_address = page_align_up(
+        elf.loadable_segments
+            .iter()
+            .map(|segment| segment.virtual_address + segment.size_in_memory)
+            .max()
+            .unwrap(),
+    );
+
     let beryllium_section = elf
         .sections
         .iter()
@@ -187,6 +203,9 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         .expect("Stack tag not found in kernel binary")
         .clone();
 
+    let memory_map_tag_offset = tags.memory_map_offset;
+    let mut final_memory_map_tag = None;
+
     let mut page_tables = arch::PageTables::new(&mut page_allocator);
 
     for segment in elf.loadable_segments {
@@ -201,6 +220,15 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
             allocated_memory
                 .add(segment.size_in_file)
                 .write_bytes(0, segment.size_in_memory - segment.size_in_file);
+
+            if segment.file_offset == beryllium_section.file_offset {
+                if let Some(memory_map_tag_offset) = memory_map_tag_offset {
+                    final_memory_map_tag = Some(
+                        &mut *(allocated_memory.add(16 + memory_map_tag_offset)
+                            as *mut MemoryMapTag),
+                    );
+                }
+            }
         }
         page_tables.map(
             &mut page_allocator,
@@ -212,9 +240,58 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         );
     }
 
-    let (_runtime_table, _memory_map) = system_table.exit_boot_services();
+    // Since we have to exit boot services to get the memory map, but we need to allocate memory to store the memory map first, we just hope this is enough space.
+    // It should be fine because the entries are 24 bytes each, so we can store 170 entries in 4 KiB.
+    let memory_map_storage = unsafe {
+        slice::from_raw_parts_mut(
+            boot_services
+                .allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, 1)
+                .unwrap() as *mut u8,
+            PAGE_SIZE,
+        )
+    };
+    uefi_services::println!(
+        "Created the memory map storage with physical address {:p}",
+        memory_map_storage.as_ptr()
+    );
+    page_tables.map(
+        &mut page_allocator,
+        memory_map_virtual_address,
+        memory_map_storage.as_ptr() as usize,
+        memory_map_storage.len(),
+        false,
+        false,
+    );
 
-    // TODO: Create the kernel's memory map and pass it to the kernel.
+    let (_runtime_table, memory_map) = system_table.exit_boot_services();
+
+    let memory_map_storage_iterator = memory_map_storage
+        .chunks_exact_mut(size_of::<MemoryMapEntry>())
+        .map::<&mut MemoryMapEntry, _>(|slice| TryFrom::try_from(slice).unwrap());
+    for (memory_map_entry, memory_map_storage_entry) in
+        memory_map.entries().zip(memory_map_storage_iterator)
+    {
+        *memory_map_storage_entry = MemoryMapEntry {
+            address: memory_map_entry.phys_start as *mut u8,
+            size: memory_map_entry.page_count as usize * PAGE_SIZE,
+            memory_type: match memory_map_entry.ty {
+                MemoryType::CONVENTIONAL => MemoryMapEntryType::Available,
+                MemoryType::LOADER_CODE => MemoryMapEntryType::Kernel,
+                MemoryType::LOADER_DATA => MemoryMapEntryType::Kernel,
+                MemoryType::BOOT_SERVICES_CODE => MemoryMapEntryType::Available,
+                MemoryType::BOOT_SERVICES_DATA => MemoryMapEntryType::Available,
+                MemoryType::RUNTIME_SERVICES_CODE => MemoryMapEntryType::EfiRuntime,
+                MemoryType::RUNTIME_SERVICES_DATA => MemoryMapEntryType::EfiRuntime,
+                MemoryType::ACPI_RECLAIM => MemoryMapEntryType::AcpiReclaimable,
+                _ => MemoryMapEntryType::Reserved,
+            },
+        }
+    }
+
+    if let Some(memory_map_tag) = final_memory_map_tag {
+        memory_map_tag.base = memory_map_virtual_address as *mut u8;
+        memory_map_tag.memory_size = memory_map_storage.len();
+    }
 
     arch::enter_kernel(
         entrypoint,
