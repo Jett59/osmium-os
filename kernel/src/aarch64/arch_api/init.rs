@@ -1,9 +1,16 @@
 use common::framebuffer;
 
-use crate::arch::beryllium::{BootRequestTagType, FrameBufferTag, StackPointerTag};
+use crate::arch::beryllium::{
+    BootRequestTagType, FrameBufferTag, MemoryMapEntry, MemoryMapEntryType, MemoryMapTag,
+    StackPointerTag,
+};
 use crate::arch_api::stack::Stack;
 use crate::heap::{map_physical_memory, PhysicalAddressHandle};
+use crate::physical_memory_manager;
+
 use core::mem::size_of;
+use core::ptr::null_mut;
+use core::slice;
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
 static mut STACK: Stack = Stack::default();
@@ -33,14 +40,40 @@ pub static mut FRAME_BUFFER_TAG: FrameBufferTag = FrameBufferTag {
     blue_byte: 0,
 };
 
+#[link_section = ".beryllium"]
+#[no_mangle]
+pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
+    tag_type: BootRequestTagType::MemoryMap,
+    size: size_of::<MemoryMapTag>() as u16,
+    flags: 0,
+    base: null_mut(),
+    memory_size: 0,
+};
+
 pub fn arch_init() {
-            unsafe {
-            core::slice::from_raw_parts_mut(
-                FRAME_BUFFER_TAG.address as *mut u8,
-                (FRAME_BUFFER_TAG.pitch * FRAME_BUFFER_TAG.height) as usize,
-            )
-            .fill(0xff)
-        };
+    let memory_map = unsafe {
+        slice::from_raw_parts(
+            MEMORY_MAP_TAG.base as *const MemoryMapEntry,
+            MEMORY_MAP_TAG.memory_size,
+        )
+    };
+    for entry in memory_map {
+        if entry.memory_type == MemoryMapEntryType::Available {
+            physical_memory_manager::mark_range_as_free(
+                entry.address as usize,
+                entry.address as usize + entry.size,
+            );
+        }
+    }
+
+    unsafe {
+        core::slice::from_raw_parts_mut(
+            FRAME_BUFFER_TAG.address as *mut u8,
+            (FRAME_BUFFER_TAG.pitch * FRAME_BUFFER_TAG.height) as usize,
+        )
+        .fill(0xff)
+    };
+
     unsafe {
         framebuffer::init(framebuffer::FrameBuffer {
             width: FRAME_BUFFER_TAG.width as usize,

@@ -1,4 +1,5 @@
 #[repr(u32)]
+#[derive(Clone, Copy)]
 pub enum BootRequestTagType {
     StackPointer = 0,
     MemoryMap = 1,
@@ -31,6 +32,7 @@ pub struct MemoryMapEntry {
 }
 
 #[repr(u32)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum MemoryMapEntryType {
     Reserved = 0,
     Available = 1,

@@ -240,6 +240,11 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         );
     }
 
+    uefi_services::println!(
+        "Memory map tag offset: {:?}, final address: {:?}",
+        memory_map_tag_offset,
+        final_memory_map_tag
+    );
     // Since we have to exit boot services to get the memory map, but we need to allocate memory to store the memory map first, we just hope this is enough space.
     // It should be fine because the entries are 24 bytes each, so we can store 170 entries in 4 KiB.
     let memory_map_storage = unsafe {
@@ -290,7 +295,10 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
 
     if let Some(memory_map_tag) = final_memory_map_tag {
         memory_map_tag.base = memory_map_virtual_address as *mut u8;
-        memory_map_tag.memory_size = memory_map_storage.len();
+        memory_map_tag.memory_size = memory_map
+            .entries()
+            .len()
+            .max(memory_map_storage.len() / size_of::<MemoryMapEntry>());
     }
 
     arch::enter_kernel(
