@@ -49,8 +49,8 @@ impl PageTables {
             .map(allocator, virtual_address, physical_address, length, flags);
     }
 
-    pub(self) fn inner(&self) -> &paging::PageTables {
-        &self.0
+    pub(self) fn inner_mut(&mut self) -> &mut paging::PageTables {
+        &mut self.0
     }
 }
 
@@ -58,7 +58,7 @@ pub fn enter_kernel(
     entrypoint: usize,
     stack_base: usize,
     stack_size: usize,
-    page_tables: &PageTables,
+    page_tables: &mut PageTables,
 ) -> ! {
-    transition::enter_kernel(entrypoint, stack_base + stack_size, page_tables.inner());
+    transition::enter_kernel(entrypoint, stack_base + stack_size, page_tables.inner_mut());
 }

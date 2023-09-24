@@ -298,13 +298,14 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         memory_map_tag.memory_size = memory_map
             .entries()
             .len()
-            .max(memory_map_storage.len() / size_of::<MemoryMapEntry>());
+            .max(memory_map_storage.len() / size_of::<MemoryMapEntry>())
+            * size_of::<MemoryMapEntry>();
     }
 
     arch::enter_kernel(
         entrypoint,
         stack_tag.base as usize,
         stack_tag.memory_size,
-        &page_tables,
+        &mut page_tables,
     );
 }

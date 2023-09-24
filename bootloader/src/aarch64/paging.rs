@@ -188,7 +188,10 @@ impl PageTables {
         }
     }
 
-    pub fn get_upper(&self) -> &PageTable {
+    pub fn upper(&self) -> &PageTable {
+        self.high_half
+    }
+    pub fn upper_mut(&mut self) -> &mut PageTable {
         self.high_half
     }
 }

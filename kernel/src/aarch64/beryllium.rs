@@ -20,7 +20,7 @@ pub struct MemoryMapTag {
     pub tag_type: BootRequestTagType, // = BootRequestTagType::MemoryMap
     pub size: u16,                    // = 24 (64-bit) or 16 (32-bit)
     pub flags: u16,
-    pub base: *mut u8,
+    pub base: *const u8,
     pub memory_size: usize,
 }
 

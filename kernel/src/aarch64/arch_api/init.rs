@@ -9,7 +9,7 @@ use crate::heap::{map_physical_memory, PhysicalAddressHandle};
 use crate::physical_memory_manager;
 
 use core::mem::size_of;
-use core::ptr::null_mut;
+use core::ptr::null;
 use core::slice;
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
@@ -46,7 +46,7 @@ pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
     tag_type: BootRequestTagType::MemoryMap,
     size: size_of::<MemoryMapTag>() as u16,
     flags: 0,
-    base: null_mut(),
+    base: null(),
     memory_size: 0,
 };
 
@@ -54,7 +54,7 @@ pub fn arch_init() {
     let memory_map = unsafe {
         slice::from_raw_parts(
             MEMORY_MAP_TAG.base as *const MemoryMapEntry,
-            MEMORY_MAP_TAG.memory_size,
+            MEMORY_MAP_TAG.memory_size / size_of::<MemoryMapEntry>(),
         )
     };
     for entry in memory_map {
@@ -65,14 +65,6 @@ pub fn arch_init() {
             );
         }
     }
-
-    unsafe {
-        core::slice::from_raw_parts_mut(
-            FRAME_BUFFER_TAG.address as *mut u8,
-            (FRAME_BUFFER_TAG.pitch * FRAME_BUFFER_TAG.height) as usize,
-        )
-        .fill(0xff)
-    };
 
     unsafe {
         framebuffer::init(framebuffer::FrameBuffer {
@@ -90,6 +82,6 @@ pub fn arch_init() {
                 );
                 PhysicalAddressHandle::leak(physical_memory_handle)
             },
-        })
+        });
     }
 }
