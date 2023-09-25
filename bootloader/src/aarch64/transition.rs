@@ -24,7 +24,7 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
     unsafe {
         mask_exceptions();
         set_ttbr1_el1(page_tables.upper() as *const _ as u64);
-        set_tcr_el1(TCR::FOURTY_EIGHT_BIT_ADDRESSES | TCR::FOUR_K_PAGES);
+        set_tcr_el1(TCR::FORTY_EIGHT_BIT_VIRTUAL_ADDRESSES | TCR::FOUR_K_PAGES | TCR::FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES);
         let mut mair = [MAIR::DEVICE; 8];
         mair[1] = MAIR::NORMAL_WRITE_BACK;
         set_mair_el1(mair);

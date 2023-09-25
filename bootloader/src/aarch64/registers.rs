@@ -29,9 +29,10 @@ bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct TCR: u64 {
         #[allow(clippy::identity_op)]
-        const FOURTY_EIGHT_BIT_ADDRESSES = 16 << 0 | 16 << 16;
+        const FORTY_EIGHT_BIT_VIRTUAL_ADDRESSES = 16 << 0 | 16 << 16;
         #[allow(clippy::identity_op)]
         const FOUR_K_PAGES = 0 << 14 | 2 << 30;
+        const FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES = 0b101 << 32;
         // TODO: Add the rest
     }
 }
