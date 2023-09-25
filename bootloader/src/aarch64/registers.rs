@@ -37,10 +37,8 @@ bitflags! {
 }
 
 #[inline(always)]
-pub fn set_tcr_el1(tcr: TCR) {
-    unsafe {
-        asm!("msr tcr_el1, {:x}", in(reg) tcr.bits(), options(nomem, nostack));
-    }
+pub unsafe fn set_tcr_el1(tcr: TCR) {
+    asm!("msr tcr_el1, {:x}", in(reg) tcr.bits(), options(nomem, nostack));
 }
 
 bitflags! {
@@ -52,43 +50,47 @@ bitflags! {
 }
 
 #[inline(always)]
-pub fn set_mair_el1(mair: [MAIR; 8]) {
+pub unsafe fn set_mair_el1(mair: [MAIR; 8]) {
     let mut mair_el1: u64 = 0;
     for (i, mair) in mair.iter().enumerate() {
         mair_el1 |= (mair.bits() as u64) << (i * 8);
     }
-    unsafe {
-        asm!("msr mair_el1, {:x}", in(reg) mair_el1, options(nomem, nostack));
-    }
+    asm!("msr mair_el1, {:x}", in(reg) mair_el1, options(nomem, nostack));
 }
 
 #[inline(always)]
-pub fn set_ttbr1_el1(ttbr1: u64) {
-    unsafe {
-        asm!("msr ttbr1_el1, {:x}", in(reg) ttbr1, options(nomem, nostack));
-    }
+pub unsafe fn set_ttbr1_el1(ttbr1: u64) {
+    asm!("msr ttbr1_el1, {:x}", in(reg) ttbr1, options(nomem, nostack));
 }
 
 bitflags! {
     pub struct HCR: u64 {
-        const SWIO = 1 << 1;
         const RW = 1 << 31;
+        const SWIO = 1 << 1;
     }
 }
 
 #[inline(always)]
-pub fn set_hcr_el2(hcr: HCR) {
-    unsafe {
-        asm!("msr hcr_el2, {:x}", in(reg) hcr.bits(), options(nomem, nostack));
-    }
+pub unsafe fn set_hcr_el2(hcr: HCR) {
+    asm!("msr hcr_el2, {:x}", in(reg) hcr.bits(), options(nomem, nostack));
 }
 
 #[inline(always)]
-pub fn mask_exceptions() {
-    unsafe {
-        asm!("msr daifset, #1", options(nomem, nostack));
-        asm!("msr daifset, #2", options(nomem, nostack));
-        asm!("msr daifset, #4", options(nomem, nostack));
-        asm!("msr daifset, #8", options(nomem, nostack));
+pub unsafe fn mask_exceptions() {
+    asm!("msr daifset, #1", options(nomem, nostack));
+    asm!("msr daifset, #2", options(nomem, nostack));
+    asm!("msr daifset, #4", options(nomem, nostack));
+    asm!("msr daifset, #8", options(nomem, nostack));
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy)]
+    pub struct SCTLR: u64 {
+        const MMU = 1 << 0;
+        const RESERVED = (1 << 29) | (1 << 28) | (1 << 23) | (1 << 22) | (1 << 20) | (1 << 11) | (1 << 8) | (1 << 7);
     }
+}
+
+pub unsafe fn set_sctlr_el1(sctlr_el1: SCTLR) {
+    asm!("msr sctlr_el1, {:x}", in(reg) sctlr_el1.bits(), options(nomem, nostack));
 }
