@@ -163,6 +163,7 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
     if let Some(frame_buffer_tag) = tags.frame_buffer {
         let graphics = graphics(image, boot_services).unwrap();
         println!("Graphics mode: {:?}", graphics.mode);
+
         frame_buffer_tag.address = graphics.frame_buffer_ptr as usize;
         frame_buffer_tag.width = graphics.mode.resolution().0 as u32;
         frame_buffer_tag.height = graphics.mode.resolution().1 as u32;

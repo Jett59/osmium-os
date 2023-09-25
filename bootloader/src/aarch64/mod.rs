@@ -49,7 +49,7 @@ impl PageTables {
             .map(allocator, virtual_address, physical_address, length, flags);
     }
 
-    pub(self) fn inner_mut(&mut self) -> &mut paging::PageTables {
+    pub fn inner_mut(&mut self) -> &mut paging::PageTables {
         &mut self.0
     }
 }

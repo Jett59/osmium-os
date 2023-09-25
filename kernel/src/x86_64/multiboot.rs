@@ -1,6 +1,7 @@
 use core::mem::size_of;
 
 use crate::{
+    arch_api::paging::MemoryType,
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
@@ -184,6 +185,7 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
                 let physical_address_handle = map_physical_memory(
                     frame_buffer.address as usize,
                     frame_buffer.pitch as usize * frame_buffer.height as usize,
+                    MemoryType::Device,
                 );
                 PhysicalAddressHandle::leak(physical_address_handle)
             },

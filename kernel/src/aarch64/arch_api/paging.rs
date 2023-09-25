@@ -176,7 +176,13 @@ fn ensure_page_table_exists(level_0_index: usize, level_1_index: usize, level_2_
     create_page_table_if_absent(level_0_index, level_1_index, level_2_index);
 }
 
-pub fn map_page(virtual_address: usize, physical_address: usize) {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MemoryType {
+    Normal,
+    Device,
+}
+
+pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
         assert!(indices.upper_half, "Lower half not supported");
@@ -194,11 +200,15 @@ pub fn map_page(virtual_address: usize, physical_address: usize) {
         if flags.contains(PageTableFlags::VALID) {
             panic!("Remapping a page which is already mapped!");
         }
+        let mut flags = PageTableFlags::VALID
+            | PageTableFlags::NOT_BLOCK
+            | PageTableFlags::NORMAL_MEMORY
+            | PageTableFlags::ACCESS;
+        if memory_type == MemoryType::Device {
+            flags.insert(PageTableFlags::DEVICE_MEMORY);
+        }
         write_upper_page_table_entry(
-            PageTableFlags::VALID
-                | PageTableFlags::NOT_BLOCK
-                | PageTableFlags::NORMAL_MEMORY
-                | PageTableFlags::ACCESS,
+            flags,
             physical_address as u64,
             indices.level_0_index,
             indices.level_1_index,

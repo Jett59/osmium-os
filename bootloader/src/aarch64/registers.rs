@@ -63,22 +63,6 @@ pub fn set_mair_el1(mair: [MAIR; 8]) {
 }
 
 #[inline(always)]
-pub fn get_ttbr0_el2() -> u64 {
-    let ttbr0: u64;
-    unsafe {
-        asm!("mrs {:x}, ttbr0_el2", out(reg) ttbr0, options(nomem, nostack));
-    }
-    ttbr0
-}
-
-#[inline(always)]
-pub fn set_ttbr0_el1(ttbr0: u64) {
-    unsafe {
-        asm!("msr ttbr0_el1, {:x}", in(reg) ttbr0, options(nomem, nostack));
-    }
-}
-
-#[inline(always)]
 pub fn set_ttbr1_el1(ttbr1: u64) {
     unsafe {
         asm!("msr ttbr1_el1, {:x}", in(reg) ttbr1, options(nomem, nostack));

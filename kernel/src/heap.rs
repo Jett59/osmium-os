@@ -3,6 +3,7 @@ use core::{alloc::GlobalAlloc, intrinsics::size_of, ops::Deref, ptr::null_mut};
 use alloc::boxed::Box;
 
 use crate::{
+    arch_api::paging::MemoryType,
     assert::const_assert,
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
@@ -93,7 +94,7 @@ impl SlabAllocator {
             if let Some(virtual_address) = virtual_address {
                 let physical_address = crate::physical_memory_manager::allocate_block_address();
                 if let Some(physical_address) = physical_address {
-                    map_block(virtual_address, physical_address);
+                    map_block(virtual_address, physical_address, MemoryType::Normal);
                     return virtual_address as *mut SlabEntry<SIZE>;
                 }
             }
@@ -222,9 +223,10 @@ unsafe impl GlobalAlloc for HeapAllocator {
             let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size);
             if let Some(address) = address {
                 for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
-                    let physical_block_address = crate::physical_memory_manager::allocate_block_address();
+                    let physical_block_address =
+                        crate::physical_memory_manager::allocate_block_address();
                     if let Some(physical_address) = physical_block_address {
-                        map_block(virtual_block_address, physical_address);
+                        map_block(virtual_block_address, physical_address, MemoryType::Normal);
                     } else {
                         return null_mut();
                     }
@@ -322,13 +324,17 @@ impl Drop for PhysicalAddressHandle<'_> {
     }
 }
 
-pub fn map_physical_memory(physical_address: usize, size: usize) -> PhysicalAddressHandle<'static> {
+pub fn map_physical_memory(
+    physical_address: usize,
+    size: usize,
+    memory_type: MemoryType,
+) -> PhysicalAddressHandle<'static> {
     let address = unsafe { HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size).unwrap() };
     for (virtual_block_address, physical_block_address) in (address..(address + size))
         .step_by(BLOCK_SIZE)
         .zip((physical_address..(physical_address + size)).step_by(BLOCK_SIZE))
     {
-        map_block(virtual_block_address, physical_block_address);
+        map_block(virtual_block_address, physical_block_address, memory_type);
     }
     let data = unsafe { core::slice::from_raw_parts_mut(address as *mut u8, size) };
     PhysicalAddressHandle {

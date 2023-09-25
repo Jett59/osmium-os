@@ -3,8 +3,8 @@ use core::arch::asm;
 use super::{
     paging::{PageTableFlags, PageTables},
     registers::{
-        current_el, get_ttbr0_el2, mask_exceptions, set_hcr_el2, set_mair_el1, set_tcr_el1,
-        set_ttbr0_el1, set_ttbr1_el1, ExceptionLevel, HCR, MAIR, TCR,
+        current_el, mask_exceptions, set_hcr_el2, set_mair_el1, set_tcr_el1, set_ttbr1_el1,
+        ExceptionLevel, HCR, MAIR, TCR,
     },
 };
 

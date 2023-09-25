@@ -12,6 +12,8 @@ use core::mem::size_of;
 use core::ptr::null;
 use core::slice;
 
+use super::paging::MemoryType;
+
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
 static mut STACK: Stack = Stack::default();
 #[link_section = ".beryllium"]
@@ -79,6 +81,7 @@ pub fn arch_init() {
                 let physical_memory_handle = map_physical_memory(
                     FRAME_BUFFER_TAG.address,
                     FRAME_BUFFER_TAG.pitch as usize * FRAME_BUFFER_TAG.height as usize,
+                    MemoryType::Device,
                 );
                 PhysicalAddressHandle::leak(physical_memory_handle)
             },

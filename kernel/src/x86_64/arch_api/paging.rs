@@ -262,7 +262,13 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
     }
 }
 
-pub fn map_page(virtual_address: usize, physical_address: usize) {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MemoryType {
+    Normal,
+    Device,
+}
+
+pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
         ensure_page_table_exists(indices.pml4_index, indices.pml3_index, indices.pml2_index);
@@ -281,7 +287,7 @@ pub fn map_page(virtual_address: usize, physical_address: usize) {
                 writeable: true,
                 user_accessible: virtual_address & (1 << 47) == 0,
                 write_through: false,
-                cache_disabled: false,
+                cache_disabled: memory_type == MemoryType::Device,
                 accessed: false,
                 dirty: false,
                 huge_page: false,
@@ -410,7 +416,7 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(4096, 0);
+    map_page(4096, 0, MemoryType::Normal);
     let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
