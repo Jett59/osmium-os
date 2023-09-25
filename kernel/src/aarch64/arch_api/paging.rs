@@ -276,5 +276,25 @@ pub fn unmap_page(virtual_address: usize) {
 }
 
 pub fn get_physical_address(_virtual_address: usize) -> usize {
-    unimplemented!();
+    unsafe {
+        let indices = deconstruct_virtual_address(_virtual_address);
+        assert!(indices.upper_half, "Lower half not supported");
+        if !is_page_table_present(
+            indices.level_0_index,
+            indices.level_1_index,
+            indices.level_2_index,
+        ) {
+            panic!("Getting the physical address of a page which is not mapped!");
+        }
+        let (flags, physical_address) = read_upper_page_table_entry(
+            indices.level_0_index,
+            indices.level_1_index,
+            indices.level_2_index,
+            indices.level_3_index,
+        );
+        if !flags.contains(PageTableFlags::VALID) {
+            panic!("Getting the physical address of a page which is not mapped!");
+        }
+        physical_address as usize
+    }
 }
