@@ -89,6 +89,7 @@ bitflags! {
     pub struct SCTLR: u64 {
         const MMU = 1 << 0;
         const RESERVED = (1 << 29) | (1 << 28) | (1 << 23) | (1 << 22) | (1 << 20) | (1 << 11) | (1 << 8) | (1 << 7);
+        const CACHE_ENABLE = (1 << 12) | (1 << 2);
     }
 }
 

@@ -24,13 +24,17 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
     unsafe {
         mask_exceptions();
         set_ttbr1_el1(page_tables.upper() as *const _ as u64);
-        set_tcr_el1(TCR::FORTY_EIGHT_BIT_VIRTUAL_ADDRESSES | TCR::FOUR_K_PAGES | TCR::FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES);
+        set_tcr_el1(
+            TCR::FORTY_EIGHT_BIT_VIRTUAL_ADDRESSES
+                | TCR::FOUR_K_PAGES
+                | TCR::FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES,
+        );
         let mut mair = [MAIR::DEVICE; 8];
         mair[1] = MAIR::NORMAL_WRITE_BACK;
         set_mair_el1(mair);
+        set_sctlr_el1(SCTLR::RESERVED | SCTLR::MMU | SCTLR::CACHE_ENABLE);
         if current_el() == ExceptionLevel::EL2 {
             set_hcr_el2(HCR::RW | HCR::SWIO);
-            set_sctlr_el1(SCTLR::RESERVED | SCTLR::MMU);
             // We set SP_EL1 to the stack, ELR_El2 to the entrypoint, SPSR_EL2 to 0x3c5 (all exceptions masked, return to EL1 using SP_EL1), and then eret into the kernel.
             asm!("
             msr sp_el1, {stack_pointer}

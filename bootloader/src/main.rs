@@ -246,6 +246,7 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         memory_map_tag_offset,
         final_memory_map_tag
     );
+
     // Since we have to exit boot services to get the memory map, but we need to allocate memory to store the memory map first, we just hope this is enough space.
     // It should be fine because the entries are 24 bytes each, so we can store 170 entries in 4 KiB.
     let memory_map_storage = unsafe {
