@@ -47,9 +47,8 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
             ",
                 stack_pointer = in(reg) stack_pointer,
                 entrypoint = in(reg) entrypoint,
-                options(nomem, nostack)
+                options(nomem, nostack, noreturn)
             );
-            unreachable!();
         } else {
             asm!(
                 "
@@ -61,9 +60,8 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
             ",
                 stack_pointer = in(reg) stack_pointer,
                 entrypoint = in(reg) entrypoint,
-                options(nomem, nostack)
+                options(nomem, nostack, noreturn)
             );
-            unreachable!();
         }
     }
 }
