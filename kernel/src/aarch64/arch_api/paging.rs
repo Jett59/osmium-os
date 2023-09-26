@@ -2,7 +2,7 @@ use core::arch::asm;
 
 use bitflags::bitflags;
 
-use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, physical_memory_manager};
+use crate::{arch::asm, buddy::BuddyAllocator, lazy_init::lazy_static, physical_memory_manager};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -43,6 +43,8 @@ unsafe fn write_upper_page_table_entry(
         + level_0_index * 512 * 512 * 512;
     let entry = flags.bits() | physical_address & PHYSICAL_PAGE_MASK;
     *UPPER_RECURSIVE_MAPPING_ADDRESS.add(offset) = entry;
+    asm::dsb_ish();
+    asm::isb();
 }
 
 /// Read the flags and physical address from a page table entry.
@@ -240,7 +242,9 @@ fn is_page_table_present(level_0_index: usize, level_1_index: usize, level_2_ind
 }
 
 unsafe fn invalidate_tlb(address: usize) {
-    asm!("tlbi vae1, {}", in(reg) address, options(nomem, nostack));
+    asm!("tlbi vaae1is, {}", in(reg) address, options(nomem, nostack));
+    asm::dsb_ish();
+    asm::isb();
 }
 
 pub fn unmap_page(virtual_address: usize) {
