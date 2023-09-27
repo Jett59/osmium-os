@@ -121,7 +121,7 @@ fn allocate_page_table() -> usize {
 fn free_page_table(address: usize) {
     unsafe {
         PAGE_TABLE_ALLOCATION_POOL.free(4096, address);
-        // If this merged into a 64 kb block, return it to the phyical memory manager (PMM) so it can be used by someone else.
+        // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
         if let Some(free_block) =
             PAGE_TABLE_ALLOCATION_POOL.allocate(physical_memory_manager::BLOCK_SIZE)
         {
@@ -242,7 +242,7 @@ fn is_page_table_present(level_0_index: usize, level_1_index: usize, level_2_ind
 }
 
 unsafe fn invalidate_tlb(address: usize) {
-    asm!("tlbi vaae1is, {}", in(reg) address, options(nomem, nostack));
+    asm!("tlbi vaae1is, {}", in (reg) address / PAGE_SIZE, options(nomem, nostack));
     asm::dsb_ish();
     asm::isb();
 }
