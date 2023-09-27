@@ -4,6 +4,8 @@
     "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128",
     "linker": "rust-lld",
     "linker-flavor": "ld.lld",
+    "dynamic-linking": false,
+    "code-model": "kernel",
     "llvm-target": "x86_64-unknown-none-elf",
     "os": "unknown",
     "position-independent-executables": false,
@@ -27,5 +29,6 @@
     "target-pointer-width": "64",
     "panic-strategy": "abort",
     "max-atomic-width": 64,
+    "relocation-model": "static",
     "executables": true
 }
