@@ -64,6 +64,11 @@ pub unsafe fn set_ttbr1_el1(ttbr1: u64) {
     asm!("msr ttbr1_el1, {:x}", in(reg) ttbr1, options(nomem, nostack));
 }
 
+#[inline(always)]
+pub unsafe fn set_ttbr0_el1(ttbr0: u64) {
+    asm!("msr ttbr0_el1, {:x}", in(reg) ttbr0, options(nomem, nostack));
+}
+
 bitflags! {
     pub struct HCR: u64 {
         const RW = 1 << 31;

@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use crate::arch::registers::{set_sctlr_el1, SCTLR};
+use crate::arch::registers::{set_sctlr_el1, set_ttbr0_el1, SCTLR};
 
 use super::{
     paging::{PageTableFlags, PageTables},
@@ -17,8 +17,8 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
     page_tables.upper_mut()[0] = page_table_address
         | (PageTableFlags::VALID
             | PageTableFlags::NOT_BLOCK
-            | PageTableFlags::ACCESS
-            | PageTableFlags::NORMAL_MEMORY)
+            | PageTableFlags::NORMAL_MEMORY
+            | PageTableFlags::ACCESS)
             .bits();
 
     unsafe {
@@ -35,14 +35,15 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
         set_sctlr_el1(SCTLR::RESERVED | SCTLR::MMU | SCTLR::CACHE_ENABLE);
         if current_el() == ExceptionLevel::EL2 {
             set_hcr_el2(HCR::RW | HCR::SWIO);
+            set_ttbr0_el1(0);
             // We set SP_EL1 to the stack, ELR_El2 to the entrypoint, SPSR_EL2 to 0x3c5 (all exceptions masked, return to EL1 using SP_EL1), and then eret into the kernel.
             asm!("
             msr sp_el1, {stack_pointer}
             msr elr_el2, {entrypoint}
             mov x0, #0x3c5
             msr spsr_el2, x0
-            DSB SY
-            ISB
+            dsb sy
+            isb
             eret
             ",
                 stack_pointer = in(reg) stack_pointer,
@@ -53,10 +54,9 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
             asm!(
                 "
             mov sp, {stack_pointer}
-            mov x0, {entrypoint}
-            DSB SY
-            ISB
-            br x0
+            dsb sy
+            isb
+            br {entrypoint}
             ",
                 stack_pointer = in(reg) stack_pointer,
                 entrypoint = in(reg) entrypoint,

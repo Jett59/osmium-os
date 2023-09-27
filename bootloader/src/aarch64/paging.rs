@@ -78,7 +78,10 @@ impl PageTable {
         }
 
         let subtable = Self::new(allocator);
-        let flags = PageTableFlags::VALID | PageTableFlags::NOT_BLOCK;
+        let flags = PageTableFlags::VALID
+            | PageTableFlags::NOT_BLOCK
+            | PageTableFlags::NORMAL_MEMORY
+            | PageTableFlags::ACCESS;
         self.entries[index] = subtable as *mut _ as u64 | flags.bits();
     }
 }
