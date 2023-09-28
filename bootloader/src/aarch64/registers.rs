@@ -33,7 +33,12 @@ bitflags! {
         #[allow(clippy::identity_op)]
         const FOUR_K_PAGES = 0 << 14 | 2 << 30;
         const FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES = 0b101 << 32;
-        // TODO: Add the rest
+        const SH1_INNER_SHAREABLE = 0b11 << 28;
+        const ORGN1_WRITE_BACK_ALLOCATE_READ_ALLOCATE = 0b01 << 26;
+        const IRGN1_WRITE_BACK_ALLOCATE_READ_ALLOCATE = 0b01 << 24;
+        const SH0_INNER_SHAREABLE = 0b11 << 12;
+        const ORGN0_WRITE_BACK_ALLOCATE_READ_ALLOCATE = 0b01 << 10;
+        const IRGN0_WRITE_BACK_ALLOCATE_READ_ALLOCATE = 0b01 << 8;
     }
 }
 

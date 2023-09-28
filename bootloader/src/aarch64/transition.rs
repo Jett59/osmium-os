@@ -27,7 +27,13 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
         set_tcr_el1(
             TCR::FORTY_EIGHT_BIT_VIRTUAL_ADDRESSES
                 | TCR::FOUR_K_PAGES
-                | TCR::FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES,
+                | TCR::FORTY_EIGHT_BIT_PHYSICAL_ADDRESSES
+                | TCR::SH0_INNER_SHAREABLE
+                | TCR::ORGN0_WRITE_BACK_ALLOCATE_READ_ALLOCATE
+                | TCR::IRGN0_WRITE_BACK_ALLOCATE_READ_ALLOCATE
+                | TCR::SH1_INNER_SHAREABLE
+                | TCR::ORGN1_WRITE_BACK_ALLOCATE_READ_ALLOCATE
+                | TCR::IRGN1_WRITE_BACK_ALLOCATE_READ_ALLOCATE,
         );
         let mut mair = [MAIR::DEVICE; 8];
         mair[1] = MAIR::NORMAL_WRITE_BACK;

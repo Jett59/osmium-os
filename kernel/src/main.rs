@@ -37,14 +37,11 @@ mod arch;
 
 pub use arch::arch_api;
 
-// Needed to silence rust-analyzer which uses test mode, where this is unused because the panic handler is conditionally excluded in test mode
-#[allow(unused_imports)]
 use core::panic::PanicInfo;
 
 extern crate alloc;
 
-#[panic_handler]
-#[cfg(not(test))]
+#[cfg_attr(not(test), panic_handler)]
 fn kpanic(_info: &PanicInfo) -> ! {
     console::write_string("Kpanic!");
     loop {}
