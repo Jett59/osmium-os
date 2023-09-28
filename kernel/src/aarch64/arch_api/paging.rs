@@ -37,12 +37,14 @@ unsafe fn write_upper_page_table_entry(
     level_2_index: usize,
     level_3_index: usize,
 ) {
-    let offset = level_3_index
-        + level_2_index * 512
-        + level_1_index * 512 * 512
-        + level_0_index * 512 * 512 * 512;
     let entry = flags.bits() | physical_address & PHYSICAL_PAGE_MASK;
-    *UPPER_RECURSIVE_MAPPING_ADDRESS.add(offset) = entry;
+    let entry_address = get_upper_page_table_entry_address(
+        level_0_index,
+        level_1_index,
+        level_2_index,
+        level_3_index,
+    );
+    *entry_address = entry;
     asm::dsb_ish();
     asm::isb();
 }
@@ -54,11 +56,12 @@ unsafe fn read_upper_page_table_entry(
     level_2_index: usize,
     level_3_index: usize,
 ) -> (PageTableFlags, u64) {
-    let offset = level_3_index
-        + level_2_index * 512
-        + level_1_index * 512 * 512
-        + level_0_index * 512 * 512 * 512;
-    let entry = *UPPER_RECURSIVE_MAPPING_ADDRESS.add(offset);
+    let entry = *get_upper_page_table_entry_address(
+        level_0_index,
+        level_1_index,
+        level_2_index,
+        level_3_index,
+    );
     let flags = PageTableFlags::from_bits_truncate(entry);
     let physical_address = entry & PHYSICAL_PAGE_MASK;
     (flags, physical_address)

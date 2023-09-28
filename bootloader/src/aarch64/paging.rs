@@ -178,6 +178,9 @@ impl PageTables {
         if physical_address > 0x0000_ffff_ffff_f000 {
             panic!("Physical address must be 48 bits or less");
         }
+        if length % PAGE_SIZE != 0 {
+            panic!("Length must be page aligned");
+        }
 
         for offset in (0..length).step_by(PAGE_SIZE) {
             unsafe {

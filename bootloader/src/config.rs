@@ -1,8 +1,8 @@
+use crate::toml::parse_toml;
 use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use crate::toml::parse_toml;
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -28,10 +28,10 @@ impl ConfigEntry {
 
 pub fn parse_config(config_string: &str) -> Config {
     let mut config: Config = Default::default();
-    
+
     let toml = parse_toml(config_string);
 
-    //get booot entry from toml
+    //get boot entry from toml
     let boot_entry = toml.get("boot").unwrap();
     config.timeout = boot_entry.get("timeout").unwrap().parse::<u32>().unwrap();
     config.default_entry = boot_entry.get("default").unwrap().clone();
