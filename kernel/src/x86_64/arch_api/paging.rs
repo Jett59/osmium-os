@@ -125,7 +125,11 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
 
 lazy_static! {
     static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12> = {
-        static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
+        static mut ACTUAL_ALLOCATOR: BuddyAllocator<
+            128,
+            { physical_memory_manager::LOG2_BLOCK_SIZE },
+            12,
+        > = BuddyAllocator::unusable();
         unsafe { ACTUAL_ALLOCATOR.all_unused() }
     };
 }
@@ -149,8 +153,10 @@ fn allocate_page_table() -> usize {
 fn free_page_table(address: usize) {
     unsafe {
         PAGE_TABLE_ALLOCATION_POOL.free(4096, address);
-        // If this merged into a 64 kb block, return it to the phyical memory manager (PMM) so it can be used by someone else.
-        if let Some(free_block) = PAGE_TABLE_ALLOCATION_POOL.allocate(physical_memory_manager::BLOCK_SIZE) {
+        // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
+        if let Some(free_block) =
+            PAGE_TABLE_ALLOCATION_POOL.allocate(physical_memory_manager::BLOCK_SIZE)
+        {
             physical_memory_manager::mark_as_free(free_block);
         }
     }

@@ -167,7 +167,7 @@ fn ensure_page_table_exists(level_0_index: usize, level_1_index: usize, level_2_
                     level_2_index,
                     0,
                 );
-                core::ptr::write_bytes(address as *mut u8, 0, PAGE_SIZE);
+                address.write_bytes(0, PAGE_SIZE);
             }
         }
     }
@@ -205,12 +205,10 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
         if flags.contains(PageTableFlags::VALID) {
             panic!("Remapping a page which is already mapped!");
         }
-        let mut flags = PageTableFlags::VALID
-            | PageTableFlags::NOT_BLOCK
-            | PageTableFlags::NORMAL_MEMORY
-            | PageTableFlags::ACCESS;
-        if memory_type == MemoryType::Device {
-            flags.insert(PageTableFlags::DEVICE_MEMORY);
+        let mut flags = PageTableFlags::VALID | PageTableFlags::NOT_BLOCK | PageTableFlags::ACCESS;
+        match memory_type {
+            MemoryType::Normal => flags |= PageTableFlags::NORMAL_MEMORY,
+            MemoryType::Device => flags |= PageTableFlags::DEVICE_MEMORY,
         }
         write_upper_page_table_entry(
             flags,
@@ -282,9 +280,9 @@ pub fn unmap_page(virtual_address: usize) {
     }
 }
 
-pub fn get_physical_address(_virtual_address: usize) -> usize {
+pub fn get_physical_address(virtual_address: usize) -> usize {
     unsafe {
-        let indices = deconstruct_virtual_address(_virtual_address);
+        let indices = deconstruct_virtual_address(virtual_address);
         assert!(indices.upper_half, "Lower half not supported");
         if !is_page_table_present(
             indices.level_0_index,
