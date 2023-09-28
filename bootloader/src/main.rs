@@ -259,37 +259,56 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         false,
     );
 
-    let (_runtime_table, memory_map) = system_table.exit_boot_services();
+    let (_runtime_table, mut memory_map) = system_table.exit_boot_services();
+    memory_map.sort();
 
-    let memory_map_storage_iterator = memory_map_storage
+    let mut memory_map_storage_iterator = memory_map_storage
         .chunks_exact_mut(size_of::<MemoryMapEntry>())
         .map::<&mut MemoryMapEntry, _>(|slice| TryFrom::try_from(slice).unwrap());
-    for (memory_map_entry, memory_map_storage_entry) in
-        memory_map.entries().zip(memory_map_storage_iterator)
-    {
-        *memory_map_storage_entry = MemoryMapEntry {
-            address: memory_map_entry.phys_start as *mut u8,
-            size: memory_map_entry.page_count as usize * PAGE_SIZE,
-            memory_type: match memory_map_entry.ty {
-                MemoryType::CONVENTIONAL => MemoryMapEntryType::Available,
-                MemoryType::LOADER_CODE => MemoryMapEntryType::Kernel,
-                MemoryType::LOADER_DATA => MemoryMapEntryType::Kernel,
-                MemoryType::BOOT_SERVICES_CODE => MemoryMapEntryType::Available,
-                MemoryType::BOOT_SERVICES_DATA => MemoryMapEntryType::Available,
-                MemoryType::RUNTIME_SERVICES_CODE => MemoryMapEntryType::EfiRuntime,
-                MemoryType::RUNTIME_SERVICES_DATA => MemoryMapEntryType::EfiRuntime,
-                MemoryType::ACPI_RECLAIM => MemoryMapEntryType::AcpiReclaimable,
-                _ => MemoryMapEntryType::Reserved,
-            },
+    let mut previous_storage_entry: Option<&mut MemoryMapEntry> = None;
+    for memory_map_entry in memory_map.entries() {
+        let memory_type = match memory_map_entry.ty {
+            MemoryType::CONVENTIONAL => MemoryMapEntryType::Available,
+            MemoryType::LOADER_CODE => MemoryMapEntryType::Kernel,
+            MemoryType::LOADER_DATA => MemoryMapEntryType::Kernel,
+            MemoryType::BOOT_SERVICES_CODE => MemoryMapEntryType::Available,
+            MemoryType::BOOT_SERVICES_DATA => MemoryMapEntryType::Available,
+            MemoryType::RUNTIME_SERVICES_CODE => MemoryMapEntryType::EfiRuntime,
+            MemoryType::RUNTIME_SERVICES_DATA => MemoryMapEntryType::EfiRuntime,
+            MemoryType::ACPI_RECLAIM => MemoryMapEntryType::AcpiReclaimable,
+            _ => MemoryMapEntryType::Reserved,
+        };
+        if let Some(ref mut previous_storage_entry) = previous_storage_entry {
+            if previous_storage_entry.memory_type == memory_type
+                && previous_storage_entry.address as u64 + previous_storage_entry.size as u64
+                    == memory_map_entry.phys_start
+            {
+                previous_storage_entry.size += memory_map_entry.page_count as usize * PAGE_SIZE;
+                continue;
+            }
+        }
+        if let Some(memory_map_storage_entry) = memory_map_storage_iterator.next() {
+            *memory_map_storage_entry = MemoryMapEntry {
+                address: memory_map_entry.phys_start as *mut u8,
+                size: memory_map_entry.page_count as usize * PAGE_SIZE,
+                memory_type,
+            };
+            previous_storage_entry = Some(memory_map_storage_entry);
+        } else {
+            break;
         }
     }
+
+    let remaining_memory_map_storage_entries = memory_map_storage_iterator.count();
+    let used_memory_map_storage_entries = memory_map_storage.len() / size_of::<MemoryMapEntry>()
+        - remaining_memory_map_storage_entries;
 
     if let Some(memory_map_tag) = final_memory_map_tag {
         memory_map_tag.base = memory_map_virtual_address as *mut u8;
         memory_map_tag.memory_size = memory_map
             .entries()
             .len()
-            .max(memory_map_storage.len() / size_of::<MemoryMapEntry>())
+            .max(used_memory_map_storage_entries)
             * size_of::<MemoryMapEntry>();
     }
 

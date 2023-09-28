@@ -76,7 +76,7 @@ impl TryFrom<&mut [u8]> for &mut MemoryMapEntry {
 }
 
 #[repr(u32)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryMapEntryType {
     Reserved = 0,
     Available = 1,
