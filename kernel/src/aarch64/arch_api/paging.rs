@@ -167,7 +167,7 @@ fn ensure_page_table_exists(level_0_index: usize, level_1_index: usize, level_2_
                     level_2_index,
                     0,
                 );
-                address.write_bytes(0, PAGE_SIZE);
+                (address as *mut u8).write_bytes(0, PAGE_SIZE);
             }
         }
     }

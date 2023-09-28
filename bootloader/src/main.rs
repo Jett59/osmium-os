@@ -234,7 +234,7 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
             &mut page_allocator,
             segment.virtual_address,
             allocated_memory as usize,
-            segment.size_in_memory,
+            page_align_up(segment.size_in_memory),
             segment.writable,
             segment.executable,
         );
