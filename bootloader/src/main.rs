@@ -162,7 +162,6 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
 
     if let Some(frame_buffer_tag) = tags.frame_buffer {
         let graphics = graphics(image, boot_services).unwrap();
-        println!("Graphics mode: {:?}", graphics.mode);
 
         frame_buffer_tag.address = graphics.frame_buffer_ptr as usize;
         frame_buffer_tag.width = graphics.mode.resolution().0 as u32;
@@ -241,12 +240,6 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         );
     }
 
-    uefi_services::println!(
-        "Memory map tag offset: {:?}, final address: {:?}",
-        memory_map_tag_offset,
-        final_memory_map_tag
-    );
-
     // Since we have to exit boot services to get the memory map, but we need to allocate memory to store the memory map first, we just hope this is enough space.
     // It should be fine because the entries are 24 bytes each, so we can store 170 entries in 4 KiB.
     let memory_map_storage = unsafe {
@@ -257,10 +250,6 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
             PAGE_SIZE,
         )
     };
-    uefi_services::println!(
-        "Created the memory map storage with physical address {:p}",
-        memory_map_storage.as_ptr()
-    );
     page_tables.map(
         &mut page_allocator,
         memory_map_virtual_address,
