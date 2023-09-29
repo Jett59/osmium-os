@@ -1,9 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 
-set -e
 set +x
+set -e
 
-source .config
+if [ -z $SOURCED_CONFIG ]; then
+    echo "Warning: .config not sourced into current shell. Doing it now."
+    echo "Run source .config to prevent this warning."
+    . ./.config
+fi
 
 # Find the command line option for the given $PROFILE (debug should have no option, otherwise --$PROFILE)
 PROFILE_OPTION=""
@@ -12,15 +16,10 @@ if [ "$PROFILE" != "debug" ]; then
     PROFILE_OPTION="--$PROFILE"
 fi
 
-cargo build --target ./targets/$ARCH.json $PROFILE_OPTION -Zbuild-std=core,alloc
+export PROFILE_OPTION
 
-mkdir -p build/isoroot/boot/grub
-cp target/$ARCH/$PROFILE/osmium build/isoroot/boot/osmium
-strip build/isoroot/boot/osmium
-cp grub/config.cfg build/isoroot/boot/grub/grub.cfg
+cd kernel
+./build.sh
+cd ..
 
-grub-mkrescue -d /usr/lib/grub/i386-pc -o build/osmium.iso build/isoroot
-
-# Set up a symbolic link so that it is easy to find the most recently built target directory.
-rm -f build/target
-ln -s `realpath target/$ARCH/$PROFILE` build/target
+./build-$ARCH.sh

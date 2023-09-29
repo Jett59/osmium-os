@@ -1,5 +1,5 @@
-/target
-/build
+target/
+build/
 *.o
 *.a
 *.log
@@ -7,3 +7,5 @@
 .vscode/
 
 .config
+**/*.DS_Store
+.idea/

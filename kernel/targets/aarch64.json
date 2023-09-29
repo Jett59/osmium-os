@@ -1,0 +1,30 @@
+{
+    "arch": "aarch64",
+    "data-layout": "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
+    "linker": "rust-lld",
+    "linker-flavor": "ld.lld",
+    "llvm-target": "aarch64-unknown-none-elf",
+    "os": "unknown",
+    "position-independent-executables": false,
+    "disable-redzone": true,
+    "features": "",
+    "pre-link-args": {
+        "ld.lld": [
+            "--gc-sections",
+            "-T",
+            "src/aarch64/linker.ld"
+        ]
+    },
+    "post-link-args": {
+        "ld.lld": [
+            "-Lasm-code",
+            "-lasm-aarch64"
+        ]
+    },
+    "target-c-int-width": "32",
+    "target-endian": "little",
+    "target-pointer-width": "64",
+    "panic-strategy": "abort",
+    "relocation-model": "static",
+    "executables": true
+}
