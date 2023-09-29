@@ -3,4 +3,4 @@ timeout = 5
 default = "osmium"
 
 [osmium]
-kernel = "/boot/osmium/osmium"
+kernel = "/boot/osmium"

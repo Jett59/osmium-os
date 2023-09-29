@@ -18,6 +18,6 @@ mmd -i build/osmium.img ::/EFI/BOOT
 mcopy -i build/osmium.img bootloader/build/bootloader.efi ::/EFI/BOOT/BOOTAA64.EFI
 
 mmd -i build/osmium.img ::/boot
-mmd -i build/osmium.img ::/boot/osmium
-mcopy -i build/osmium.img config/boot.toml ::/boot/osmium/boot.toml
-mcopy -i build/osmium.img kernel/build/osmium ::/boot/osmium/osmium
+mmd -i build/osmium.img ::/boot/beryllium
+mcopy -i build/osmium.img config/boot.toml ::/boot/beryllium/boot.toml
+mcopy -i build/osmium.img kernel/build/osmium ::/boot/osmium

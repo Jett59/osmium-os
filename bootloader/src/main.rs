@@ -111,7 +111,11 @@ fn read_file(image: Handle, boot_services: &BootServices, name: &CStr16) -> Resu
 }
 
 fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
-    let bytes = read_file(image, boot_services, cstr16!("\\boot\\osmium\\boot.toml"))?;
+    let bytes = read_file(
+        image,
+        boot_services,
+        cstr16!("\\boot\\beryllium\\boot.toml"),
+    )?;
 
     let config_string = core::str::from_utf8(&bytes).unwrap();
     let config = parse_config(config_string);
