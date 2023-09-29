@@ -198,10 +198,9 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
     };
 
     let entrypoint = elf.entrypoint as usize;
-    let stack_tag = tags
+    let stack_tag = *tags
         .stack_pointer
-        .expect("Stack tag not found in kernel binary")
-        .clone();
+        .expect("Stack tag not found in kernel binary");
 
     let memory_map_tag_offset = tags.memory_map_offset;
     let mut final_memory_map_tag = None;

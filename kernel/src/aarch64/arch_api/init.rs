@@ -1,6 +1,6 @@
 use common::framebuffer;
 
-use crate::arch::beryllium::{
+use common::beryllium::{
     BootRequestTagType, FrameBufferTag, MemoryMapEntry, MemoryMapEntryType, MemoryMapTag,
     StackPointerTag,
 };
