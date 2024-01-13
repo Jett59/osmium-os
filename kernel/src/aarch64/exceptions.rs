@@ -3,6 +3,8 @@ use core::{
     fmt::Debug,
 };
 
+use crate::arch::registers::get_esr;
+
 global_asm!(include_str!("exceptions.s"));
 
 extern "C" {
@@ -89,8 +91,10 @@ pub struct SavedRegisters {
 #[no_mangle]
 pub extern "C" fn synchronous_vector(registers: &SavedRegisters) {
     panic!(
-        "Synchronous exception at {:p}\n{:x?}",
-        registers.elr as *const (), registers
+        "Synchronous exception at {:p}: {:x}\n{:x?}",
+        registers.elr as *const (),
+        get_esr(),
+        registers
     );
 }
 #[no_mangle]
@@ -109,8 +113,10 @@ pub extern "C" fn serror_vector(registers: &SavedRegisters) {
 #[no_mangle]
 pub extern "C" fn synchronous_vector_user(registers: &SavedRegisters) {
     panic!(
-        "synchronous exception in user code at {:p}\n{:x?}",
-        registers.elr as *const (), registers
+        "synchronous exception in user code at {:p}: {:x}\n{:x?}",
+        registers.elr as *const (),
+        get_esr(),
+        registers
     );
 }
 #[no_mangle]
