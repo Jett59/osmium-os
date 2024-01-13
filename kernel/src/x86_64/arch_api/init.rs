@@ -11,7 +11,7 @@ extern "C" {
 }
 
 #[cfg(test)]
-static KERNEL_PHYSICAL_END: () = (); // Mutable to make an unsafe block necessary.
+static KERNEL_PHYSICAL_END: () = ();
 
 #[allow(unused_unsafe)] // It isn't actually unused, but I think there is a bug in the compiler since removing it causes an error.
 pub fn arch_init() {
