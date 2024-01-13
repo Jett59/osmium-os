@@ -15,6 +15,8 @@ stp x24, x25, [sp, #0xc8]
 stp x26, x27, [sp, #0xd8]
 stp x28, x29, [sp, #0xe8]
 str x30, [sp, #0xf8]
+mrs x0, elr_el1
+str x0, [sp, #0x108]
 ret
 
 restore_registers:

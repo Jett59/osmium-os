@@ -1,4 +1,7 @@
-use core::arch::{asm, global_asm};
+use core::{
+    arch::{asm, global_asm},
+    fmt::Debug,
+};
 
 global_asm!(include_str!("exceptions.s"));
 
@@ -49,40 +52,76 @@ pub extern "C" fn invalid_vector(vector: *const &str) {
 
 #[derive(Debug)]
 pub struct SavedRegisters {
-    x: [u64; 31],
-    zero: u64,
+    x0: u64,
+    x1: u64,
+    x2: u64,
+    x3: u64,
+    x4: u64,
+    x5: u64,
+    x6: u64,
+    x7: u64,
+    x8: u64,
+    x9: u64,
+    x10: u64,
+    x11: u64,
+    x12: u64,
+    x13: u64,
+    x14: u64,
+    x15: u64,
+    x16: u64,
+    x17: u64,
+    x18: u64,
+    x19: u64,
+    x20: u64,
+    x21: u64,
+    x22: u64,
+    x23: u64,
+    x24: u64,
+    x25: u64,
+    x26: u64,
+    x27: u64,
+    x28: u64,
+    x29: u64,
+    x30: u64,
+    elr: u64,
 }
 
 #[no_mangle]
 pub extern "C" fn synchronous_vector(registers: &SavedRegisters) {
-    panic!("Synchronous exception\n{:?}", registers);
+    panic!(
+        "Synchronous exception at {:p}\n{:x?}",
+        registers.elr as *const (), registers
+    );
 }
 #[no_mangle]
 pub extern "C" fn irq_vector(registers: &SavedRegisters) {
-    panic!("IRQ exception\n{:?}", registers);
+    panic!("IRQ exception\n{:x?}", registers);
 }
 #[no_mangle]
 pub extern "C" fn fiq_vector(registers: &SavedRegisters) {
-    panic!("FIQ exception\n{:?}", registers);
+    panic!("FIQ exception\n{:x?}", registers);
 }
 #[no_mangle]
 pub extern "C" fn serror_vector(registers: &SavedRegisters) {
-    panic!("SError exception\n{:?}", registers);
+    panic!("SError exception\n{:x?}", registers);
 }
 
 #[no_mangle]
 pub extern "C" fn synchronous_vector_user(registers: &SavedRegisters) {
-    panic!("synchronous exception in user code\n{:?}", registers);
+    panic!(
+        "synchronous exception in user code at {:p}\n{:x?}",
+        registers.elr as *const (), registers
+    );
 }
 #[no_mangle]
 pub extern "C" fn irq_vector_user(registers: &SavedRegisters) {
-    panic!("IRQ exception in user code\n{:?}", registers);
+    panic!("IRQ exception in user code\n{:x?}", registers);
 }
 #[no_mangle]
 pub extern "C" fn fiq_vector_user(registers: &SavedRegisters) {
-    panic!("FIQ exception in user code\n{:?}", registers);
+    panic!("FIQ exception in user code\n{:x?}", registers);
 }
 #[no_mangle]
 pub extern "C" fn serror_vector_user(registers: &SavedRegisters) {
-    panic!("SError exception in user code\n{:?}", registers);
+    panic!("SError exception in user code\n{:x?}", registers);
 }
