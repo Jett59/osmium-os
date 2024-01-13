@@ -52,11 +52,7 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     physical_memory_manager::sanity_check();
     heap::sanity_check();
-    console::write_string("Initialized the display (obviously)");
-    for i in 0.. {
-        console::write_string("-".repeat(i % 50).as_str());
-        console::write_character('\n');
-    }
+    console::println!("Initialized the display (obviously)");
     loop {}
 }
 

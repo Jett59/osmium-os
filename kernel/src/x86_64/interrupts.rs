@@ -87,7 +87,7 @@ macro_rules! asm_interrupt_handler {
                  pop rcx
                  pop rax
                  sub rsp, {error_code_length}
-                 iret",
+                 iretq",
                 number = const $number,
                 handler = sym $handler,
                 error_code_length = const $error_code_length,

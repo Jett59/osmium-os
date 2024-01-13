@@ -89,6 +89,13 @@ _start64:
 lea high_gdt_pointer(%rip), %rax
 lgdt (%rax)
 
+xor %eax, %eax
+mov %ax, %ds
+mov %ax, %es
+mov %ax, %fs
+mov %ax, %gs
+mov %ax, %ss
+
 /* Enable write-protect. This means that read-only pages are not writable in kernel mode and is very important, both for security and COW. */
 mov %cr0, %rax
 or $(1 << 16), %rax
