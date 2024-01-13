@@ -1,3 +1,4 @@
+// Sets up the data structure for the exception handlers to interpret.
 save_registers:
 stp x0, x1, [sp, #0x00]
 stp x2, x3, [sp, #0x10]
@@ -41,7 +42,9 @@ ret
 .p2align 11
 .globl exception_vector_table
 exception_vector_table:
-// For these first four, we don't bother saving anything since we expect not to return.
+// This table is structured as 16 functions, each of which is 128 bytes long (32 instructions).
+
+// The first four are for system interrupts with a user stack, which we don't use.
 adr x0, sp0_synch
 b invalid_vector
 .p2align 7
@@ -53,7 +56,7 @@ b invalid_vector
 .p2align 7
 adr x0, sp0_serror
 b invalid_vector
-// The next four are actually going to be used, so we save the registers.
+// The next four are system exceptions with kernel stack, which is what we use.
 .p2align 7
 sub sp, sp, #0x100
 bl save_registers
@@ -86,7 +89,7 @@ bl serror_vector
 bl restore_registers
 add sp, sp, #0x100
 eret
-// The next lot are the user mode vectors.
+// The next lot are the user mode vectors in aarch64 mode.
 .p2align 7
 sub sp, sp, #0x100
 bl save_registers

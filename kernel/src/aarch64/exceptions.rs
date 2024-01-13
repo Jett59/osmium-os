@@ -5,18 +5,21 @@ use core::{
 
 use crate::arch::registers::get_esr;
 
+// The vector table itself is defined in assembly language, since it requires low-level manipulation of registers and system instructions.
 global_asm!(include_str!("exceptions.s"));
 
 extern "C" {
     static exception_vector_table: u8;
 }
 
+/// Loads vbar_el1 with the address of the exception vector table, allowing us to handle them properly.
 pub fn load_exceptions() {
     unsafe {
         asm!("msr vbar_el1, {}", in(reg) &exception_vector_table);
     }
 }
 
+// Below are the string constants referenced in the assembly:
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
 pub static sp0_synch: &str = "sp0_synch";
@@ -52,6 +55,7 @@ pub extern "C" fn invalid_vector(vector: *const &str) {
     }
 }
 
+/// The registers saved by the assembly code, which are passed to the handlers.
 #[derive(Debug)]
 pub struct SavedRegisters {
     x0: u64,
@@ -85,7 +89,7 @@ pub struct SavedRegisters {
     x28: u64,
     x29: u64,
     x30: u64,
-    elr: u64,
+    elr: u64, // Exception Link Register, giving the address of the interrupted instruction.
 }
 
 #[no_mangle]
