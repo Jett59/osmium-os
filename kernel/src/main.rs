@@ -3,7 +3,7 @@
 #![cfg_attr(not(test), no_main)]
 // Lets just hope these aren't as unstable as the language says they are (it would be a pain to have to change everywhere one of these is used)
 #![feature(
-    core_intrinsics,
+    //core_intrinsics,
     generic_const_exprs,
     const_trait_impl,
     // Why all of these maybe_uninit things are separate is beyond me.

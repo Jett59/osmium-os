@@ -4,10 +4,7 @@ use alloc::boxed::Box;
 use common::font::get_character_dimensions;
 use common::framebuffer::get_screen_dimensions;
 
-use crate::{    
-    font_renderer,
-    lazy_init::lazy_static,
-};
+use crate::{font_renderer, lazy_init::lazy_static};
 
 pub fn get_console_dimensions() -> (usize, usize) {
     let screen_dimensions = get_screen_dimensions();

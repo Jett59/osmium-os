@@ -1,12 +1,11 @@
 use crate::{assert::const_assert, paging::PAGE_SIZE};
 use core::{
-    intrinsics::size_of,
-    mem::MaybeUninit,
+    mem::{size_of, MaybeUninit},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
 pub const fn get_bitmap_size(bits: usize) -> usize {
-    (bits + size_of::<usize>() * 8 - 1) / (size_of::<usize>() * 8)
+    (bits + usize::BITS as usize - 1) / usize::BITS as usize
 }
 
 pub struct MemoryBitmapAllocator<const BITS: usize>
@@ -36,8 +35,8 @@ where
     }
 
     fn get_index_and_bit_offset(bit: usize) -> (usize, usize) {
-        let index = bit / (size_of::<usize>() * 8);
-        let bit_offset = bit % (size_of::<usize>() * 8);
+        let index = bit / usize::BITS as usize;
+        let bit_offset = bit % usize::BITS as usize;
         (index, bit_offset)
     }
 
@@ -73,7 +72,7 @@ where
         } else {
             // Otherwise the lengthier algorithm.
             self.bits[start_index].fetch_or(
-                Self::get_bit_range_mask(start_bit_offset, size_of::<usize>() * 8),
+                Self::get_bit_range_mask(start_bit_offset, usize::BITS as usize),
                 Ordering::SeqCst,
             );
             for i in start_index + 1..end_index {
@@ -96,7 +95,7 @@ where
             );
         } else {
             self.bits[start_index].fetch_and(
-                !Self::get_bit_range_mask(start_bit_offset, size_of::<usize>() * 8),
+                !Self::get_bit_range_mask(start_bit_offset, usize::BITS as usize),
                 Ordering::SeqCst,
             );
             for i in start_index + 1..end_index {
@@ -188,6 +187,14 @@ pub fn allocate_block_address() -> Option<usize> {
     unsafe { GLOBAL_PMM.allocate_block().map(get_address) }
 }
 
+// This is outside the test module because it is for testing in the real kernel environment and not part of the unit testing suite.
+pub fn sanity_check() {
+    // Make sure there is some memory to work with. I'll probably add more stuff later.
+    mark_as_free(
+        allocate_block_address().expect("There should be at least some memory by this point"),
+    );
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -204,12 +211,4 @@ mod test {
         allocator.mark_as_free(17);
         assert_eq!(allocator.allocate_block(), Some(17));
     }
-}
-
-// This is outside the test module because it is for testing in the real kernel environment and not part of the unit testing suite.
-pub fn sanity_check() {
-    // Make sure there is some memory to work with. I'll probably add more stuff later.
-    mark_as_free(
-        allocate_block_address().expect("There should be at least some memory by this point"),
-    );
 }
