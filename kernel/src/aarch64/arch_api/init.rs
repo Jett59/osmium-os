@@ -1,12 +1,13 @@
 use common::framebuffer;
 
+use crate::arch::exceptions::load_exceptions;
+use crate::arch_api::stack::Stack;
+use crate::heap::{map_physical_memory, PhysicalAddressHandle};
+use crate::physical_memory_manager;
 use common::beryllium::{
     BootRequestTagType, FrameBufferTag, MemoryMapEntry, MemoryMapEntryType, MemoryMapTag,
     StackPointerTag,
 };
-use crate::arch_api::stack::Stack;
-use crate::heap::{map_physical_memory, PhysicalAddressHandle};
-use crate::physical_memory_manager;
 
 use core::mem::size_of;
 use core::ptr::null;
@@ -53,6 +54,8 @@ pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
 };
 
 pub fn arch_init() {
+    load_exceptions();
+
     let memory_map = unsafe {
         slice::from_raw_parts(
             MEMORY_MAP_TAG.base as *const MemoryMapEntry,
@@ -86,5 +89,10 @@ pub fn arch_init() {
                 PhysicalAddressHandle::leak(physical_memory_handle)
             },
         });
+    }
+
+    // Manually trigger an exception to test the exception handling.
+    unsafe {
+        core::arch::asm!("svc #0");
     }
 }

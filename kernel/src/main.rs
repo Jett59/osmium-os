@@ -42,8 +42,8 @@ use core::panic::PanicInfo;
 extern crate alloc;
 
 #[cfg_attr(not(test), panic_handler)]
-fn kpanic(_info: &PanicInfo) -> ! {
-    console::write_string("Kpanic!");
+fn kpanic(info: &PanicInfo) -> ! {
+    console::print!("Kernel panic: {}\n", info);
     loop {}
 }
 
