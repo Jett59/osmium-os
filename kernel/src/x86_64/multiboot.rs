@@ -244,11 +244,15 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
             green_byte: frame_buffer.green_position / 8,
             blue_byte: frame_buffer.blue_position / 8,
             pixels: {
-                let physical_address_handle = map_physical_memory(
-                    frame_buffer.address as usize,
-                    frame_buffer.pitch as usize * frame_buffer.height as usize,
-                    MemoryType::Device,
-                );
+                // # Safety
+                // This is the only place where the framebuffer is mapped, so there should be no aliasing issues.
+                let physical_address_handle = unsafe {
+                    map_physical_memory(
+                        frame_buffer.address as usize,
+                        frame_buffer.pitch as usize * frame_buffer.height as usize,
+                        MemoryType::Device,
+                    )
+                };
                 PhysicalAddressHandle::leak(physical_address_handle)
             },
         });

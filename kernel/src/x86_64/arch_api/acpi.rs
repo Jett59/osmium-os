@@ -8,8 +8,14 @@ pub(in crate::arch) fn init(rsdt_address: usize) {
     }
 }
 
-pub fn get_root_table_address() -> usize {
+pub fn get_root_table_address() -> Option<usize> {
     // # Safety
     // Se above for init.
-    unsafe { ROOT_TABLE_ADDRESS }
+    unsafe {
+        if ROOT_TABLE_ADDRESS == 0 {
+            None
+        } else {
+            Some(ROOT_TABLE_ADDRESS)
+        }
+    }
 }
