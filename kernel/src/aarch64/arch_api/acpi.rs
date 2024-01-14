@@ -13,8 +13,7 @@ pub static mut ACPI_TAG: AcpiTag = AcpiTag {
 
 pub fn get_rsdt_address() -> Option<usize> {
     // # Safety
-    // Only the bootloader touches this value, so we should be safe.
-    // Additionally, this code only runs when the kernel is first loaded, so there are no threads to worry about.
+    // It's safe to access the tag structures since, although they are technically mutable, they only get changed by the bootloader.
     unsafe {
         if ACPI_TAG.rsdt == 0 {
             None
