@@ -55,7 +55,7 @@ extern "C" fn kmain() -> ! {
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");
     let required_acpi_tables = acpi::find_required_acpi_tables().unwrap();
-    console::println!("Found required ACPI tables: {:?}", required_acpi_tables);
+    arch_api::acpi::handle_acpi_info(required_acpi_tables);
     loop {}
 }
 

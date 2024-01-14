@@ -3,7 +3,10 @@ use core::{
     mem::size_of,
 };
 
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::{
     arch_api::{acpi, paging::MemoryType},
@@ -11,6 +14,8 @@ use crate::{
     memory::{reinterpret_memory, Validateable},
     println,
 };
+
+pub mod madt;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -92,17 +97,17 @@ impl AcpiTableHandle {
         &self.identifier
     }
 
-    pub fn as_slice(&self) -> &[u8] {
-        &self.physical_memory_handle
+    pub fn body(&self) -> &[u8] {
+        &self.physical_memory_handle[size_of::<AcpiTableHeader>()..]
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.physical_memory_handle
+    pub fn body_mut(&mut self) -> &mut [u8] {
+        &mut self.physical_memory_handle[size_of::<AcpiTableHeader>()..]
     }
 }
 
 #[cfg(target_arch = "aarch64")]
-const REQUIRED_TABLES: &[&[u8; 4]] = &[b"APIC"];
+const REQUIRED_TABLES: &[&[u8; 4]] = &[b"APIC", b"GTDT", b"FACP"];
 #[cfg(target_arch = "x86_64")]
 const REQUIRED_TABLES: &[&[u8; 4]] = &[b"APIC", b"HPET"];
 
@@ -111,6 +116,7 @@ pub enum AcpiTableSearchError {
     NoRootTable,
     InvalidRootTableSignature,
     InvalidRootTableSize,
+    MissingRequiredTable(String),
     ParseError(AcpiTableParseError),
 }
 
@@ -123,7 +129,7 @@ impl From<AcpiTableParseError> for AcpiTableSearchError {
 pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSearchError> {
     let root_table_address =
         acpi::get_root_table_address().ok_or(AcpiTableSearchError::NoRootTable)?;
-        println!("Acpi tables at address {:#x}", root_table_address);
+    println!("Acpi tables at address {:#x}", root_table_address);
     // # Safety
     // The returned address is guaranteed to be valid, and we really don't have any choice but to trust it.
     // Nothing else has used the address yet, so there shouldn't be any aliasing issues.
@@ -131,12 +137,12 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
     if root_table.identifier() != b"RSDT" && root_table.identifier() != b"XSDT" {
         return Err(AcpiTableSearchError::InvalidRootTableSignature);
     }
-    let table_body = &root_table.as_slice()[size_of::<AcpiTableHeader>()..];
+    let table_body = root_table.body();
+    let mut tables = Vec::new();
     if root_table.identifier() == b"RSDT" {
         if table_body.len() % size_of::<u32>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        let mut tables = Vec::new();
         for table_address in table_body.chunks_exact(size_of::<u32>()) {
             let table_address = unsafe { *(table_address.as_ptr() as *const u32) as usize };
             // # Safety
@@ -150,12 +156,10 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
                 tables.push(table);
             }
         }
-        Ok(tables)
     } else {
         if table_body.len() % size_of::<u64>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        let mut tables = Vec::new();
         for table_address in table_body.chunks_exact(size_of::<u64>()) {
             let table_address = unsafe { *(table_address.as_ptr() as *const u64) as usize };
             // # Safety
@@ -169,6 +173,18 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
                 tables.push(table);
             }
         }
-        Ok(tables)
     }
+    // Check that we found at least one table for each of required tables.
+    for required_table in REQUIRED_TABLES {
+        if !tables
+            .iter()
+            .any(|table| table.identifier() == *required_table)
+        {
+            return Err(AcpiTableSearchError::MissingRequiredTable(
+                #[allow(clippy::explicit_auto_deref)]
+                String::from_utf8_lossy(*required_table).to_string(),
+            ));
+        }
+    }
+    Ok(tables)
 }
