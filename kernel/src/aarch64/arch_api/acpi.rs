@@ -31,6 +31,7 @@ pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
     for table in acpi_tables {
         match table.identifier() {
             b"APIC" => {
+                crate::println!("Found madt with body size {}", table.body().len());
                 madt = Some(MadtInfo::new(&table));
             }
             _ => {}

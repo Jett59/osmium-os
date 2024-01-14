@@ -24,7 +24,7 @@ impl DynamicallySized for MadtEntryHeader {
     }
 }
 
-const MAX_ENTRY_SIZE: u8 = 64;
+const MAX_ENTRY_SIZE: u8 = 128;
 
 impl Validateable for MadtEntryHeader {
     fn validate(&self) -> bool {
@@ -196,8 +196,28 @@ madt_entry! {
     }
 }
 
+// The GICC entries can be different sizes for different versions of ACPI.
+// On some, it is 76, but on others it is 80.
+// There may be more that I don't know of but I know for sure that these both exist.
 madt_entry! {
-    struct GenericInterruptControllerCpuInterfaceEntry(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE) {
+    struct GenericInterruptControllerCpuInterfaceEntry76(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE) {
+        reserved: u16 => true,
+        cpu_interface_number: u32 => true,
+        uid: u32 => true,
+        flags: u32 => true,
+        parking_protocol_version: u32 => true,
+        performance_interrupt: u32 => true,
+        parked_address: u64 => true,
+        base_address: u64 => true,
+        gicv_base_address: u64 => true,
+        gich_base_address: u64 => true,
+        vgic_maintenance_interrupt: u32 => true,
+        gicr_base_address: u64 => true,
+        multiprocessing_id: u64 => true,
+    }
+}
+madt_entry! {
+    struct GenericInterruptControllerCpuInterfaceEntry80(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE) {
         reserved: u16 => true,
         cpu_interface_number: u32 => true,
         uid: u32 => true,
@@ -214,6 +234,51 @@ madt_entry! {
         processor_efficiency: u8 => true,
         reserved2: u8 => true,
         statistical_profiling_interrupt: u16 => true,
+    }
+}
+
+impl From<GenericInterruptControllerCpuInterfaceEntry76>
+    for GenericInterruptControllerCpuInterfaceEntry80
+{
+    fn from(entry: GenericInterruptControllerCpuInterfaceEntry76) -> Self {
+        let GenericInterruptControllerCpuInterfaceEntry76 {
+            header,
+            reserved,
+            cpu_interface_number,
+            uid,
+            flags,
+            parking_protocol_version,
+            performance_interrupt,
+            parked_address,
+            base_address,
+            gicv_base_address,
+            gich_base_address,
+            vgic_maintenance_interrupt,
+            gicr_base_address,
+            multiprocessing_id,
+        } = entry;
+        GenericInterruptControllerCpuInterfaceEntry80 {
+            header: MadtEntryHeader {
+                entry_type: header.entry_type,
+                length: 80,
+            },
+            reserved,
+            cpu_interface_number,
+            uid,
+            flags,
+            parking_protocol_version,
+            performance_interrupt,
+            parked_address,
+            base_address,
+            gicv_base_address,
+            gich_base_address,
+            vgic_maintenance_interrupt,
+            gicr_base_address,
+            multiprocessing_id,
+            processor_efficiency: 0,
+            reserved2: 0,
+            statistical_profiling_interrupt: 0,
+        }
     }
 }
 
@@ -274,7 +339,7 @@ pub struct MadtInfo {
     pub local_x2apic_entries: Vec<LocalX2ApicEntry>,
     pub local_x2apic_nmi_entries: Vec<LocalX2ApicNmiEntry>,
     pub generic_interrupt_controller_cpu_interface_entries:
-        Vec<GenericInterruptControllerCpuInterfaceEntry>,
+        Vec<GenericInterruptControllerCpuInterfaceEntry80>, // The 76s are expanded to 80s.
     pub generic_interrupt_controller_distributor_entries:
         Vec<GenericInterruptControllerDistributorEntry>,
     pub generic_interrupt_controller_msi_frame_entries:
@@ -306,12 +371,11 @@ impl MadtInfo {
         } in DynamicallySizedObjectIterator::<MadtEntryHeader>::new(entries_data)
         {
             macro_rules! add_entry {
-    ($list_name:ident) => {
-        result.$list_name.push(
-            *unsafe {reinterpret_memory(value_memory)
-                .expect("Invalid MADT entry")
-        })
-}
+                ($list_name:ident) => {
+                    result.$list_name.push(*unsafe {
+                        reinterpret_memory(value_memory).expect("Invalid MADT entry")
+                    })
+                };
             }
 
             match value.entry_type {
@@ -333,7 +397,20 @@ impl MadtInfo {
                 MADT_TYPE_LOCAL_X2APIC => add_entry!(local_x2apic_entries),
                 MADT_TYPE_LOCAL_X2APIC_NMI => add_entry!(local_x2apic_nmi_entries),
                 MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE => {
-                    add_entry!(generic_interrupt_controller_cpu_interface_entries)
+                    if value.length == 80 {
+                        add_entry!(generic_interrupt_controller_cpu_interface_entries)
+                    } else {
+                        result
+                            .generic_interrupt_controller_cpu_interface_entries
+                            .push(GenericInterruptControllerCpuInterfaceEntry80::from(
+                                *unsafe {
+                                    reinterpret_memory::<
+                                        GenericInterruptControllerCpuInterfaceEntry76,
+                                    >(value_memory)
+                                    .expect("Invalid MADT entry")
+                                },
+                            ))
+                    }
                 }
                 MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_DISTRIBUTOR => {
                     add_entry!(generic_interrupt_controller_distributor_entries)
