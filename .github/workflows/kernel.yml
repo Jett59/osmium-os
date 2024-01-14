@@ -25,7 +25,9 @@ jobs:
 
       - name: install qemu-user
         if: matrix.arch == 'aarch64'
-        run: sudo apt install -y qemu-user
+        run: |
+          sudo apt-get update
+          sudo apt install -y qemu-user
 
       - name: set up docker with qemu
         if: matrix.arch == 'aarch64'

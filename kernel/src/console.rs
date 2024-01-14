@@ -1,11 +1,10 @@
+use core::fmt::Write;
+
 use alloc::boxed::Box;
 use common::font::get_character_dimensions;
 use common::framebuffer::get_screen_dimensions;
 
-use crate::{    
-    font_renderer,
-    lazy_init::lazy_static,
-};
+use crate::{font_renderer, lazy_init::lazy_static};
 
 pub fn get_console_dimensions() -> (usize, usize) {
     let screen_dimensions = get_screen_dimensions();
@@ -114,3 +113,28 @@ pub fn write_string(string: &str) {
         write_character(character);
     }
 }
+
+pub struct ConsoleWriter;
+
+impl Write for ConsoleWriter {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        write_string(s);
+        Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => (::core::fmt::Write::write_fmt(&mut $crate::console::ConsoleWriter, format_args!($($arg)*)).unwrap());
+}
+
+pub use print;
+
+#[macro_export]
+macro_rules! println {
+    () => (print!("\n"));
+    ($fmt:expr) => ($crate::console::print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => ($crate::console::print!(concat!($fmt, "\n"), $($arg)*));
+}
+
+pub use println;

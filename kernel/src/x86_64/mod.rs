@@ -1,2 +1,3 @@
-pub mod multiboot;
 pub mod arch_api;
+mod interrupts;
+mod multiboot;

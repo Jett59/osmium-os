@@ -1,4 +1,4 @@
-use core::{alloc::GlobalAlloc, intrinsics::size_of, ops::Deref, ptr::null_mut};
+use core::{alloc::GlobalAlloc, ops::Deref, ptr::null_mut, mem::size_of};
 
 use alloc::boxed::Box;
 

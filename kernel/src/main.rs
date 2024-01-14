@@ -3,7 +3,6 @@
 #![cfg_attr(not(test), no_main)]
 // Lets just hope these aren't as unstable as the language says they are (it would be a pain to have to change everywhere one of these is used)
 #![feature(
-    core_intrinsics,
     generic_const_exprs,
     const_trait_impl,
     // Why all of these maybe_uninit things are separate is beyond me.
@@ -15,6 +14,7 @@
     const_maybe_uninit_array_assume_init,
     let_chains,
     new_uninit,
+    asm_const,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
@@ -42,8 +42,8 @@ use core::panic::PanicInfo;
 extern crate alloc;
 
 #[cfg_attr(not(test), panic_handler)]
-fn kpanic(_info: &PanicInfo) -> ! {
-    console::write_string("Kpanic!");
+fn kpanic(info: &PanicInfo) -> ! {
+    console::print!("Kernel panic: {}\n", info);
     loop {}
 }
 
@@ -52,11 +52,7 @@ extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     physical_memory_manager::sanity_check();
     heap::sanity_check();
-    console::write_string("Initialized the display (obviously)");
-    for i in 0.. {
-        console::write_string("-".repeat(i % 50).as_str());
-        console::write_character('\n');
-    }
+    console::println!("Initialized the display (obviously)");
     loop {}
 }
 
