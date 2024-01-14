@@ -90,9 +90,4 @@ pub fn arch_init() {
             },
         });
     }
-
-    // Manually trigger an exception to test the exception handling.
-    unsafe {
-        core::arch::asm!("mov x0, #0xbeef", "svc #0");
-    }
 }

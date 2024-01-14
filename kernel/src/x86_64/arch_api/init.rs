@@ -27,9 +27,4 @@ pub fn arch_init() {
         ),
     );
     paging::initialize_paging();
-
-    // Trigger an exception
-    unsafe {
-        core::arch::asm!("mov rax, 0xdeadbeef", "int 0x80");
-    }
 }
