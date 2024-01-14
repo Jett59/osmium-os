@@ -1,7 +1,7 @@
 use core::mem::size_of;
 
 use crate::{
-    arch_api::paging::MemoryType,
+    arch_api::{acpi, paging::MemoryType},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
@@ -55,6 +55,8 @@ impl DynamicallySized for MbiTag {
 
 const MBI_TAG_MEMORY_MAP: u32 = 6;
 const MBI_TAG_FRAME_BUFFER: u32 = 8;
+const MBI_TAG_ACPI_OLD: u32 = 14;
+const MBI_TAG_ACPI_NEW: u32 = 15;
 
 #[repr(C, packed)]
 struct MbiMemoryMapTag {
@@ -101,6 +103,49 @@ impl Validateable for MbiFrameBufferTag {
     }
 }
 
+#[repr(C, packed)]
+struct MbiAcpiOldTag {
+    base_tag: MbiTag,
+    rsdp_signature: [u8; 8],
+    rsdp_checksum: u8,
+    rsdp_oem_id: [u8; 6],
+    rsdp_revision: u8,
+    rsdt_address: u32,
+}
+
+impl Validateable for MbiAcpiOldTag {
+    fn validate(&self) -> bool {
+        self.base_tag.tag_type == MBI_TAG_ACPI_OLD
+            && self.base_tag.size == size_of::<MbiAcpiOldTag>() as u32
+            && self.rsdp_signature == *b"RSD PTR "
+            && self.rsdp_revision == 0
+    }
+}
+
+#[repr(C, packed)]
+struct MbiAcpiNewTag {
+    base_tag: MbiTag,
+    rsdp_signature: [u8; 8],
+    rsdp_checksum: u8,
+    rsdp_oem_id: [u8; 6],
+    rsdp_revision: u8,
+    rsdt_address: u32,
+    rsdp_length: u32,
+    xsdt_address: u64,
+    extended_checksum: u8,
+    _reserved: [u8; 3],
+}
+
+impl Validateable for MbiAcpiNewTag {
+    fn validate(&self) -> bool {
+        self.base_tag.tag_type == MBI_TAG_ACPI_NEW
+            && self.base_tag.size == size_of::<MbiAcpiNewTag>() as u32
+            && self.rsdp_signature == *b"RSD PTR "
+            && self.rsdp_revision >= 2
+            && self.rsdp_length == size_of::<MbiAcpiNewTag>() as u32 - size_of::<MbiTag>() as u32
+    }
+}
+
 pub fn parse_multiboot_structures() {
     let mbi_header: &MbiHeader = unsafe {
         reinterpret_memory(slice_from_memory(mbi_pointer, size_of::<MbiHeader>()).unwrap()).unwrap()
@@ -115,19 +160,36 @@ pub fn parse_multiboot_structures() {
     let tag_iterator: DynamicallySizedObjectIterator<MbiTag> =
         DynamicallySizedObjectIterator::new(tag_memory);
     let mut frame_buffer = None; // Delayed initialization to allow for memory to be detected first.
+    let mut found_new_acpi = false;
     for DynamicallySizedItem {
         value: tag,
         value_memory: tag_memory,
     } in tag_iterator
     {
-        if tag.tag_type == MBI_TAG_MEMORY_MAP {
-            let memory_map_tag: &MbiMemoryMapTag =
-                unsafe { reinterpret_memory(tag_memory).unwrap() };
-            parse_memory_map(memory_map_tag, tag_memory);
-        } else if tag.tag_type == MBI_TAG_FRAME_BUFFER {
-            let frame_buffer_tag: &MbiFrameBufferTag =
-                unsafe { reinterpret_memory(tag_memory).unwrap() };
-            frame_buffer = Some(frame_buffer_tag);
+        let tag_type = tag.tag_type;
+        match tag_type {
+            MBI_TAG_MEMORY_MAP => {
+                let memory_map_tag: &MbiMemoryMapTag =
+                    unsafe { reinterpret_memory(tag_memory).unwrap() };
+                parse_memory_map(memory_map_tag, tag_memory);
+            }
+            MBI_TAG_FRAME_BUFFER => {
+                let frame_buffer_tag: &MbiFrameBufferTag =
+                    unsafe { reinterpret_memory(tag_memory).unwrap() };
+                frame_buffer = Some(frame_buffer_tag);
+            }
+            MBI_TAG_ACPI_OLD if !found_new_acpi => {
+                let acpi_old_tag: &MbiAcpiOldTag =
+                    unsafe { reinterpret_memory(tag_memory).unwrap() };
+                acpi::init(acpi_old_tag.rsdt_address as usize);
+            }
+            MBI_TAG_ACPI_NEW => {
+                found_new_acpi = true;
+                let acpi_new_tag: &MbiAcpiNewTag =
+                    unsafe { reinterpret_memory(tag_memory).unwrap() };
+                acpi::init(acpi_new_tag.xsdt_address as usize);
+            }
+            _ => {}
         }
     }
     if let Some(frame_buffer) = frame_buffer {

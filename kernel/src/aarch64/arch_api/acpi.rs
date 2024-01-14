@@ -19,7 +19,7 @@ pub fn get_rsdt_address() -> Option<usize> {
         if ACPI_TAG.rsdt == 0 {
             None
         } else {
-            Some(ACPI_TAG.rsdt as usize)
+            Some(ACPI_TAG.rsdt)
         }
     }
 }
