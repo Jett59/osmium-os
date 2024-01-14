@@ -18,7 +18,10 @@ use config::Config;
 use uefi::{
     prelude::*,
     proto::console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
-    table::boot::{AllocateType, MemoryType, OpenProtocolAttributes, OpenProtocolParams},
+    table::{
+        boot::{AllocateType, MemoryType, OpenProtocolAttributes, OpenProtocolParams},
+        cfg::{ACPI2_GUID, ACPI_GUID},
+    },
 };
 use uefi::{CStr16, Result};
 use uefi_services::println;
@@ -192,6 +195,50 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         }
         frame_buffer_tag.pitch =
             graphics.mode.stride() as u32 * frame_buffer_tag.bits_per_pixel / 8;
+    }
+
+    if let Some(acpi_tag) = tags.acpi {
+        let rsdt_address = if let Some(rsdp_v2) = system_table
+            .config_table()
+            .iter()
+            .find(|entry| entry.guid == ACPI2_GUID)
+        {
+            #[repr(C)]
+            struct RSDPv2 {
+                signature: [u8; 8],
+                checksum: u8,
+                oem_id: [u8; 6],
+                revision: u8,
+                rsdt_address: u32,
+                length: u32,
+                xsdt_address: u64,
+                extended_checksum: u8,
+                reserved: [u8; 3],
+            }
+            let rsdp_v2 = unsafe { &*(rsdp_v2.address as *const RSDPv2) };
+            assert!(rsdp_v2.revision >= 2);
+            rsdp_v2.xsdt_address as usize
+        } else if let Some(rsdp_v1) = system_table
+            .config_table()
+            .iter()
+            .find(|entry| entry.guid == ACPI_GUID)
+        {
+            #[repr(C)]
+            struct RSDPv1 {
+                signature: [u8; 8],
+                checksum: u8,
+                oem_id: [u8; 6],
+                revision: u8,
+                rsdt_address: u32,
+            }
+            let rsdp_v1 = unsafe { &*(rsdp_v1.address as *const RSDPv1) };
+            assert!(rsdp_v1.revision == 0);
+            rsdp_v1.rsdt_address as usize
+        } else {
+            panic!("ACPI RSDP not found");
+        };
+
+        acpi_tag.rsdt = rsdt_address;
     }
 
     let mut page_allocator = |page_count| {

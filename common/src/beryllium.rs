@@ -6,6 +6,7 @@ pub enum BootRequestTagType {
     StackPointer = 0,
     MemoryMap = 1,
     FrameBuffer = 2,
+    Acpi = 3,
 }
 
 #[repr(C, align(8))]
@@ -113,4 +114,13 @@ pub struct FrameBufferTag {
     pub red_byte: u8,
     pub green_byte: u8,
     pub blue_byte: u8,
+}
+
+#[repr(C, align(8))]
+#[derive(Debug, Clone, Copy)]
+pub struct AcpiTag {
+    pub tag_type: BootRequestTagType, // = BootRequestTagType::Acpi
+    pub size: u16,                    // 16 (64-bit) or 12 (32-bit)
+    pub flags: u16,
+    pub rsdt: usize,
 }
