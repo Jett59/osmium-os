@@ -53,6 +53,7 @@ extern "C" fn kmain() -> ! {
     physical_memory_manager::sanity_check();
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");
+    console::println!("ACPI tables: {:#x?}", arch_api::acpi::get_rsdt_address());
     loop {}
 }
 
