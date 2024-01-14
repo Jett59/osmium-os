@@ -11,7 +11,7 @@ pub static mut ACPI_TAG: AcpiTag = AcpiTag {
     rsdt: 0,
 };
 
-pub fn get_rsdt_address() -> Option<usize> {
+pub fn get_root_table_address() -> Option<usize> {
     // # Safety
     // It's safe to access the tag structures since, although they are technically mutable, they only get changed by the bootloader.
     unsafe {
