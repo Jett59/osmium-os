@@ -15,6 +15,7 @@ use crate::{
     println,
 };
 
+pub mod fadt;
 pub mod madt;
 
 #[derive(Debug, Clone, Copy)]

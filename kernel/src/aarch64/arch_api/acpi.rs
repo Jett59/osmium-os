@@ -3,7 +3,7 @@ use core::mem::size_of;
 use alloc::vec::Vec;
 use common::beryllium::{AcpiTag, BootRequestTagType};
 
-use crate::acpi::{madt::MadtInfo, AcpiTableHandle};
+use crate::acpi::{fadt::FadtInfo, madt::MadtInfo, AcpiTableHandle};
 
 #[link_section = ".beryllium"]
 #[no_mangle]
@@ -28,15 +28,19 @@ pub fn get_root_table_address() -> Option<usize> {
 
 pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
     let mut madt = None;
+    let mut fadt = None;
     for table in acpi_tables {
         match table.identifier() {
             b"APIC" => {
-                crate::println!("Found madt with body size {}", table.body().len());
                 madt = Some(MadtInfo::new(&table));
+            }
+            b"FACP" => {
+                fadt = Some(FadtInfo::new(&table));
             }
             _ => {}
         }
     }
 
     crate::println!("MADT: {:?}", madt);
+    crate::println!("FADT: {:?}", fadt);
 }
