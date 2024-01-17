@@ -1,6 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::acpi::{madt::MadtInfo, AcpiTableHandle};
+use crate::{
+    acpi::{madt::MadtInfo, AcpiTableHandle},
+    arch::hpet::HpetInfo,
+};
 
 static mut ROOT_TABLE_ADDRESS: usize = 0;
 
@@ -26,14 +29,19 @@ pub fn get_root_table_address() -> Option<usize> {
 
 pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
     let mut madt = None;
+    let mut hpet = None;
     for table in acpi_tables {
         match table.identifier() {
             b"APIC" => {
                 madt = Some(MadtInfo::new(&table));
+            }
+            b"HPET" => {
+                hpet = Some(HpetInfo::new(&table));
             }
             _ => {}
         }
     }
 
     crate::println!("MADT: {:?}", madt);
+    crate::println!("HPET: {:?}", hpet);
 }
