@@ -6,11 +6,12 @@ use bitflags::bitflags;
 
 use crate::{
     acpi::AcpiTableHandle,
-    memory::{reinterpret_memory, Validateable},
+    memory::{Endianness, FromBytes},
+    memory_struct,
 };
 
-#[repr(C, packed)]
-struct GtdtTableBody {
+memory_struct! {
+struct GtdtTableBody<'lifetime> {
     count_control_physical_address: u64,
     reserved: u32,
     _secure_el1_interrupt: u32,
@@ -25,11 +26,6 @@ struct GtdtTableBody {
     platform_timers_count: u32,
     platform_timers_offset: u32,
 }
-
-impl Validateable for GtdtTableBody {
-    fn validate(&self) -> bool {
-        true // There isn't really anything to validate. We just need an implementation to use reinterpret_memory.
-    }
 }
 
 bitflags! {
@@ -50,11 +46,11 @@ pub struct GtdtInfo {
 impl GtdtInfo {
     pub fn new(table: &AcpiTableHandle) -> Self {
         assert_eq!(table.identifier(), b"GTDT");
-        let body = unsafe { reinterpret_memory::<GtdtTableBody>(table.body()) }
+        let body = GtdtTableBody::from_bytes(Endianness::Little, table.body())
             .expect("Invalid GTDT table body");
         Self {
-            timer_interrupt: body.el1_interrupt,
-            timer_flags: TimerFlags::from_bits_retain(body.el1_flags),
+            timer_interrupt: body.el1_interrupt(),
+            timer_flags: TimerFlags::from_bits_retain(body.el1_flags()),
         }
     }
 }

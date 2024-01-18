@@ -4,11 +4,12 @@
 
 use crate::{
     acpi::AcpiTableHandle,
-    memory::{reinterpret_memory, Validateable},
+    memory::{Endianness, FromBytes},
+    memory_struct,
 };
 
-#[repr(C, packed)]
-pub struct HpetTableBody {
+memory_struct! {
+struct HpetTableBody<'lifetime> {
     hardware_revision: u8,
     counter_info: u8,
     pci_vendor_id: u16,
@@ -21,11 +22,6 @@ pub struct HpetTableBody {
     minimum_tick: u16,
     page_protection: u8,
 }
-
-impl Validateable for HpetTableBody {
-    fn validate(&self) -> bool {
-        true // There isn't really much to validate here. However, it's needed to allow us to reinterpret_memory.
-    }
 }
 
 const COUNTER_INFO_COMPARATOR_COUNT_MASK: u8 = 0b0001_1111;
@@ -43,11 +39,11 @@ pub struct HpetInfo {
 impl HpetInfo {
     pub fn new(table: &AcpiTableHandle) -> HpetInfo {
         assert_eq!(table.identifier(), b"HPET");
-        let body = unsafe { reinterpret_memory::<HpetTableBody>(table.body()) }
+        let body = HpetTableBody::from_bytes(Endianness::Little, table.body())
             .expect("Invalid HPET table");
-        let counter_info = body.counter_info;
+        let counter_info = body.counter_info();
         Self {
-            address: body.address,
+            address: body.address(),
             comparator_count: (counter_info & COUNTER_INFO_COMPARATOR_COUNT_MASK) + 1,
             is_64_bit: counter_info & COUNTER_INFO_64_BIT != 0,
             legacy_replacement: counter_info & COUNTER_INFO_LEGACY_REPLACEMENT != 0,
