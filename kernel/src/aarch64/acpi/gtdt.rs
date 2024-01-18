@@ -28,7 +28,7 @@ struct GtdtTableBody {
 
 impl Validateable for GtdtTableBody {
     fn validate(&self) -> bool {
-        true // TODO: Actually validate this.
+        true // There isn't really anything to validate. We just need an implementation to use reinterpret_memory.
     }
 }
 

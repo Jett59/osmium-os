@@ -24,7 +24,7 @@ pub struct HpetTableBody {
 
 impl Validateable for HpetTableBody {
     fn validate(&self) -> bool {
-        true // TODO: Actually validate this
+        true // There isn't really much to validate here. However, it's needed to allow us to reinterpret_memory.
     }
 }
 

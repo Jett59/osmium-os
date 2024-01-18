@@ -22,7 +22,7 @@ pub struct FadtTableBody {
 
 impl Validateable for FadtTableBody {
     fn validate(&self) -> bool {
-        true // TODO: actually validate this structure
+        true // There isn't actually anything to validate.
     }
 }
 
