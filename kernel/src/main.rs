@@ -15,7 +15,8 @@
     let_chains,
     new_uninit,
     asm_const,
-    array_chunks
+    array_chunks,
+    offset_of,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
