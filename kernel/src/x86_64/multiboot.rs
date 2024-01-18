@@ -5,7 +5,8 @@ use crate::{
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
-        DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Validateable,
+        DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
+        Validateable,
     },
     physical_memory_manager::{mark_range_as_free, BLOCK_SIZE},
 };
@@ -157,8 +158,8 @@ pub fn parse_multiboot_structures() {
         )
         .unwrap()
     };
-    let tag_iterator: DynamicallySizedObjectIterator<MbiTag> =
-        DynamicallySizedObjectIterator::new(tag_memory);
+    let tag_iterator: DynamicallySizedObjectIterator<&MbiTag> =
+        DynamicallySizedObjectIterator::new(Endianness::Little, tag_memory);
     let mut frame_buffer = None; // Delayed initialization to allow for memory to be detected first.
     let mut found_new_acpi = false;
     for DynamicallySizedItem {

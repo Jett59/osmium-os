@@ -16,9 +16,10 @@ pub enum Endianness {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FromBytesError {
     InvalidSize,
+    InvalidMemory,
 }
 
-trait FromBytes<'lifetime>: Sized {
+pub trait FromBytes<'lifetime>: Sized {
     fn from_bytes(endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError>;
 
     const SIZE: usize;
@@ -72,6 +73,7 @@ macro_rules! memory_struct {
             $field_name:ident: $field_type:ty
         ),* $(,)?
     }) => {
+        #[derive(Copy, Clone)]
         $visibility struct $Name<$lifetime> {
             memory: &$lifetime [u8],
             endianness: $crate::memory::Endianness,
@@ -96,7 +98,21 @@ macro_rules! memory_struct {
             )* 0;
         }
 
+        impl<'lifetime> core::fmt::Debug for $Name<'lifetime>
+        where
+            $($field_type: $crate::memory::FromBytes<'lifetime> + core::fmt::Debug),*
         {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(stringify!($Name))
+                    $(
+                        .field(stringify!($field_name), &self.$field_name())
+                    )*
+                    .finish()
+            }
+        }
+
+        // Isolates the Layout struct, since there would otherwise be naming conflicts with other memory_structs.
+        const _: () = {
             #[repr(C, packed)]
             struct Layout<$lifetime> {
                 $(
@@ -115,8 +131,19 @@ macro_rules! memory_struct {
                     }
                 )*
             }
-        }
+        };
     };
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ReservedMemory<const SIZE: usize>;
+
+impl<const N: usize> FromBytes<'_> for ReservedMemory<N> {
+    fn from_bytes(_endianness: Endianness, _bytes: &'_ [u8]) -> Result<Self, FromBytesError> {
+        Ok(Self)
+    }
+
+    const SIZE: usize = N;
 }
 
 pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
@@ -130,6 +157,17 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
     } else {
         None
     }
+}
+
+impl<'lifetime, T: Validateable> FromBytes<'lifetime> for &'lifetime T {
+    fn from_bytes(_endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError> {
+        if bytes.len() < core::mem::size_of::<T>() {
+            return Err(FromBytesError::InvalidSize);
+        }
+        Ok(unsafe { reinterpret_memory(bytes).ok_or(FromBytesError::InvalidMemory)? })
+    }
+
+    const SIZE: usize = size_of::<T>();
 }
 
 pub unsafe fn slice_from_memory<'lifetime>(
@@ -150,25 +188,33 @@ pub trait DynamicallySized {
     const ALIGNMENT: usize = 1;
 }
 
+impl<T: DynamicallySized> DynamicallySized for &T {
+    fn size(&self) -> usize {
+        (*self).size()
+    }
+}
+
 pub struct DynamicallySizedItem<'lifetime, T: DynamicallySized> {
-    pub value: &'lifetime T,
+    pub value: T,
     pub value_memory: &'lifetime [u8], // Sized to the dynamic size of T
 }
 
 pub struct DynamicallySizedObjectIterator<'lifetime, T: DynamicallySized> {
     total_memory: &'lifetime [u8],
     current_offset: usize,
+    endianness: Endianness,
     _phantom: core::marker::PhantomData<T>, // To make the compiler happy about having T as a type parameter.
 }
 
 impl<'lifetime, T: DynamicallySized> DynamicallySizedObjectIterator<'lifetime, T>
 where
-    T: 'lifetime + Validateable,
+    T: 'lifetime + FromBytes<'lifetime>,
 {
-    pub fn new(memory: &'lifetime [u8]) -> Self {
+    pub fn new(endianness: Endianness, memory: &'lifetime [u8]) -> Self {
         Self {
             total_memory: memory,
             current_offset: 0,
+            endianness,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -176,7 +222,7 @@ where
 
 impl<'lifetime, T: DynamicallySized> Iterator for DynamicallySizedObjectIterator<'lifetime, T>
 where
-    T: 'lifetime + Validateable,
+    T: 'lifetime + FromBytes<'lifetime>,
 {
     type Item = DynamicallySizedItem<'lifetime, T>;
 
@@ -185,11 +231,8 @@ where
             return None;
         }
         let value_memory = &self.total_memory[self.current_offset..];
-        let optional_value: Option<&'lifetime T> = unsafe { reinterpret_memory(value_memory) };
-        let value = match optional_value {
-            Some(value) => value,
-            None => return None,
-        };
+        let value: T = T::from_bytes(self.endianness, value_memory)
+            .expect("Failed to create object from memory");
         if value.size() > self.total_memory.len() - self.current_offset {
             return None;
         }
@@ -247,8 +290,8 @@ mod test {
         }
 
         let memory = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let iterator: DynamicallySizedObjectIterator<TestStruct> =
-            DynamicallySizedObjectIterator::new(&memory);
+        let iterator: DynamicallySizedObjectIterator<&TestStruct> =
+            DynamicallySizedObjectIterator::new(Endianness::Little, &memory);
         let mut iterator = iterator.peekable();
         assert_eq!(iterator.peek().unwrap().value.a, 0);
         assert_eq!(iterator.next().unwrap().value.b, 1);
