@@ -144,8 +144,8 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
         if table_body.len() % size_of::<u32>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        for table_address in table_body.chunks_exact(size_of::<u32>()) {
-            let table_address = unsafe { *(table_address.as_ptr() as *const u32) as usize };
+        for table_address in table_body.array_chunks::<{ size_of::<u32>() }>() {
+            let table_address = u32::from_le_bytes(*table_address) as usize;
             // # Safety
             // It is obviously safe to interpret the pointers in the RSDT as ACPI tables, since that is the point of the RSDT.
             let table = unsafe { AcpiTableHandle::new(table_address)? };
@@ -161,8 +161,8 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
         if table_body.len() % size_of::<u64>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        for table_address in table_body.chunks_exact(size_of::<u64>()) {
-            let table_address = unsafe { *(table_address.as_ptr() as *const u64) as usize };
+        for table_address in table_body.array_chunks::<{ size_of::<u64>() }>() {
+            let table_address = u64::from_le_bytes(*table_address) as usize;
             // # Safety
             // It is obviously safe to interpret the pointers in the XSDT as ACPI tables, since that is the point of the XSDT.
             let table = unsafe { AcpiTableHandle::new(table_address) }?;
