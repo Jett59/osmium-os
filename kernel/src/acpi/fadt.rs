@@ -4,26 +4,24 @@
 
 use bitflags::bitflags;
 
-use crate::memory::{reinterpret_memory, Validateable};
+use crate::{
+    memory::{Endianness, FromBytes, ReservedMemory},
+    memory_struct,
+};
 
 use super::AcpiTableHandle;
 
-#[repr(C, packed)]
-pub struct FadtTableBody {
+memory_struct! {
+struct FadtTableBody<'lifetime> {
     // TODO: fill out the rest of this structure when we need it (which may well be never, since we are only dealing with early initialization code).
-    unknown: [u8; 73],
+    unknown: ReservedMemory<73>,
     x86_boot_flags: u16,
     reserved: u8,
     fixed_flags: u32,
-    _reset_register: [u8; 12],
+    _reset_register: ReservedMemory<12>,
     _reset_value: u8,
     arm_boot_flags: u16,
 }
-
-impl Validateable for FadtTableBody {
-    fn validate(&self) -> bool {
-        true // There isn't actually anything to validate.
-    }
 }
 
 bitflags! {
@@ -80,13 +78,13 @@ pub struct FadtInfo {
 impl FadtInfo {
     pub fn new(fadt_table: &AcpiTableHandle) -> Self {
         assert_eq!(fadt_table.identifier(), b"FACP");
-        let fadt_table_body = unsafe { reinterpret_memory::<FadtTableBody>(fadt_table.body()) }
+        let fadt_table_body = FadtTableBody::from_bytes(Endianness::Little, fadt_table.body())
             .expect("FADT table is invalid");
 
         Self {
-            x86_boot_flags: X86BootFlags::from_bits_retain(fadt_table_body.x86_boot_flags),
-            fixed_flags: FixedFlags::from_bits_retain(fadt_table_body.fixed_flags),
-            arm_boot_flags: ArmBootFlags::from_bits_retain(fadt_table_body.arm_boot_flags),
+            x86_boot_flags: X86BootFlags::from_bits_retain(fadt_table_body.x86_boot_flags()),
+            fixed_flags: FixedFlags::from_bits_retain(fadt_table_body.fixed_flags()),
+            arm_boot_flags: ArmBootFlags::from_bits_retain(fadt_table_body.arm_boot_flags()),
         }
     }
 }
