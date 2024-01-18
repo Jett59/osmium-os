@@ -1,3 +1,7 @@
+//! High Precision Event Timer ([`HPET`]) table handling.
+//!
+//! [`HPET`]: https://www.intel.com/content/dam/www/public/us/en/documents/technical-specifications/software-developers-hpet-spec-1-0a.pdf
+
 use crate::{
     acpi::AcpiTableHandle,
     memory::{reinterpret_memory, Validateable},

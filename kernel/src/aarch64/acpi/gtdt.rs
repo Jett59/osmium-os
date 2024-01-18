@@ -1,3 +1,7 @@
+//! Generic Timer Description Table ([`GTDT`]) handling.
+//!
+//! [`GTDT`]: https://uefi.org/htmlspecs/ACPI_Spec_6_4_html/05_ACPI_Software_Programming_Model/ACPI_Software_Programming_Model.html#generic-timer-description-table-gtdt
+
 use bitflags::bitflags;
 
 use crate::{
