@@ -39,32 +39,18 @@ const MADT_ENTRY_TYPE_INTERRUPT_SOURCE_OVERRIDE: u8 = 2;
 const MADT_ENTRY_TYPE_NON_MASKABLE_INTERRUPT_SOURCE: u8 = 3;
 const MADT_ENTRY_TYPE_LOCAL_APIC_NMI: u8 = 4;
 const MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE: u8 = 5;
-const MADT_ENTRY_TYPE_IO_SAPIC: u8 = 6;
-const MADT_ENTRY_TYPE_LOCAL_SAPIC: u8 = 7;
-const MADT_TYPE_INTERRUPT_SOURCES: u8 = 8;
-const MADT_TYPE_LOCAL_X2APIC: u8 = 9;
-const MADT_TYPE_LOCAL_X2APIC_NMI: u8 = 0xa;
+
 const MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE: u8 = 0xb;
 const MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_DISTRIBUTOR: u8 = 0xc;
 const MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_MSI_FRAME: u8 = 0xd;
 const MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_REDISTRIBUTOR: u8 = 0xe;
 const MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_TRANSLATION_SERVICE: u8 = 0xf;
 
-macro_rules! default_operator {
-    ($left:expr, $default:tt|$given:tt, $right:expr) => {
-        $left $given $right
-    };
-    ($left:expr, $default:tt, $right:expr) => {
-        $left $default $right
-    };
-}
-
 macro_rules! madt_entry {
     (
-        $(#[size_comparison_operator($size_comparison_operator:tt)])?
         struct $Name:ident ($id:expr) {
         $(
-            $field:ident: $Type:ty => $validation:expr
+            $field:ident: $Type:ty
     ),*$(,)?
 }
 ) => {
@@ -87,11 +73,8 @@ impl $Name {
 
     impl Validateable for $Name {
         fn validate(&self) -> bool {
-            #[allow(unused_variables)]
-            let $Name {header, $($field,)*} = *self;
-            header.validate() && header.entry_type == $id && default_operator!(header.length, ==$(|$size_comparison_operator)?, size_of::<Self>() as u8) && $(
-                $validation
-            )&&*
+            let header = self.header;
+            header.validate() && header.entry_type == $id && header.length >= size_of::<Self>() as u8
         }
     }
 }
@@ -99,100 +82,49 @@ impl $Name {
 
 madt_entry! {
     struct LocalApicEntry(MADT_ENTRY_TYPE_LOCAL_APIC) {
-        acpi_id: u8 => true,
-        apic_id: u8 => true,
-        flags: u32 => true,
+        acpi_id: u8,
+        apic_id: u8,
+        flags: u32,
     }
 }
 
 madt_entry! {
     struct IoApicEntry(MADT_ENTRY_TYPE_IO_APIC) {
-        io_apic_id: u8 => true,
-        reserved: u8 => true,
-        io_apic_address: u32 => true,
-        global_system_interrupt_base: u32 => true,
+        io_apic_id: u8,
+        reserved: u8,
+        io_apic_address: u32,
+        global_system_interrupt_base: u32,
     }
 }
 
 madt_entry! {
     struct InterruptSourceOverrideEntry(MADT_ENTRY_TYPE_INTERRUPT_SOURCE_OVERRIDE) {
-        bus_source: u8 => true,
-        irq_source: u8 => true,
-        global_system_interrupt: u32 => true,
-        flags: u16 => true,
+        bus_source: u8,
+        irq_source: u8,
+        global_system_interrupt: u32,
+        flags: u16,
     }
 }
 
 madt_entry! {
     struct NonMaskableInterruptSourceEntry(MADT_ENTRY_TYPE_NON_MASKABLE_INTERRUPT_SOURCE) {
-        flags: u16 => true,
-        global_system_interrupt: u32 => true,
+        flags: u16,
+        global_system_interrupt: u32,
     }
 }
 
 madt_entry! {
     struct LocalApicNmiEntry(MADT_ENTRY_TYPE_LOCAL_APIC_NMI) {
-        acpi_processor_id: u8 => true,
-        flags: u16 => true,
-        local_apic_lint: u8 => true,
+        acpi_processor_id: u8,
+        flags: u16,
+        local_apic_lint: u8,
     }
 }
 
 madt_entry! {
     struct LocalApicAddressOverrideEntry(MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
-        reserved: u16 => true,
-        local_apic_address: u64 => true,
-    }
-}
-
-madt_entry! {
-    struct IoSapicEntry(MADT_ENTRY_TYPE_IO_SAPIC) {
-        io_sapic_id: u8 => true,
-        reserved: u8 => true,
-        global_system_interrupt_base: u32 => true,
-        io_sapic_address: u64 => true,
-    }
-}
-
-madt_entry! {
-    #[size_comparison_operator(>=)]
-    struct LocalSapicEntry(MADT_ENTRY_TYPE_LOCAL_SAPIC) {
-        acpi_processor_id: u8 => true,
-        local_sapic_id: u8 => true,
-        local_sapic_eid: u8 => true,
-        reserved: [u8; 3] => true,
-        flags: u32 => true,
-        acpi_processor_uid_string: u8 => true,
-    }
-}
-
-madt_entry! {
-    struct InterruptSourceEntry(MADT_TYPE_INTERRUPT_SOURCES) {
-        flags: u16 => true,
-        interrupt_type: u8 => true,
-        destination_processor_id: u8 => true,
-        destination_processor_eid: u8 => true,
-        sapic_vector: u8 => true,
-        global_system_interrupt: u32 => true,
-        platform_flags: u32 => true,
-    }
-}
-
-madt_entry! {
-    struct LocalX2ApicEntry(MADT_TYPE_LOCAL_X2APIC) {
-        reserved: u16 => true,
-        x2apic_id: u32 => true,
-        flags: u32 => true,
-        acpi_processor_uid: u32 => true,
-    }
-}
-
-madt_entry! {
-    struct LocalX2ApicNmiEntry(MADT_TYPE_LOCAL_X2APIC_NMI) {
-        flags: u16 => true,
-        acpi_processor_uid: u32 => true,
-        local_x2apic_lint: u8 => true,
-        reserved: [u8; 3] => true,
+        reserved: u16,
+        local_apic_address: u64,
     }
 }
 
@@ -201,39 +133,39 @@ madt_entry! {
 // There may be more that I don't know of but I know for sure that these both exist.
 madt_entry! {
     struct GenericInterruptControllerCpuInterfaceEntry76(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE) {
-        reserved: u16 => true,
-        cpu_interface_number: u32 => true,
-        uid: u32 => true,
-        flags: u32 => true,
-        parking_protocol_version: u32 => true,
-        performance_interrupt: u32 => true,
-        parked_address: u64 => true,
-        base_address: u64 => true,
-        gicv_base_address: u64 => true,
-        gich_base_address: u64 => true,
-        vgic_maintenance_interrupt: u32 => true,
-        gicr_base_address: u64 => true,
-        multiprocessing_id: u64 => true,
+        reserved: u16,
+        cpu_interface_number: u32,
+        uid: u32,
+        flags: u32,
+        parking_protocol_version: u32,
+        performance_interrupt: u32,
+        parked_address: u64,
+        base_address: u64,
+        gicv_base_address: u64,
+        gich_base_address: u64,
+        vgic_maintenance_interrupt: u32,
+        gicr_base_address: u64,
+        multiprocessing_id: u64,
     }
 }
 madt_entry! {
     struct GenericInterruptControllerCpuInterfaceEntry80(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE) {
-        reserved: u16 => true,
-        cpu_interface_number: u32 => true,
-        uid: u32 => true,
-        flags: u32 => true,
-        parking_protocol_version: u32 => true,
-        performance_interrupt: u32 => true,
-        parked_address: u64 => true,
-        base_address: u64 => true,
-        gicv_base_address: u64 => true,
-        gich_base_address: u64 => true,
-        vgic_maintenance_interrupt: u32 => true,
-        gicr_base_address: u64 => true,
-        multiprocessing_id: u64 => true,
-        processor_efficiency: u8 => true,
-        reserved2: u8 => true,
-        statistical_profiling_interrupt: u16 => true,
+        reserved: u16,
+        cpu_interface_number: u32,
+        uid: u32,
+        flags: u32,
+        parking_protocol_version: u32,
+        performance_interrupt: u32,
+        parked_address: u64,
+        base_address: u64,
+        gicv_base_address: u64,
+        gich_base_address: u64,
+        vgic_maintenance_interrupt: u32,
+        gicr_base_address: u64,
+        multiprocessing_id: u64,
+        processor_efficiency: u8,
+        reserved2: u8,
+        statistical_profiling_interrupt: u16,
     }
 }
 
@@ -284,40 +216,40 @@ impl From<GenericInterruptControllerCpuInterfaceEntry76>
 
 madt_entry! {
     struct GenericInterruptControllerDistributorEntry(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_DISTRIBUTOR) {
-        reserved: u16 => true,
-        gic_id: u32 => true,
-        base_address: u64 => true,
-        global_system_interrupt_base: u32 => true, // Always 0
-        version: u8 => true,
-        reserved2: [u8; 3] => true,
+        reserved: u16,
+        gic_id: u32,
+        base_address: u64,
+        global_system_interrupt_base: u32, // Always 0
+        version: u8,
+        reserved2: [u8; 3],
     }
 }
 
 madt_entry! {
     struct GenericInterruptControllerMsiFrameEntry(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_MSI_FRAME) {
-        reserved: u16 => true,
-        msi_frame_id: u32 => true,
-        base_address: u64 => true,
-        flags: u32 => true,
-        spi_count: u16 => true,
-        spi_base: u16 => true,
+        reserved: u16,
+        msi_frame_id: u32,
+        base_address: u64,
+        flags: u32,
+        spi_count: u16,
+        spi_base: u16,
     }
 }
 
 madt_entry! {
     struct GenericInterruptControllerRedistributorEntry(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_REDISTRIBUTOR) {
-        reserved: u16 => true,
-        discovery_range_base_address: u64 => true,
-        discovery_range_length: u32 => true,
+        reserved: u16,
+        discovery_range_base_address: u64,
+        discovery_range_length: u32,
     }
 }
 
 madt_entry! {
     struct GenericInterruptControllerTranslationServiceEntry(MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_TRANSLATION_SERVICE) {
-        reserved: u16 => true,
-        translation_service_id: u32 => true,
-        base_address: u64 => true,
-        reserved2: u32 => true,
+        reserved: u16,
+        translation_service_id: u32,
+        base_address: u64,
+        reserved2: u32,
     }
 }
 
@@ -333,11 +265,6 @@ pub struct MadtInfo {
     pub non_maskable_interrupt_source_entries: Vec<NonMaskableInterruptSourceEntry>,
     pub local_apic_nmi_entries: Vec<LocalApicNmiEntry>,
     pub local_apic_address_override_entries: Vec<LocalApicAddressOverrideEntry>,
-    pub io_sapic_entries: Vec<IoSapicEntry>,
-    pub local_sapic_entries: Vec<LocalSapicEntry>,
-    pub interrupt_source_entries: Vec<InterruptSourceEntry>,
-    pub local_x2apic_entries: Vec<LocalX2ApicEntry>,
-    pub local_x2apic_nmi_entries: Vec<LocalX2ApicNmiEntry>,
     pub generic_interrupt_controller_cpu_interface_entries:
         Vec<GenericInterruptControllerCpuInterfaceEntry80>, // The 76s are expanded to 80s.
     pub generic_interrupt_controller_distributor_entries:
@@ -391,11 +318,6 @@ impl MadtInfo {
                 MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE => {
                     add_entry!(local_apic_address_override_entries)
                 }
-                MADT_ENTRY_TYPE_IO_SAPIC => add_entry!(io_sapic_entries),
-                MADT_ENTRY_TYPE_LOCAL_SAPIC => add_entry!(local_sapic_entries),
-                MADT_TYPE_INTERRUPT_SOURCES => add_entry!(interrupt_source_entries),
-                MADT_TYPE_LOCAL_X2APIC => add_entry!(local_x2apic_entries),
-                MADT_TYPE_LOCAL_X2APIC_NMI => add_entry!(local_x2apic_nmi_entries),
                 MADT_TYPE_GENERIC_INTERRUPT_CONTROLLER_CPU_INTERFACE => {
                     if value.length == 80 {
                         add_entry!(generic_interrupt_controller_cpu_interface_entries)
