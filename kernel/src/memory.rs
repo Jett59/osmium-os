@@ -190,8 +190,10 @@ pub trait DynamicallySized {
 
 impl<T: DynamicallySized> DynamicallySized for &T {
     fn size(&self) -> usize {
-        (*self).size()
+        (**self).size()
     }
+
+    const ALIGNMENT: usize = T::ALIGNMENT;
 }
 
 pub struct DynamicallySizedItem<'lifetime, T: DynamicallySized> {
@@ -231,7 +233,7 @@ where
             return None;
         }
         let value_memory = &self.total_memory[self.current_offset..];
-        let value: T = T::from_bytes(self.endianness, value_memory)
+        let value = T::from_bytes(self.endianness, value_memory)
             .expect("Failed to create object from memory");
         if value.size() > self.total_memory.len() - self.current_offset {
             return None;

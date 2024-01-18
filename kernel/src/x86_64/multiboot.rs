@@ -190,6 +190,7 @@ pub fn parse_multiboot_structures() {
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
                 acpi::init(acpi_new_tag.xsdt_address as usize);
             }
+            0 => break, // End of tags
             _ => {}
         }
     }
