@@ -5,7 +5,8 @@ use crate::{
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
-        DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Validateable,
+        DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
+        Validateable,
     },
     physical_memory_manager::{mark_range_as_free, BLOCK_SIZE},
 };
@@ -157,8 +158,8 @@ pub fn parse_multiboot_structures() {
         )
         .unwrap()
     };
-    let tag_iterator: DynamicallySizedObjectIterator<MbiTag> =
-        DynamicallySizedObjectIterator::new(tag_memory);
+    let tag_iterator: DynamicallySizedObjectIterator<&MbiTag> =
+        DynamicallySizedObjectIterator::new(Endianness::Little, tag_memory);
     let mut frame_buffer = None; // Delayed initialization to allow for memory to be detected first.
     let mut found_new_acpi = false;
     for DynamicallySizedItem {
@@ -189,6 +190,7 @@ pub fn parse_multiboot_structures() {
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
                 acpi::init(acpi_new_tag.xsdt_address as usize);
             }
+            0 => break, // End of tags
             _ => {}
         }
     }
@@ -244,11 +246,15 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
             green_byte: frame_buffer.green_position / 8,
             blue_byte: frame_buffer.blue_position / 8,
             pixels: {
-                let physical_address_handle = map_physical_memory(
-                    frame_buffer.address as usize,
-                    frame_buffer.pitch as usize * frame_buffer.height as usize,
-                    MemoryType::Device,
-                );
+                // # Safety
+                // This is the only place where the framebuffer is mapped, so there should be no aliasing issues.
+                let physical_address_handle = unsafe {
+                    map_physical_memory(
+                        frame_buffer.address as usize,
+                        frame_buffer.pitch as usize * frame_buffer.height as usize,
+                        MemoryType::Device,
+                    )
+                };
                 PhysicalAddressHandle::leak(physical_address_handle)
             },
         });

@@ -15,12 +15,15 @@
     let_chains,
     new_uninit,
     asm_const,
+    array_chunks,
+    offset_of,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
 // While I don't enjoy surpressing warnings, I think that this particular warning is unnecessary at this stage of development. It would be more useful when the basic components are in place and working.
 #![allow(dead_code)]
 
+mod acpi;
 mod assert;
 mod buddy;
 mod console;
@@ -53,10 +56,8 @@ extern "C" fn kmain() -> ! {
     physical_memory_manager::sanity_check();
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");
-    console::println!(
-        "ACPI tables: {:#x?}",
-        arch_api::acpi::get_root_table_address()
-    );
+    let required_acpi_tables = acpi::find_required_acpi_tables().unwrap();
+    arch_api::acpi::handle_acpi_info(required_acpi_tables);
     loop {}
 }
 

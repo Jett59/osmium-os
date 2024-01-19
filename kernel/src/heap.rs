@@ -1,4 +1,9 @@
-use core::{alloc::GlobalAlloc, ops::Deref, ptr::null_mut, mem::size_of};
+use core::{
+    alloc::GlobalAlloc,
+    mem::size_of,
+    ops::{Deref, DerefMut},
+    ptr::null_mut,
+};
 
 use alloc::boxed::Box;
 
@@ -7,6 +12,7 @@ use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
+    memory::align_address_up,
     paging::{get_physical_address, map_block, unmap_block},
     physical_memory_manager::{self, mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
 };
@@ -290,55 +296,89 @@ unsafe impl GlobalAlloc for HeapAllocator {
     }
 }
 
-pub struct PhysicalAddressHandle<'lifetime> {
-    data: &'lifetime mut [u8],
+pub struct PhysicalAddressHandle {
+    base_pointer: *mut u8,
+    allocated_size: usize,
     pointer: *mut u8,
     size: usize,
 }
 
-impl<'lifetime> PhysicalAddressHandle<'lifetime> {
-    pub fn get_slice(handle: &Self) -> &[u8] {
-        handle.data
+impl PhysicalAddressHandle {
+    pub fn as_slice(handle: &Self) -> &[u8] {
+        // # Safety
+        // It is safe to construct a slice from the pointer and size the memory pointed to by handle.pointer is guaranteed to be at least handle.size bytes.
+        unsafe { core::slice::from_raw_parts(handle.pointer, handle.size) }
     }
 
-    pub fn leak(handle: Self) -> &'lifetime mut [u8] {
-        let data_pointer = handle.data.as_mut_ptr();
-        let data_size = handle.data.len();
+    pub fn as_slice_mut(handle: &mut Self) -> &mut [u8] {
+        // # Safety
+        // See above.
+        unsafe { core::slice::from_raw_parts_mut(handle.pointer, handle.size) }
+    }
+
+    pub fn leak(handle: Self) -> &'static mut [u8] {
+        let data_pointer = handle.pointer;
+        let data_size = handle.size;
         core::mem::forget(handle);
+        // # Safety
+        // See above.
         unsafe { core::slice::from_raw_parts_mut(data_pointer, data_size) }
     }
 }
 
-impl Deref for PhysicalAddressHandle<'_> {
+impl Deref for PhysicalAddressHandle {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        self.data
+        PhysicalAddressHandle::as_slice(self)
     }
 }
 
-impl Drop for PhysicalAddressHandle<'_> {
+impl DerefMut for PhysicalAddressHandle {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        PhysicalAddressHandle::as_slice_mut(self)
+    }
+}
+
+impl Drop for PhysicalAddressHandle {
     fn drop(&mut self) {
-        unmap_physical_memory(self.pointer, self.size);
+        unmap_physical_memory(self.base_pointer, self.allocated_size);
     }
 }
 
-pub fn map_physical_memory(
+/// Maps a region of physical memory.
+///
+/// # Safety
+/// It is possible to create aliasing issues with this function, since it is possible to map physical memory which is already mapped somewhere else.
+pub unsafe fn map_physical_memory(
     physical_address: usize,
     size: usize,
     memory_type: MemoryType,
-) -> PhysicalAddressHandle<'static> {
-    let address = unsafe { HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size).unwrap() };
-    for (virtual_block_address, physical_block_address) in (address..(address + size))
+) -> PhysicalAddressHandle {
+    // There are a few things we need to handle:
+    // Firstly, the address may not be aligned to a block boundary. This means we will have to map a little before the actual address, and add an offset from base_pointer to pointer.
+    // The other thing is that the size must likewise be aligned to a block boundary, and must also be increased by the offset of the pointer.
+    let offset_from_block = physical_address % BLOCK_SIZE;
+    let aligned_physical_address = physical_address - offset_from_block;
+    let allocated_size = align_address_up(size + offset_from_block, BLOCK_SIZE);
+    let address = unsafe {
+        HEAP_VIRTUAL_MEMORY_ALLOCATOR
+            .allocate(allocated_size)
+            .unwrap()
+    };
+    for (virtual_block_address, physical_block_address) in (address..(address + allocated_size))
         .step_by(BLOCK_SIZE)
-        .zip((physical_address..(physical_address + size)).step_by(BLOCK_SIZE))
+        .zip(
+            (aligned_physical_address..(aligned_physical_address + allocated_size))
+                .step_by(BLOCK_SIZE),
+        )
     {
         map_block(virtual_block_address, physical_block_address, memory_type);
     }
-    let data = unsafe { core::slice::from_raw_parts_mut(address as *mut u8, size) };
     PhysicalAddressHandle {
-        data,
-        pointer: address as *mut u8,
+        base_pointer: address as *mut u8,
+        allocated_size,
+        pointer: (address + offset_from_block) as *mut u8,
         size,
     }
 }
