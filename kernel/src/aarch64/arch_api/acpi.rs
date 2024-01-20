@@ -29,7 +29,13 @@ pub fn get_root_table_address() -> Option<usize> {
     }
 }
 
-pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
+pub struct AcpiInfo {
+    madt: MadtInfo,
+    fadt: FadtInfo,
+    gtdt: GtdtInfo,
+}
+
+pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) -> AcpiInfo {
     let mut madt = None;
     let mut fadt = None;
     let mut gtdt = None;
@@ -51,4 +57,10 @@ pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
     crate::println!("MADT: {:?}", madt);
     crate::println!("FADT: {:?}", fadt);
     crate::println!("GTDT: {:?}", gtdt);
+
+    AcpiInfo {
+        madt: madt.expect("MADT not found"),
+        fadt: fadt.expect("FADT not found"),
+        gtdt: gtdt.expect("GTDT not found"),
+    }
 }
