@@ -1,6 +1,8 @@
 pub mod arch_api;
+mod hpet;
 mod interrupts;
 mod multiboot;
 
-#[path = "acpi/hpet.rs"]
-mod hpet;
+mod acpi {
+    pub(in crate::arch) mod hpet;
+}

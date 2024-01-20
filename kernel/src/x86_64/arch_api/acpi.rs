@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use crate::{
     acpi::{madt::MadtInfo, AcpiTableHandle},
-    arch::hpet::HpetInfo,
+    arch::acpi::hpet::HpetInfo,
 };
 
 static mut ROOT_TABLE_ADDRESS: usize = 0;
