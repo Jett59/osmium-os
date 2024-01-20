@@ -28,8 +28,8 @@ pub fn get_root_table_address() -> Option<usize> {
 }
 
 pub struct AcpiInfo {
-    madt: MadtInfo,
-    hpet: HpetInfo,
+    pub madt: MadtInfo,
+    pub hpet: HpetInfo,
 }
 
 pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) -> AcpiInfo {

@@ -31,6 +31,7 @@ mod font_renderer;
 mod heap;
 mod lazy_init;
 mod memory;
+mod mmio;
 mod paging;
 mod physical_memory_manager;
 

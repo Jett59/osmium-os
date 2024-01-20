@@ -9,3 +9,8 @@ pub fn isb() {
 pub fn dsb_ish() {
     unsafe { asm!("dsb ish", options(nomem, nostack)) }
 }
+
+#[inline(always)]
+pub fn yield_instruction() {
+    unsafe { asm!("yield", options(nomem, nostack)) }
+}

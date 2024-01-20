@@ -324,6 +324,18 @@ impl PhysicalAddressHandle {
         // See above.
         unsafe { core::slice::from_raw_parts_mut(data_pointer, data_size) }
     }
+
+    pub fn as_ptr(handle: &Self) -> *const u8 {
+        handle.pointer as *const u8
+    }
+
+    pub fn as_mut_ptr(handle: &mut Self) -> *mut u8 {
+        handle.pointer
+    }
+
+    pub fn size(handle: &Self) -> usize {
+        handle.size
+    }
 }
 
 impl Deref for PhysicalAddressHandle {
