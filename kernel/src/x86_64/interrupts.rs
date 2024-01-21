@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use core::arch::{asm, global_asm};
 
-use crate::{lazy_init::lazy_static, println};
+use crate::{arch::local_apic, lazy_init::lazy_static, print, println};
 
 bitflags! {
     struct IdtFlags: u8 {
@@ -188,7 +188,22 @@ macro_rules! unhandled_interrupts {
 
 unhandled_interrupts!(divide_by_zero "divide by zero", debug "debug", non_maskable_interrupt "non maskable interrupt", breakpoint "breakpoint", overflow "overflow", bound_range_exceeded "bound range exceeded", device_not_available "device not available", invalid_opcode "invalid opcode", double_fault "double fault", coprocessor_segment_overrun "coprocessor segment overrun", invalid_tss "invalid tss", segment_not_present "segment not present", stack_segment_fault "stack segment fault", general_protection_fault "general protection fault", page_fault "page fault", reserved "reserved exception", x87_floating_point "x87 floating point", alignment_check "alignment check", machine_check "machine check", simd_floating_point "simd floating point", virtualization "virtualization", security_exception "security exception");
 
+pub const TIMER_INTERRUPT: u8 = 0x20;
+
+pub const SPURIOUS_INTERRUPT_VECTOR: u8 = 0xFF;
+
 fn handle_interrupt(number: u64, saved_registers: &SavedRegisters) {
+    if number == SPURIOUS_INTERRUPT_VECTOR as u64 {
+        return;
+    }
+    // Testing code to make sure the timer IRQ is working properly.
+    if number == TIMER_INTERRUPT as u64 {
+        print!(".");
+        unsafe { local_apic::set_timer(local_apic::get_timer_frequency()) };
+        unsafe { local_apic::end_of_interrupt() };
+        return;
+    }
+
     println!("Interrupt: {}", number);
     println!("Saved registers: {:?}", saved_registers);
 }
