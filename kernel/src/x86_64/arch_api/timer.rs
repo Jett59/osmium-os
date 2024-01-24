@@ -1,7 +1,6 @@
 use crate::{
     arch::{hpet::Hpet, local_apic},
-    mmio::MmioMemoryHandle,
-    print, println,
+    println,
 };
 
 use super::acpi::AcpiInfo;

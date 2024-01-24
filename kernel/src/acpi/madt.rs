@@ -186,8 +186,8 @@ memory_struct! {
 
 #[derive(Debug)]
 pub struct IoApicInfo {
-    address: u32,
-    global_system_interrupt_base: u32,
+    pub address: u32,
+    pub global_system_interrupt_base: u32,
 }
 
 bitflags! {
@@ -202,36 +202,36 @@ bitflags! {
 
 #[derive(Debug)]
 pub struct InterruptSourceOverrideInfo {
-    bus_source: u8,
-    irq_source: u8,
-    global_system_interrupt: u32,
-    flags: GeneralAPICInterruptFlags,
+    pub bus_source: u8,
+    pub irq_source: u8,
+    pub global_system_interrupt: u32,
+    pub flags: GeneralAPICInterruptFlags,
 }
 
 #[derive(Debug)]
 pub struct LocalApicNmiInfo {
-    flags: GeneralAPICInterruptFlags,
-    local_apic_lint: u8,
+    pub flags: GeneralAPICInterruptFlags,
+    pub local_apic_lint: u8,
 }
 
 #[derive(Debug)]
 pub struct GenericInterruptControllerCpuInterfaceInfo {
-    cpu_interface_number: u32,
-    base_address: u64,
-    mp_id_register: u64,
-    efficiency_class: u8,
+    pub cpu_interface_number: u32,
+    pub base_address: u64,
+    pub mp_id_register: u64,
+    pub efficiency_class: u8,
 }
 
 #[derive(Debug)]
 pub struct GenericInterruptControllerDistributorInfo {
-    base_address: u64,
-    gic_version: u8,
+    pub base_address: u64,
+    pub gic_version: u8,
 }
 
 #[derive(Debug)]
 pub struct GenericInterruptControllerRedistributorInfo {
-    discovery_range_base_address: u64,
-    discovery_range_length: u32,
+    pub discovery_range_base_address: u64,
+    pub discovery_range_length: u32,
 }
 
 #[derive(Debug, Default)]

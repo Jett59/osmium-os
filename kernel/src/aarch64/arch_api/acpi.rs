@@ -30,9 +30,9 @@ pub fn get_root_table_address() -> Option<usize> {
 }
 
 pub struct AcpiInfo {
-    madt: MadtInfo,
-    fadt: FadtInfo,
-    gtdt: GtdtInfo,
+    pub madt: MadtInfo,
+    pub fadt: FadtInfo,
+    pub gtdt: GtdtInfo,
 }
 
 pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) -> AcpiInfo {
