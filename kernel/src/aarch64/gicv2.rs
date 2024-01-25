@@ -3,7 +3,7 @@ use core::ops::Range;
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
-    arch_api::irq::{GenericInterruptController, InterruptInfo},
+    arch_api::irq::{GenericInterruptController, InterruptInfo, Priority},
     mmio::MmioMemoryHandle,
 };
 
@@ -29,6 +29,10 @@ const CPU_INTERFACE_CONTROL_OFFSET: usize = 0x00;
 const CPU_INTERFACE_PRIORITY_MASK_OFFSET: usize = 0x04;
 const CPU_INTERFACE_ACKNOWLEDGE_REGISTER: usize = 0x0C;
 const CPU_INTERFACE_END_OF_INTERRUPT_REGISTER: usize = 0x10;
+
+const LOW_PRIORITY: u8 = 0xd0;
+const NORMAL_PRIORITY: u8 = 0xc0;
+const HIGH_PRIORITY: u8 = 0xb0;
 
 impl Gicv2 {
     /// # Safety
@@ -188,7 +192,12 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
-    fn configure_interrupt(&mut self, interrupt_number: u32, edge_triggered: bool, priority: u8) {
+    fn configure_interrupt(
+        &mut self,
+        interrupt_number: u32,
+        edge_triggered: bool,
+        priority: Priority,
+    ) {
         assert!(
             self.interrupt_is_usable(interrupt_number),
             "attempted to configure an interrupt that is not usable"
@@ -197,7 +206,11 @@ impl GenericInterruptController for Gicv2 {
         unsafe {
             self.distributor_registers
                 .at_offset::<u8>(DISTRIBUTOR_PRIORITY_OFFSET + interrupt_number as usize)
-                .write(priority as u8);
+                .write(match priority {
+                    Priority::Low => LOW_PRIORITY,
+                    Priority::Normal => NORMAL_PRIORITY,
+                    Priority::High => HIGH_PRIORITY,
+                });
 
             let interrupt_configuration_register_offset =
                 DISTRIBUTOR_INTERRUPT_CONFIGURATION_OFFSET + ((interrupt_number / 16) as usize * 4);
@@ -234,10 +247,10 @@ impl GenericInterruptController for Gicv2 {
             self.cpu_interface_registers
                 .at_offset::<u32>(CPU_INTERFACE_CONTROL_OFFSET)
                 .write(0x1);
-            // Also set the priority mask to 0xff (which should allow all interrupts).
+            // Also set the priority mask to LOW_PRIORITY+0x10 (which should allow all low-priority and above interrupts).
             self.cpu_interface_registers
                 .at_offset::<u32>(CPU_INTERFACE_PRIORITY_MASK_OFFSET)
-                .write(0xff);
+                .write(LOW_PRIORITY as u32 + 0x10);
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::arch::{
 
 use super::{
     acpi::AcpiInfo,
-    irq::{configure_interrupt, enable_interrupt},
+    irq::{configure_interrupt, enable_interrupt, Priority},
 };
 
 pub fn initialize(acpi_info: &AcpiInfo) {
@@ -18,7 +18,7 @@ pub fn initialize(acpi_info: &AcpiInfo) {
             .gtdt
             .timer_flags
             .contains(TimerFlags::EDGE_TRIGGERED),
-        0xf0,
+        Priority::High,
     );
     enable_interrupt(acpi_info.gtdt.timer_interrupt);
 }

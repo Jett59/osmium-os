@@ -10,6 +10,12 @@ pub(in crate::arch) struct InterruptInfo {
     pub acknowledge_register_value: u32,
 }
 
+pub(in crate::arch) enum Priority {
+    Low,
+    Normal,
+    High,
+}
+
 pub(in crate::arch) trait GenericInterruptController {
     /// Acknowledge that an interrupt was received, getting the interrupt number at the same time.
     /// On GICv2, this is done by reading the `IAR` register in the CPU interface.
@@ -21,7 +27,12 @@ pub(in crate::arch) trait GenericInterruptController {
     fn enable_interrupt(&mut self, interrupt_number: u32);
     fn disable_interrupt(&mut self, interrupt_number: u32);
 
-    fn configure_interrupt(&mut self, interrupt_number: u32, edge_triggered: bool, priority: u8);
+    fn configure_interrupt(
+        &mut self,
+        interrupt_number: u32,
+        edge_triggered: bool,
+        priority: Priority,
+    );
 
     fn interrupt_is_usable(&self, interrupt_number: u32) -> bool;
 
@@ -111,7 +122,7 @@ pub(in crate::arch) fn disable_interrupt(interrupt_number: u32) {
 pub(in crate::arch) fn configure_interrupt(
     interrupt_number: u32,
     edge_triggered: bool,
-    priority: u8,
+    priority: Priority,
 ) {
     // SAFETY: The GIC is designed to work across threads.
     unsafe {
