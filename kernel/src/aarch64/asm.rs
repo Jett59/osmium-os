@@ -14,3 +14,7 @@ pub fn dsb_ish() {
 pub fn yield_instruction() {
     unsafe { asm!("yield", options(nomem, nostack)) }
 }
+
+pub fn enable_interrupts() {
+    unsafe { asm!("msr daifclr, #15", options(nomem, nostack)) }
+}

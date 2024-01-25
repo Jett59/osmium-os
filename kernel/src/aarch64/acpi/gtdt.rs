@@ -14,12 +14,13 @@ memory_struct! {
 struct GtdtTableBody<'lifetime> {
     count_control_physical_address: u64,
     reserved: u32,
+    // We only use the virtual EL1 timer here.
     _secure_el1_interrupt: u32,
     _secure_el1_flags: u32,
-    el1_interrupt: u32,
-    el1_flags: u32,
-    _virtual_el1_interrupt: u32,
-    _virtual_el1_flags: u32,
+    _el1_interrupt: u32,
+    _el1_flags: u32,
+    virtual_el1_interrupt: u32,
+    virtual_el1_flags: u32,
     _el2_interrupt: u32,
     _el2_flags: u32,
     counter_read_physical_address: u64,
@@ -49,8 +50,8 @@ impl GtdtInfo {
         let body = GtdtTableBody::from_bytes(Endianness::Little, table.body())
             .expect("Invalid GTDT table body");
         Self {
-            timer_interrupt: body.el1_interrupt(),
-            timer_flags: TimerFlags::from_bits_retain(body.el1_flags()),
+            timer_interrupt: body.virtual_el1_interrupt(),
+            timer_flags: TimerFlags::from_bits_retain(body.virtual_el1_flags()),
         }
     }
 }

@@ -23,3 +23,15 @@ pub fn get_cntvct() -> u64 {
     }
     cntvct
 }
+
+pub fn set_cntv_ctl(cntv_ctl: u64) {
+    unsafe {
+        asm!("msr cntv_ctl_el0, {}", in(reg) cntv_ctl, options(nomem, nostack));
+    }
+}
+
+pub fn set_cntv_cval(cntv_cval: u64) {
+    unsafe {
+        asm!("msr cntv_cval_el0, {}", in(reg) cntv_cval, options(nomem, nostack));
+    }
+}

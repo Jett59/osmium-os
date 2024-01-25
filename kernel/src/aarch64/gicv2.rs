@@ -22,8 +22,11 @@ const DISTRIBUTOR_CONTROL_OFFSET: usize = 0x000;
 const DISTRIBUTOR_IDENTIFICATION_OFFSET: usize = 0x004;
 const DISTRIBUTOR_SET_ENABLE_OFFSET: usize = 0x100;
 const DISTRIBUTOR_CLEAR_ENABLE_OFFSET: usize = 0x180;
+const DISTRIBUTOR_PRIORITY_OFFSET: usize = 0x400;
+const DISTRIBUTOR_INTERRUPT_CONFIGURATION_OFFSET: usize = 0xC00;
 
 const CPU_INTERFACE_CONTROL_OFFSET: usize = 0x00;
+const CPU_INTERFACE_PRIORITY_MASK_OFFSET: usize = 0x04;
 const CPU_INTERFACE_ACKNOWLEDGE_REGISTER: usize = 0x0C;
 const CPU_INTERFACE_END_OF_INTERRUPT_REGISTER: usize = 0x10;
 
@@ -141,7 +144,7 @@ impl GenericInterruptController for Gicv2 {
         } else {
             Some(InterruptInfo {
                 acknowledge_register_value,
-                interrupt_number: acknowledge_register_value & 0x3FF,
+                interrupt_number,
             })
         }
     }
@@ -185,6 +188,37 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
+    fn configure_interrupt(&mut self, interrupt_number: u32, edge_triggered: bool, priority: u8) {
+        assert!(
+            self.interrupt_is_usable(interrupt_number),
+            "attempted to configure an interrupt that is not usable"
+        );
+        // SAFETY: we were created with an address, which was required to be valid.
+        unsafe {
+            self.distributor_registers
+                .at_offset::<u8>(DISTRIBUTOR_PRIORITY_OFFSET + interrupt_number as usize)
+                .write(priority as u8);
+
+            let interrupt_configuration_register_offset =
+                DISTRIBUTOR_INTERRUPT_CONFIGURATION_OFFSET + ((interrupt_number / 16) as usize * 4);
+
+            // The way this works is that there is a 2-bit field for each interrupt number.
+            // The first bit is reserved (probably used in an earlier version of the spec).
+            // The second bit is 1 if the interrupt is edge-triggered, and 0 if it is level-triggered.
+
+            // Unfortunately we have to use a read-modify-write pattern here since we have to preserve the other bits.
+            self.distributor_registers
+                .at_offset::<u32>(interrupt_configuration_register_offset)
+                .write(
+                    self.distributor_registers
+                        .at_offset::<u32>(interrupt_configuration_register_offset)
+                        .read()
+                        & !(0b11 << ((interrupt_number % 16) * 2))
+                        | ((edge_triggered as u32) << ((interrupt_number % 16) * 2)),
+                );
+        }
+    }
+
     fn interrupt_is_usable(&self, interrupt_number: u32) -> bool {
         for available_interrupt_range in self.available_interrupt_ranges.iter() {
             if available_interrupt_range.contains(&interrupt_number) {
@@ -200,6 +234,10 @@ impl GenericInterruptController for Gicv2 {
             self.cpu_interface_registers
                 .at_offset::<u32>(CPU_INTERFACE_CONTROL_OFFSET)
                 .write(0x1);
+            // Also set the priority mask to 0xff (which should allow all interrupts).
+            self.cpu_interface_registers
+                .at_offset::<u32>(CPU_INTERFACE_PRIORITY_MASK_OFFSET)
+                .write(0xff);
         }
     }
 }
