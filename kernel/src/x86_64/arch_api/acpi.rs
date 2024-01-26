@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use crate::{
     acpi::{madt::MadtInfo, AcpiTableHandle},
-    arch::hpet::HpetInfo,
+    arch::acpi::hpet::HpetInfo,
 };
 
 static mut ROOT_TABLE_ADDRESS: usize = 0;
@@ -27,7 +27,12 @@ pub fn get_root_table_address() -> Option<usize> {
     }
 }
 
-pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
+pub struct AcpiInfo {
+    pub madt: MadtInfo,
+    pub hpet: HpetInfo,
+}
+
+pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) -> AcpiInfo {
     let mut madt = None;
     let mut hpet = None;
     for table in acpi_tables {
@@ -44,4 +49,9 @@ pub fn handle_acpi_info(acpi_tables: Vec<AcpiTableHandle>) {
 
     crate::println!("MADT: {:?}", madt);
     crate::println!("HPET: {:?}", hpet);
+
+    AcpiInfo {
+        madt: madt.expect("MADT not found"),
+        hpet: hpet.expect("HPET not found"),
+    }
 }

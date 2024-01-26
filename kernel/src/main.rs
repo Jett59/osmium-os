@@ -31,6 +31,7 @@ mod font_renderer;
 mod heap;
 mod lazy_init;
 mod memory;
+mod mmio;
 mod paging;
 mod physical_memory_manager;
 
@@ -57,7 +58,9 @@ extern "C" fn kmain() -> ! {
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");
     let required_acpi_tables = acpi::find_required_acpi_tables().unwrap();
-    arch_api::acpi::handle_acpi_info(required_acpi_tables);
+    let acpi_info = arch_api::acpi::handle_acpi_info(required_acpi_tables);
+    arch_api::irq::initialize(&acpi_info);
+    arch_api::timer::initialize(&acpi_info);
     loop {}
 }
 

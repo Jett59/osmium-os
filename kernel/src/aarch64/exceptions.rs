@@ -3,7 +3,14 @@ use core::{
     fmt::Debug,
 };
 
-use crate::arch::registers::get_esr;
+use crate::{
+    arch::registers::{get_cntfrq, get_cntvct, get_esr, set_cntv_cval},
+    arch_api::{
+        irq::{acknowledge_interrupt, end_of_interrupt},
+        timer,
+    },
+    print,
+};
 
 // The vector table itself is defined in assembly language, since it requires low-level manipulation of registers and system instructions.
 global_asm!(include_str!("exceptions.s"));
@@ -103,7 +110,19 @@ pub extern "C" fn synchronous_vector(registers: &SavedRegisters) {
 }
 #[no_mangle]
 pub extern "C" fn irq_vector(registers: &SavedRegisters) {
-    panic!("IRQ exception\n{:x?}", registers);
+    let Some(irq_info) = acknowledge_interrupt() else {
+        return;
+    };
+    let interrupt_number = irq_info.interrupt_number;
+    if interrupt_number == timer::get_timer_interrupt() {
+        // Test code for the timer. Remove when we know it works.
+        print!(".");
+        // Set the timer to go off again in 1 second.
+        set_cntv_cval(get_cntfrq() + get_cntvct());
+    } else {
+        panic!("IRQ {}\n{:x?}", irq_info.interrupt_number, registers);
+    }
+    end_of_interrupt(irq_info);
 }
 #[no_mangle]
 pub extern "C" fn fiq_vector(registers: &SavedRegisters) {
