@@ -12,9 +12,9 @@ pub fn initialize(acpi_info: &AcpiInfo) {
     if acpi_info.madt.flags & 0b1 != 0 {
         // Legacy PIC present
         unsafe {
-            // We must disable the legacy PIC so that we don't get interrupts through it in addition to the IO APICs.
-            // Unfortunately, there is no official way to do this.
-            // The generally accepted method is to map it to some reserved range of interrupts, and then mask all interrupts on the primary PIC (including the cascade line to the secondary PIC).
+            // The legacy PIC will be giving us interrupts as well, which we don't want.
+            // The solution consists of two steps:
+            // - Initialize the PIC, so it sends spurious interrupts correctly.
             write_port8(0x20, 0x11); // Initialize primary PIC
             io_wait();
             write_port8(0x21, 0xf8); // Primary PIC starts at interrupt 0xf8, so that the spurious interrupt is 0xff
@@ -25,7 +25,8 @@ pub fn initialize(acpi_info: &AcpiInfo) {
             io_wait();
             write_port8(0x21, 0x01); // Put it in 8086 mode (whatever that does)
 
-            // Mask all interrupts on the primary PIC (including the cascade line to the secondary PIC)
+            // - Then mask all interrupts.
+            // NOTE: It may still send us spurious interrupts (interrupt 7), so the initialization above was definitely necessary.
             write_port8(0x21, 0xff);
         }
     }
