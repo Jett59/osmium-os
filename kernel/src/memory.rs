@@ -1,4 +1,4 @@
-use core::{mem::size_of, slice};
+use core::{marker::PhantomData, mem::size_of, ops::Deref, slice};
 
 pub trait Validateable {
     // Ensure that an instance of this type is valid. This is used to ensure that
@@ -57,6 +57,66 @@ impl_from_bytes!(i16);
 impl_from_bytes!(i32);
 impl_from_bytes!(i64);
 impl_from_bytes!(i128);
+
+pub struct Array<'lifetime, T, const N: usize> {
+    data: &'lifetime [u8],
+    endianness: Endianness,
+    _phantom: PhantomData<T>,
+}
+
+impl<'lifetime, T, const N: usize> FromBytes<'lifetime> for Array<'lifetime, T, N>
+where
+    T: FromBytes<'lifetime>,
+{
+    fn from_bytes(endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError> {
+        if bytes.len() < N * T::SIZE {
+            return Err(FromBytesError::InvalidSize);
+        }
+        Ok(Self {
+            data: bytes,
+            endianness,
+            _phantom: PhantomData,
+        })
+    }
+
+    const SIZE: usize = N * T::SIZE;
+}
+
+impl<'lifetime, T, const N: usize> Array<'lifetime, T, N>
+where
+    T: FromBytes<'lifetime> + 'lifetime,
+{
+    pub fn get(&self, index: usize) -> Result<T, FromBytesError> {
+        let offset = index * T::SIZE;
+        let bytes = &self.data[offset..offset + T::SIZE];
+        T::from_bytes(self.endianness, bytes)
+    }
+}
+
+impl<'lifetime, T, const N: usize> core::fmt::Debug for Array<'lifetime, T, N>
+where
+    T: FromBytes<'lifetime> + core::fmt::Debug + 'lifetime,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list()
+            .entries((0..N).map(|index| self.get(index).unwrap()))
+            .finish()
+    }
+}
+
+impl<const N: usize> Deref for Array<'_, u8, N> {
+    type Target = [u8; N];
+
+    fn deref(&self) -> &Self::Target {
+        self.data[..N].try_into().unwrap()
+    }
+}
+
+impl<'lifetime, const N: usize> From<Array<'lifetime, u8, N>> for &'lifetime [u8] {
+    fn from(value: Array<'lifetime, u8, N>) -> Self {
+        value.data
+    }
+}
 
 /// Create a type which wraps a byte slice.
 ///
