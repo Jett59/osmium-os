@@ -98,8 +98,50 @@ pub fn read_initramfs(initramfs: &[u8]) -> BTreeMap<String, &[u8]> {
                 .position(|&byte| byte == 0)
                 .unwrap_or(file_name.len());
             let file_name = String::from_utf8_lossy(&file_name[..null_terminator_index]);
-            result.insert(file_name.into_owned(), &value_memory[512..]);
+            result.insert(
+                file_name.into_owned(),
+                &value_memory[512..512 + *value.file_size() as usize],
+            );
         }
     }
     result
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn octal_string_test() {
+        let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"3210");
+        assert!(octal_string.is_ok());
+        assert_eq!(octal_string.unwrap().0, 0o3210);
+
+        let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"8765");
+        assert!(octal_string.is_err());
+
+        let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"12345");
+        assert!(octal_string.is_ok());
+        assert_eq!(octal_string.unwrap().0, 0o1234);
+
+        let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"12\x003");
+        assert!(octal_string.is_ok());
+        assert_eq!(octal_string.unwrap().0, 0o12);
+    }
+
+    #[test]
+    fn initramfs_test() {
+        let test_initramfs_data = include_bytes!("test/initramfs.tar");
+        let initramfs = read_initramfs(test_initramfs_data);
+
+        assert_eq!(initramfs.len(), 2);
+        assert!(initramfs.contains_key("test.txt"));
+        assert!(initramfs.contains_key("yes/agree.txt"));
+
+        let test_txt = initramfs.get("test.txt").unwrap();
+        assert_eq!(test_txt.len(), 8);
+        assert_eq!(test_txt, b"testing\n");
+        let yes_agree_txt = initramfs.get("yes/agree.txt").unwrap();
+        assert_eq!(yes_agree_txt.len(), 10);
+        assert_eq!(yes_agree_txt, b"certainly\n");
+    }
 }
