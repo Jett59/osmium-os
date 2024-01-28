@@ -297,12 +297,12 @@ fn load_kernel(
         page_align_up(memory_map_virtual_address + MEMORY_MAP_ALLOCATED_SIZE);
 
     if let Some(initramfs_tag) = tags.module {
-        let Some(initramfs_data) = &initramfs_data else {
-            unreachable!();
-        };
+        if let Some(initramfs_data) = &initramfs_data {
+            panic!("Initramfs tag found in kernel binary, but no initramfs was specified");
 
-        initramfs_tag.base = initramfs_virtual_address as *const u8;
-        initramfs_tag.file_size = initramfs_data.len();
+            initramfs_tag.base = initramfs_virtual_address as *const u8;
+            initramfs_tag.file_size = initramfs_data.len();
+        }
     }
 
     let memory_map_tag_offset = tags.memory_map_offset;
