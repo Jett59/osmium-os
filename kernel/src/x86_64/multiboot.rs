@@ -1,14 +1,14 @@
 use core::mem::size_of;
 
 use crate::{
-    arch_api::{acpi, paging::MemoryType},
+    arch_api::{acpi, initramfs, paging::MemoryType},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         Validateable,
     },
-    physical_memory_manager::{mark_range_as_free, BLOCK_SIZE},
+    physical_memory_manager::{mark_range_as_free, mark_range_as_used, BLOCK_SIZE},
 };
 use common::framebuffer::{self, FrameBuffer};
 
@@ -54,10 +54,25 @@ impl DynamicallySized for MbiTag {
     const ALIGNMENT: usize = 8;
 }
 
+const MBI_TAG_MODULE: u32 = 3;
 const MBI_TAG_MEMORY_MAP: u32 = 6;
 const MBI_TAG_FRAME_BUFFER: u32 = 8;
 const MBI_TAG_ACPI_OLD: u32 = 14;
 const MBI_TAG_ACPI_NEW: u32 = 15;
+
+#[repr(C, packed)]
+struct MbiModuleTag {
+    base_tag: MbiTag,
+    module_start: u32,
+    module_end: u32,
+}
+
+impl Validateable for MbiModuleTag {
+    fn validate(&self) -> bool {
+        // Make sure we are the right type and that the module end is after the module start.
+        self.base_tag.tag_type == MBI_TAG_MODULE && self.module_end > self.module_start
+    }
+}
 
 #[repr(C, packed)]
 struct MbiMemoryMapTag {
@@ -161,6 +176,7 @@ pub fn parse_multiboot_structures() {
     let tag_iterator: DynamicallySizedObjectIterator<&MbiTag> =
         DynamicallySizedObjectIterator::new(Endianness::Little, tag_memory);
     let mut frame_buffer = None; // Delayed initialization to allow for memory to be detected first.
+    let mut module = None; // Same as above
     let mut found_new_acpi = false;
     for DynamicallySizedItem {
         value: tag,
@@ -169,6 +185,10 @@ pub fn parse_multiboot_structures() {
     {
         let tag_type = tag.tag_type;
         match tag_type {
+            MBI_TAG_MODULE => {
+                let module_tag: &MbiModuleTag = unsafe { reinterpret_memory(tag_memory).unwrap() };
+                module = Some(module_tag);
+            }
             MBI_TAG_MEMORY_MAP => {
                 let memory_map_tag: &MbiMemoryMapTag =
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
@@ -194,8 +214,32 @@ pub fn parse_multiboot_structures() {
             _ => {}
         }
     }
+    if let Some(module) = module {
+        parse_module(module);
+    }
     if let Some(frame_buffer) = frame_buffer {
         parse_frame_buffer(frame_buffer);
+    }
+}
+
+fn parse_module(module: &MbiModuleTag) {
+    // Since Grub puts the module in `available` memory, we need to explicitly mark it as used.
+    let start_address = align_address_down(module.module_start as usize, BLOCK_SIZE);
+    let end_address = align_address_up(module.module_end as usize, BLOCK_SIZE);
+    mark_range_as_used(start_address, end_address);
+
+    let module_size = module.module_end - module.module_start;
+    // SAFETY: The memory should be valid (Grub makes sure of this), and it won't be given out to anyone since it is marked as used.
+    let module_memory = unsafe {
+        map_physical_memory(
+            module.module_start as usize,
+            module_size as usize,
+            MemoryType::Normal,
+        )
+    };
+    // SAFETY: There are no data races possible, since there is only one thread running at the moment.
+    unsafe {
+        initramfs::INITRAMFS = Some(PhysicalAddressHandle::leak(module_memory));
     }
 }
 
@@ -235,7 +279,7 @@ fn parse_memory_map(memory_map: &MbiMemoryMapTag, tag_memory: &[u8]) {
 }
 
 fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
-    // The frame buffer may still be marked as valid even if it dosn'doesn't use RGB mode.
+    // The frame buffer may still be marked as valid even if it doesn't use RGB mode.
     if frame_buffer.framebuffer_type == 1 {
         framebuffer::init(FrameBuffer {
             width: frame_buffer.width as usize,

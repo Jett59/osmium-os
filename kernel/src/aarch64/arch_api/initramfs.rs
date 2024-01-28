@@ -18,10 +18,10 @@ pub fn get_initramfs() -> Option<&'static [u8]> {
         return None;
     }
 
-    // SAFETY: We trust the bootloader to give us a valid pointer.
+    // SAFETY: We trust the bootloader to give us a valid pointer and a correct size.
     unsafe {
-        let base = MODULE_TAG.base as *const u8;
-        let size = MODULE_TAG.file_size as usize;
+        let base = MODULE_TAG.base;
+        let size = MODULE_TAG.file_size;
         Some(core::slice::from_raw_parts(base, size))
     }
 }
