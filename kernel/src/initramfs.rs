@@ -1,4 +1,4 @@
-//! A basic reader for the initramfs.
+//! A basic reader for the [initramfs](https://en.wikipedia.org/wiki/Initial_ramdisk) (INITial RAM File System).
 //!
 //! The initramfs is a simple TAR file containing all the necessary files to bring up the machine, load drivers and do whatever else.
 //!
@@ -20,10 +20,7 @@ use crate::{
 struct OctalString<const MAX_LENGTH: usize>(u32);
 
 impl<const MAX_LENGTH: usize> FromBytes<'_> for OctalString<MAX_LENGTH> {
-    fn from_bytes(
-        _endianness: Endianness,
-        bytes: &[u8],
-    ) -> Result<Self, crate::memory::FromBytesError> {
+    fn from_bytes(_endianness: Endianness, bytes: &[u8]) -> Result<Self, FromBytesError> {
         let mut result = 0;
         for byte in &bytes[..MAX_LENGTH] {
             if *byte == 0 {
@@ -90,9 +87,12 @@ pub fn read_initramfs(initramfs: &[u8]) -> BTreeMap<String, &[u8]> {
         value_memory,
     } in DynamicallySizedObjectIterator::<FileHeader>::new(Endianness::Native, initramfs)
     {
+        // The file size is 0 for directories and other non-files, which we don't care about.
         if *value.file_size() != 0 {
             let file_name = &*value.file_name();
-            // We need to find the null terminator, since String::from_utf8_lossy doesn't know where to stop.
+            // We need to find the null terminator, since String::from_utf8_lossy doesn't know where to stop (it assumes the entire slice is part of the string).
+            // There may not be a null terminator (if the file name is exactly 100 characters), so we fall back to saying it is one-past-the-end of the slice.
+            // This makes sure that the subslicing logic gets the right string either way.
             let null_terminator_index = file_name
                 .iter()
                 .position(|&byte| byte == 0)
@@ -121,11 +121,11 @@ mod test {
 
         let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"12345");
         assert!(octal_string.is_ok());
-        assert_eq!(octal_string.unwrap().0, 0o1234);
+        assert_eq!(octal_string.unwrap().0, 0o1234); // It should've cut off at 4 (MAX_LENGTH)
 
         let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"12\x003");
         assert!(octal_string.is_ok());
-        assert_eq!(octal_string.unwrap().0, 0o12);
+        assert_eq!(octal_string.unwrap().0, 0o12); // The null terminator should stop it
     }
 
     #[test]
