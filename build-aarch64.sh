@@ -21,3 +21,4 @@ mmd -i build/osmium.img ::/boot
 mmd -i build/osmium.img ::/boot/beryllium
 mcopy -i build/osmium.img config/boot.toml ::/boot/beryllium/boot.toml
 mcopy -i build/osmium.img kernel/build/osmium ::/boot/osmium
+mcopy -i build/osmium.img build/initramfs.tar ::/boot/initramfs.tar
