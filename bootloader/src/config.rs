@@ -15,6 +15,7 @@ pub struct Config {
 pub struct ConfigEntry {
     pub label: String,
     pub kernel_path: String,
+    pub initramfs_path: String,
 }
 
 impl ConfigEntry {
@@ -22,6 +23,7 @@ impl ConfigEntry {
         ConfigEntry {
             label,
             kernel_path: String::new(),
+            initramfs_path: String::new(),
         }
     }
 }
@@ -40,6 +42,9 @@ pub fn parse_config(config_string: &str) -> Config {
     for (key, value) in toml.iter().filter(|(key, _)| key != &"boot") {
         let mut entry = ConfigEntry::new(key.to_string());
         entry.kernel_path = value.get("kernel").unwrap().to_string();
+        if let Some(initramfs_path) = value.get("initramfs") {
+            entry.initramfs_path = initramfs_path.to_string();
+        }
         config.entries.push(entry);
     }
 

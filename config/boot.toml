@@ -4,3 +4,4 @@ default = "osmium"
 
 [osmium]
 kernel = "/boot/osmium"
+initramfs = "/boot/initramfs.tar"

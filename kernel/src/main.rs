@@ -61,6 +61,10 @@ extern "C" fn kmain() -> ! {
     let acpi_info = arch_api::acpi::handle_acpi_info(required_acpi_tables);
     arch_api::irq::initialize(&acpi_info);
     arch_api::timer::initialize(&acpi_info);
+
+    let initramfs = arch_api::initramfs::get_initramfs().expect("No initramfs found");
+    println!("Initramfs found with size {}", initramfs.len());
+
     loop {}
 }
 
