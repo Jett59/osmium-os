@@ -1,3 +1,4 @@
+#[cfg_attr(test, allow(unused_imports))]
 use core::{
     arch::{asm, global_asm},
     fmt::Debug,
@@ -13,11 +14,17 @@ use crate::{
 };
 
 // The vector table itself is defined in assembly language, since it requires low-level manipulation of registers and system instructions.
+#[cfg(not(test))]
 global_asm!(include_str!("exceptions.s"));
 
+#[cfg(not(test))]
 extern "C" {
     static exception_vector_table: u8;
 }
+
+#[cfg(test)]
+#[allow(non_upper_case_globals)]
+static exception_vector_table: u8 = 0;
 
 /// Loads vbar_el1 with the address of the exception vector table, allowing us to handle them properly.
 pub fn load_exceptions() {
