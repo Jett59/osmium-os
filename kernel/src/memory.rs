@@ -293,8 +293,7 @@ where
             return None;
         }
         let value_memory = &self.total_memory[self.current_offset..];
-        let value = T::from_bytes(self.endianness, value_memory)
-            .expect("Failed to create object from memory");
+        let value = T::from_bytes(self.endianness, value_memory).expect("Invalid memory");
         if value.size() > self.total_memory.len() - self.current_offset {
             return None;
         }
