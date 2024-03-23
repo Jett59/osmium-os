@@ -96,8 +96,8 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         .find(|entry| entry.label == config.default_entry)
         .unwrap();
     println!("Kernel path: {}", entry.kernel_path);
-    if !entry.initramfs_path.is_empty() {
-        println!("Initramfs path: {}", entry.initramfs_path);
+    if !entry.initial_ramdisk_path.is_empty() {
+        println!("initial_ramdisk path: {}", entry.initial_ramdisk_path);
     }
 
     boot_services.stall((config.timeout * 1_000_000) as usize);
@@ -106,7 +106,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         image,
         system_table,
         entry.kernel_path.as_str(),
-        entry.initramfs_path.as_str(),
+        entry.initial_ramdisk_path.as_str(),
     )
     .unwrap();
 
@@ -140,7 +140,7 @@ fn load_kernel(
     image: Handle,
     system_table: SystemTable<Boot>,
     kernel_path: &str,
-    initramfs_path: &str,
+    initial_ramdisk_path: &str,
 ) -> Result {
     let boot_services = system_table.boot_services();
 
@@ -255,7 +255,7 @@ fn load_kernel(
         acpi_tag.rsdt = rsdt_address;
     }
 
-    let mut initramfs_data = None;
+    let mut initial_ramdisk_data = None;
 
     let mut page_allocator = |page_count| {
         boot_services
@@ -264,26 +264,30 @@ fn load_kernel(
             .ok()
     };
 
-    if !initramfs_path.is_empty() {
-        let initramfs_path = initramfs_path.replace('/', "\\");
-        let mut initramfs_path_buffer = vec![0u16; initramfs_path.len() + 1]; // Includes null terminator.
-        let initramfs_binary = read_file(
+    if !initial_ramdisk_path.is_empty() {
+        let initial_ramdisk_path = initial_ramdisk_path.replace('/', "\\");
+        let mut initial_ramdisk_path_buffer = vec![0u16; initial_ramdisk_path.len() + 1]; // Includes null terminator.
+        let initial_ramdisk_binary = read_file(
             image,
             boot_services,
             CStr16::from_str_with_buf(
-                initramfs_path.as_str(),
-                initramfs_path_buffer.as_mut_slice(),
+                initial_ramdisk_path.as_str(),
+                initial_ramdisk_path_buffer.as_mut_slice(),
             )
             .unwrap(),
         )?;
         // To make sure the data is page aligned, we have to allocate the pages manually and copy the data.
-        let initramfs_page_count = page_align_up(initramfs_binary.len()) / PAGE_SIZE;
-        let initramfs_address = page_allocator(initramfs_page_count).unwrap();
+        let initial_ramdisk_page_count = page_align_up(initial_ramdisk_binary.len()) / PAGE_SIZE;
+        let initial_ramdisk_address = page_allocator(initial_ramdisk_page_count).unwrap();
         unsafe {
-            initramfs_address.copy_from(initramfs_binary.as_ptr(), initramfs_binary.len());
+            initial_ramdisk_address.copy_from(
+                initial_ramdisk_binary.as_ptr(),
+                initial_ramdisk_binary.len(),
+            );
         }
-        initramfs_data =
-            Some(unsafe { slice::from_raw_parts(initramfs_address, initramfs_binary.len()) });
+        initial_ramdisk_data = Some(unsafe {
+            slice::from_raw_parts(initial_ramdisk_address, initial_ramdisk_binary.len())
+        });
     }
 
     let entrypoint = elf.entrypoint as usize;
@@ -293,15 +297,15 @@ fn load_kernel(
 
     const MEMORY_MAP_ALLOCATED_SIZE: usize = PAGE_SIZE;
 
-    let initramfs_virtual_address =
+    let initial_ramdisk_virtual_address =
         page_align_up(memory_map_virtual_address + MEMORY_MAP_ALLOCATED_SIZE);
 
-    if let Some(initramfs_tag) = tags.module {
-        if let Some(initramfs_data) = &initramfs_data {
-            initramfs_tag.base = initramfs_virtual_address as *const u8;
-            initramfs_tag.file_size = initramfs_data.len();
-        }else {
-            panic!("Initramfs tag found, but no initramfs data");
+    if let Some(initial_ramdisk_tag) = tags.module {
+        if let Some(initial_ramdisk_data) = &initial_ramdisk_data {
+            initial_ramdisk_tag.base = initial_ramdisk_virtual_address as *const u8;
+            initial_ramdisk_tag.file_size = initial_ramdisk_data.len();
+        } else {
+            panic!("initial_ramdisk tag found, but no initial_ramdisk data");
         }
     }
 
@@ -342,13 +346,13 @@ fn load_kernel(
         );
     }
 
-    // Map the initramfs memory.
-    if let Some(initramfs_data) = &initramfs_data {
+    // Map the initial_ramdisk memory.
+    if let Some(initial_ramdisk_data) = &initial_ramdisk_data {
         page_tables.map(
             &mut page_allocator,
-            initramfs_virtual_address,
-            initramfs_data.as_ptr() as usize,
-            page_align_up(initramfs_data.len()),
+            initial_ramdisk_virtual_address,
+            initial_ramdisk_data.as_ptr() as usize,
+            page_align_up(initial_ramdisk_data.len()),
             false,
             false,
         );

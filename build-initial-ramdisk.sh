@@ -8,5 +8,5 @@ This is a test file!
 EOF
 
 cd build
-tar -cf initramfs.tar test.txt
+tar -cf initial_ramdisk.tar test.txt
 cd ..

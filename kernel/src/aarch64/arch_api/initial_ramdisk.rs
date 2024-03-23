@@ -12,7 +12,7 @@ pub static mut MODULE_TAG: ModuleTag = ModuleTag {
     file_size: 0,
 };
 
-pub fn get_initramfs() -> Option<&'static [u8]> {
+pub fn get_initial_ramdisk() -> Option<&'static [u8]> {
     // SAFETY: The module tag is initialized by the bootloader, and never modified afterwards.
     if unsafe { MODULE_TAG }.file_size == 0 {
         return None;

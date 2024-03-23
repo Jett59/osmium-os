@@ -22,6 +22,6 @@ cd kernel
 ./build.sh
 cd ..
 
-./build-initramfs.sh
+./build-initial-ramdisk.sh
 
 ./build-$ARCH.sh

@@ -28,7 +28,7 @@ mod buddy;
 mod console;
 mod font_renderer;
 mod heap;
-mod initramfs;
+mod initial_ramdisk;
 mod lazy_init;
 mod memory;
 mod mmio;
@@ -43,7 +43,7 @@ pub use arch::arch_api;
 
 use core::panic::PanicInfo;
 
-use crate::initramfs::read_initramfs;
+use crate::initial_ramdisk::read_initial_ramdisk;
 
 extern crate alloc;
 
@@ -64,9 +64,10 @@ extern "C" fn kmain() -> ! {
     arch_api::irq::initialize(&acpi_info);
     arch_api::timer::initialize(&acpi_info);
 
-    let initramfs =
-        read_initramfs(arch_api::initramfs::get_initramfs().expect("No initramfs found"));
-    println!("Files in initramfs: {:?}", initramfs.keys());
+    let initial_ramdisk = read_initial_ramdisk(
+        arch_api::initial_ramdisk::get_initial_ramdisk().expect("No initial_ramdisk found"),
+    );
+    println!("Files in initial ramdisk: {:?}", initial_ramdisk.keys());
 
     loop {}
 }

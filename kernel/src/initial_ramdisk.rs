@@ -1,8 +1,8 @@
-//! A basic reader for the [initramfs](https://en.wikipedia.org/wiki/Initial_ramdisk) (INITial RAM File System).
+//! A basic reader for the [initial_ramdisk](https://en.wikipedia.org/wiki/Initial_ramdisk) (INITial RAM File System).
 //!
-//! The initramfs is a simple TAR file containing all the necessary files to bring up the machine, load drivers and do whatever else.
+//! The initial_ramdisk is a simple TAR file containing all the necessary files to bring up the machine, load drivers and do whatever else.
 //!
-//! Although the initramfs is traditionally just for initialization, it may well be used as the root filesystem if the OS hasn't been installed.
+//! Although the initial_ramdisk is traditionally just for initialization, it may well be used as the root filesystem if the OS hasn't been installed.
 
 use core::ops::Deref;
 
@@ -80,12 +80,12 @@ impl<'lifetime> DynamicallySized for FileHeader<'lifetime> {
     const ALIGNMENT: usize = 512;
 }
 
-pub fn read_initramfs(initramfs: &[u8]) -> BTreeMap<String, &[u8]> {
+pub fn read_initial_ramdisk(initial_ramdisk: &[u8]) -> BTreeMap<String, &[u8]> {
     let mut result = BTreeMap::new();
     for DynamicallySizedItem {
         value,
         value_memory,
-    } in DynamicallySizedObjectIterator::<FileHeader>::new(Endianness::Native, initramfs)
+    } in DynamicallySizedObjectIterator::<FileHeader>::new(Endianness::Native, initial_ramdisk)
     {
         // The file size is 0 for directories and other non-files, which we don't care about.
         if *value.file_size() != 0 {
@@ -129,18 +129,18 @@ mod test {
     }
 
     #[test]
-    fn initramfs_test() {
-        let test_initramfs_data = include_bytes!("test/initramfs.tar");
-        let initramfs = read_initramfs(test_initramfs_data);
+    fn initial_ramdisk_test() {
+        let test_initial_ramdisk_data = include_bytes!("test/initial_ramdisk.tar");
+        let initial_ramdisk = read_initial_ramdisk(test_initial_ramdisk_data);
 
-        assert_eq!(initramfs.len(), 2);
-        assert!(initramfs.contains_key("test.txt"));
-        assert!(initramfs.contains_key("yes/agree.txt"));
+        assert_eq!(initial_ramdisk.len(), 2);
+        assert!(initial_ramdisk.contains_key("test.txt"));
+        assert!(initial_ramdisk.contains_key("yes/agree.txt"));
 
-        let test_txt = initramfs.get("test.txt").unwrap();
+        let test_txt = initial_ramdisk.get("test.txt").unwrap();
         assert_eq!(test_txt.len(), 8);
         assert_eq!(test_txt, b"testing\n");
-        let yes_agree_txt = initramfs.get("yes/agree.txt").unwrap();
+        let yes_agree_txt = initial_ramdisk.get("yes/agree.txt").unwrap();
         assert_eq!(yes_agree_txt.len(), 10);
         assert_eq!(yes_agree_txt, b"certainly\n");
     }

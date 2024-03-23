@@ -1,7 +1,7 @@
 use core::mem::size_of;
 
 use crate::{
-    arch_api::{acpi, initramfs, paging::MemoryType},
+    arch_api::{acpi, initial_ramdisk, paging::MemoryType},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
@@ -239,7 +239,7 @@ fn parse_module(module: &MbiModuleTag) {
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
     unsafe {
-        initramfs::INITRAMFS = Some(PhysicalAddressHandle::leak(module_memory));
+        initial_ramdisk::INITIAL_RAMDISK = Some(PhysicalAddressHandle::leak(module_memory));
     }
 }
 
