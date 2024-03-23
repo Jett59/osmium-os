@@ -300,7 +300,7 @@ fn load_kernel(
     let initial_ramdisk_virtual_address =
         page_align_up(memory_map_virtual_address + MEMORY_MAP_ALLOCATED_SIZE);
 
-    if let Some(initial_ramdisk_tag) = tags.module {
+    if let Some(initial_ramdisk_tag) = tags.initial_ramdisk {
         if let Some(initial_ramdisk_data) = &initial_ramdisk_data {
             initial_ramdisk_tag.base = initial_ramdisk_virtual_address as *const u8;
             initial_ramdisk_tag.file_size = initial_ramdisk_data.len();
