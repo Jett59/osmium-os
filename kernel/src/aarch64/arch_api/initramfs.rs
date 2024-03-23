@@ -2,7 +2,7 @@ use core::{mem::size_of, ptr::null};
 
 use common::beryllium::{BootRequestTagType, ModuleTag};
 
-#[link_section = ".beryllium"]
+#[cfg_attr(not(test), link_section = ".beryllium")]
 #[no_mangle]
 pub static mut MODULE_TAG: ModuleTag = ModuleTag {
     tag_type: BootRequestTagType::Module,
