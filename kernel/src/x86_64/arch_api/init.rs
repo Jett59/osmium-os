@@ -16,7 +16,6 @@ static KERNEL_PHYSICAL_END: () = ();
 #[allow(unused_unsafe)] // It isn't actually unused, but I think there is a bug in the compiler since removing it causes an error.
 pub fn arch_init() {
     interrupts::init();
-
     multiboot::parse_multiboot_structures();
     // Unless we really want to have difficulties in the near future (possibly as soon as the very next function), we must tell people not to use the kernel's memory as a heap.]
     physical_memory_manager::mark_range_as_used(

@@ -96,10 +96,19 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         .find(|entry| entry.label == config.default_entry)
         .unwrap();
     println!("Kernel path: {}", entry.kernel_path);
+    if !entry.initial_ramdisk_path.is_empty() {
+        println!("initial_ramdisk path: {}", entry.initial_ramdisk_path);
+    }
 
     boot_services.stall((config.timeout * 1_000_000) as usize);
 
-    load_kernel(image, system_table, entry.kernel_path.as_str()).unwrap();
+    load_kernel(
+        image,
+        system_table,
+        entry.kernel_path.as_str(),
+        entry.initial_ramdisk_path.as_str(),
+    )
+    .unwrap();
 
     loop {}
 }
@@ -127,15 +136,20 @@ fn read_config(image: Handle, boot_services: &BootServices) -> Result<Config> {
 }
 
 /// If this function succeeds, it will never return.
-fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Result {
+fn load_kernel(
+    image: Handle,
+    system_table: SystemTable<Boot>,
+    kernel_path: &str,
+    initial_ramdisk_path: &str,
+) -> Result {
     let boot_services = system_table.boot_services();
 
-    let path = path.replace('/', "\\");
-    let mut path_buffer = vec![0u16; path.len() + 1]; // Includes null terminator.
+    let kernel_path = kernel_path.replace('/', "\\");
+    let mut kernel_path_buffer = vec![0u16; kernel_path.len() + 1]; // Includes null terminator.
     let mut kernel_binary = read_file(
         image,
         boot_services,
-        CStr16::from_str_with_buf(path.as_str(), path_buffer.as_mut_slice()).unwrap(),
+        CStr16::from_str_with_buf(kernel_path.as_str(), kernel_path_buffer.as_mut_slice()).unwrap(),
     )?;
     let elf = elf::load_elf(kernel_binary.as_slice()).unwrap();
 
@@ -241,6 +255,8 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         acpi_tag.rsdt = rsdt_address;
     }
 
+    let mut initial_ramdisk_data = None;
+
     let mut page_allocator = |page_count| {
         boot_services
             .allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, page_count)
@@ -248,10 +264,50 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
             .ok()
     };
 
+    if !initial_ramdisk_path.is_empty() {
+        let initial_ramdisk_path = initial_ramdisk_path.replace('/', "\\");
+        let mut initial_ramdisk_path_buffer = vec![0u16; initial_ramdisk_path.len() + 1]; // Includes null terminator.
+        let initial_ramdisk_binary = read_file(
+            image,
+            boot_services,
+            CStr16::from_str_with_buf(
+                initial_ramdisk_path.as_str(),
+                initial_ramdisk_path_buffer.as_mut_slice(),
+            )
+            .unwrap(),
+        )?;
+        // To make sure the data is page aligned, we have to allocate the pages manually and copy the data.
+        let initial_ramdisk_page_count = page_align_up(initial_ramdisk_binary.len()) / PAGE_SIZE;
+        let initial_ramdisk_address = page_allocator(initial_ramdisk_page_count).unwrap();
+        unsafe {
+            initial_ramdisk_address.copy_from(
+                initial_ramdisk_binary.as_ptr(),
+                initial_ramdisk_binary.len(),
+            );
+        }
+        initial_ramdisk_data = Some(unsafe {
+            slice::from_raw_parts(initial_ramdisk_address, initial_ramdisk_binary.len())
+        });
+    }
+
     let entrypoint = elf.entrypoint as usize;
     let stack_tag = *tags
         .stack_pointer
         .expect("Stack tag not found in kernel binary");
+
+    const MEMORY_MAP_ALLOCATED_SIZE: usize = PAGE_SIZE;
+
+    let initial_ramdisk_virtual_address =
+        page_align_up(memory_map_virtual_address + MEMORY_MAP_ALLOCATED_SIZE);
+
+    if let Some(initial_ramdisk_tag) = tags.initial_ramdisk {
+        if let Some(initial_ramdisk_data) = &initial_ramdisk_data {
+            initial_ramdisk_tag.base = initial_ramdisk_virtual_address as *const u8;
+            initial_ramdisk_tag.file_size = initial_ramdisk_data.len();
+        } else {
+            panic!("initial_ramdisk tag found, but no initial_ramdisk data");
+        }
+    }
 
     let memory_map_tag_offset = tags.memory_map_offset;
     let mut final_memory_map_tag = None;
@@ -290,14 +346,30 @@ fn load_kernel(image: Handle, system_table: SystemTable<Boot>, path: &str) -> Re
         );
     }
 
+    // Map the initial_ramdisk memory.
+    if let Some(initial_ramdisk_data) = &initial_ramdisk_data {
+        page_tables.map(
+            &mut page_allocator,
+            initial_ramdisk_virtual_address,
+            initial_ramdisk_data.as_ptr() as usize,
+            page_align_up(initial_ramdisk_data.len()),
+            false,
+            false,
+        );
+    }
+
     // Since we have to exit boot services to get the memory map, but we need to allocate memory to store the memory map first, we just hope this is enough space.
     // It should be fine because the entries are 24 bytes each, so we can store 170 entries in 4 KiB.
     let memory_map_storage = unsafe {
         slice::from_raw_parts_mut(
             boot_services
-                .allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, 1)
+                .allocate_pages(
+                    AllocateType::AnyPages,
+                    MemoryType::LOADER_DATA,
+                    page_align_up(MEMORY_MAP_ALLOCATED_SIZE) / PAGE_SIZE,
+                )
                 .unwrap() as *mut u8,
-            PAGE_SIZE,
+            MEMORY_MAP_ALLOCATED_SIZE,
         )
     };
     page_tables.map(

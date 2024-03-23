@@ -22,4 +22,6 @@ cd kernel
 ./build.sh
 cd ..
 
+./build-initial-ramdisk.sh
+
 ./build-$ARCH.sh

@@ -4,3 +4,4 @@ default = "osmium"
 
 [osmium]
 kernel = "/boot/osmium"
+initial_ramdisk = "/boot/initial_ramdisk.tar"

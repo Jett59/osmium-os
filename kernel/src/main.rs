@@ -16,7 +16,6 @@
     new_uninit,
     asm_const,
     array_chunks,
-    offset_of,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
@@ -29,6 +28,7 @@ mod buddy;
 mod console;
 mod font_renderer;
 mod heap;
+mod initial_ramdisk;
 mod lazy_init;
 mod memory;
 mod mmio;
@@ -42,6 +42,8 @@ mod arch;
 pub use arch::arch_api;
 
 use core::panic::PanicInfo;
+
+use crate::initial_ramdisk::read_initial_ramdisk;
 
 extern crate alloc;
 
@@ -61,6 +63,12 @@ extern "C" fn kmain() -> ! {
     let acpi_info = arch_api::acpi::handle_acpi_info(required_acpi_tables);
     arch_api::irq::initialize(&acpi_info);
     arch_api::timer::initialize(&acpi_info);
+
+    let initial_ramdisk = read_initial_ramdisk(
+        arch_api::initial_ramdisk::get_initial_ramdisk().expect("No initial_ramdisk found"),
+    );
+    println!("Files in initial ramdisk: {:?}", initial_ramdisk.keys());
+
     loop {}
 }
 

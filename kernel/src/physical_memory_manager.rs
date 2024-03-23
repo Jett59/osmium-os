@@ -59,6 +59,12 @@ where
     }
 
     pub fn mark_range_as_free(&mut self, start: usize, end: usize) {
+        // If the start is outside the range, we can just return.
+        if start >= BITS {
+            return;
+        }
+        // If the end is outside the range, we can set it to the end.
+        let end = end.min(BITS);
         // Split into a series of masks so that we don't have to do so many operations.
         // This means that we take the leading bits before a multiple of the size of usize, we create a mask for that, then we go over all of the complete usizes and set them straight up, then we do the same with the trailing bits.
         let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
@@ -78,14 +84,22 @@ where
             for i in start_index + 1..end_index {
                 self.bits[i].store(!0, Ordering::SeqCst);
             }
-            self.bits[end_index].fetch_or(
-                Self::get_bit_range_mask(0, end_bit_offset),
-                Ordering::SeqCst,
-            );
+            if end_bit_offset != 0 {
+                self.bits[end_index].fetch_or(
+                    Self::get_bit_range_mask(0, end_bit_offset),
+                    Ordering::SeqCst,
+                );
+            }
         }
     }
 
     pub fn mark_range_as_used(&mut self, start: usize, end: usize) {
+        // If the start is outside the range, we can just return.
+        if start >= BITS {
+            return;
+        }
+        // If the end is outside the range, we can set it to the end of the range.
+        let end = end.min(BITS);
         let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
         let (end_index, end_bit_offset) = Self::get_index_and_bit_offset(end);
         if start_index == end_index {
@@ -101,10 +115,12 @@ where
             for i in start_index + 1..end_index {
                 self.bits[i].store(0, Ordering::SeqCst);
             }
-            self.bits[end_index].fetch_and(
-                !Self::get_bit_range_mask(0, end_bit_offset),
-                Ordering::SeqCst,
-            );
+            if end_bit_offset != 0 {
+                self.bits[end_index].fetch_and(
+                    !Self::get_bit_range_mask(0, end_bit_offset),
+                    Ordering::SeqCst,
+                );
+            }
         }
     }
 
@@ -210,5 +226,21 @@ mod test {
         assert_eq!(allocator.allocate_block(), None);
         allocator.mark_as_free(17);
         assert_eq!(allocator.allocate_block(), Some(17));
+    }
+
+    #[test]
+    fn pmm_bitmap_test_boundaries() {
+        let mut allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
+        allocator.mark_range_as_free(0, 1024);
+        for i in 0..1024 {
+            assert_eq!(allocator.allocate_block(), Some(i));
+        }
+        assert_eq!(allocator.allocate_block(), None);
+        // If we specify a range which is too large, it should clamp it to a valid range.
+        allocator.mark_range_as_free(0, 2048);
+        for i in 0..1024 {
+            assert_eq!(allocator.allocate_block(), Some(i));
+        }
+        assert_eq!(allocator.allocate_block(), None);
     }
 }

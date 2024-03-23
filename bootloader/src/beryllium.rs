@@ -10,6 +10,8 @@ pub struct BerylliumInfo<'lifetime> {
     pub frame_buffer_offset: Option<usize>,
     pub acpi: Option<&'lifetime mut AcpiTag>,
     pub acpi_offset: Option<usize>,
+    pub initial_ramdisk: Option<&'lifetime mut InitialRamdiskTag>,
+    pub initial_ramdisk_offset: Option<usize>,
 }
 
 pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
@@ -22,6 +24,8 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
         frame_buffer_offset: None,
         acpi: None,
         acpi_offset: None,
+        initial_ramdisk: None,
+        initial_ramdisk_offset: None,
     };
     let mut remaining_bytes = tags;
     let mut current_offset = 0;
@@ -67,6 +71,16 @@ pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
                 }
                 result.acpi = Some(unsafe { &mut *(remaining_bytes.as_mut_ptr() as *mut AcpiTag) });
                 result.acpi_offset = Some(current_offset);
+            }
+            BootRequestTagType::InitialRamdisk => {
+                if cfg!(target_pointer_width = "64") {
+                    assert!(header.size == 24);
+                } else {
+                    assert!(header.size == 16);
+                }
+                result.initial_ramdisk =
+                    Some(unsafe { &mut *(remaining_bytes.as_mut_ptr() as *mut InitialRamdiskTag) });
+                result.initial_ramdisk_offset = Some(current_offset);
             }
         }
         remaining_bytes = &mut remaining_bytes[header.size as usize..];
