@@ -5,7 +5,6 @@
 mod arch;
 mod beryllium;
 mod config;
-mod elf;
 mod toml;
 
 extern crate alloc;
@@ -31,6 +30,8 @@ use crate::{
     beryllium::{MemoryMapEntry, MemoryMapEntryType, MemoryMapTag},
     config::parse_config,
 };
+
+use common::elf;
 
 struct GraphicsInfo {
     mode: ModeInfo,
