@@ -36,7 +36,7 @@ pub fn parse_config(config_string: &str) -> Config {
     //get boot entry from toml
     let boot_entry = toml.get("boot").unwrap();
     config.timeout = boot_entry.get("timeout").unwrap().parse::<u32>().unwrap();
-    config.default_entry = boot_entry.get("default").unwrap().clone();
+    config.default_entry.clone_from(boot_entry.get("default").unwrap());
 
     //iterate over entries excluding boot
     for (key, value) in toml.iter().filter(|(key, _)| key != &"boot") {

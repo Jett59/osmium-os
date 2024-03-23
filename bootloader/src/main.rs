@@ -298,10 +298,10 @@ fn load_kernel(
 
     if let Some(initramfs_tag) = tags.module {
         if let Some(initramfs_data) = &initramfs_data {
-            panic!("Initramfs tag found in kernel binary, but no initramfs was specified");
-
             initramfs_tag.base = initramfs_virtual_address as *const u8;
             initramfs_tag.file_size = initramfs_data.len();
+        }else {
+            panic!("Initramfs tag found, but no initramfs data");
         }
     }
 
