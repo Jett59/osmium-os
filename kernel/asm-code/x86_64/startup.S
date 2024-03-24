@@ -139,6 +139,12 @@ gdt:
 .quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE | GDT_USER_ACCESSIBLE
 /*User mode data segment*/
 .quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM | GDT_USER_ACCESSIBLE
+
+.globl task_state_segment_descriptor
+task_state_segment_descriptor:
+/*This will be filled in later*/
+.quad 0
+.quad 0
 gdt_end:
 
 .section .bootstrap.bss, "aw", @nobits
@@ -153,6 +159,7 @@ pml2:
 .bss
 stack:
 .fill 8192
+.globl stack_end
 stack_end:
 
 .globl mbi_pointer

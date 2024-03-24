@@ -35,3 +35,7 @@ pub unsafe fn iret(
         "iretq",
         in(reg) stack_segment, in(reg) stack_pointer, in(reg) flags, in(reg) code_segment, in(reg) instruction_pointer, options(nomem, nostack, noreturn));
 }
+
+pub unsafe fn load_task_state_segment(selector: u16) {
+    asm!("ltr ax", in("ax") selector, options(nomem, nostack));
+}
