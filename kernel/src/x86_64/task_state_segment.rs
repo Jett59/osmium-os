@@ -28,12 +28,13 @@ struct TaskStateSegmentDescriptor {
 
 const DEFAULT_ADDITIONAL_FLAGS: u8 = 0b00000000;
 
+#[repr(C, packed)]
 struct TaskStateSegment {
-    _reserved: [u32; 3],
+    _reserved: u32,
     rsp0: u64,
     rsp1: u64,
     rsp2: u64,
-    _reserved2: [u64; 2],
+    _reserved2: u64,
     ist1: u64,
     ist2: u64,
     ist3: u64,
@@ -41,17 +42,17 @@ struct TaskStateSegment {
     ist5: u64,
     ist6: u64,
     ist7: u64,
-    _reserved3: [u64; 2],
-    iomap_base: u16,
+    _reserved3: u64,
     _reserved4: u16,
+    iomap_base: u16,
 }
 
 static mut TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment {
-    _reserved: [0; 3],
+    _reserved: 0,
     rsp0: 0,
     rsp1: 0,
     rsp2: 0,
-    _reserved2: [0; 2],
+    _reserved2: 0,
     ist1: 0,
     ist2: 0,
     ist3: 0,
@@ -59,9 +60,9 @@ static mut TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment {
     ist5: 0,
     ist6: 0,
     ist7: 0,
-    _reserved3: [0; 2],
-    iomap_base: 0,
+    _reserved3: 0,
     _reserved4: 0,
+    iomap_base: 0,
 };
 
 extern "C" {

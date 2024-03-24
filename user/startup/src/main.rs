@@ -8,7 +8,7 @@ use osmium_runtime::panic as _;
 extern "C" fn main() {
     #[cfg(target_arch = "aarch64")]
     unsafe {
-        core::arch::asm!("mov x0, #3", "svc 0")
+        core::arch::asm!("svc 0")
     };
     #[cfg(target_arch = "x86_64")]
     unsafe {

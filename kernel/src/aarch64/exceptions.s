@@ -15,12 +15,20 @@ stp x22, x23, [sp, #0xb0]
 stp x24, x25, [sp, #0xc0]
 stp x26, x27, [sp, #0xd0]
 stp x28, x29, [sp, #0xe0]
-str x30, [sp, #0xf0]
+mrs x0, sp_el0
+stp x30, x0, [sp, #0xf0]
 mrs x0, elr_el1
-str x0, [sp, #0xf8]
+mrs x1, spsr_el1
+stp x0, x1, [sp, #0x100]
 ret
 
-restore_registers:
+restore_registers_and_eret:
+ldp x0, x1, [sp, #0x100]
+msr spsr_el1, x1
+msr elr_el1, x0
+ldp x30, x0, [sp, #0xf0]
+msr sp_el0, x0
+
 ldp x0, x1, [sp, #0x00]
 ldp x2, x3, [sp, #0x10]
 ldp x4, x5, [sp, #0x20]
@@ -36,8 +44,8 @@ ldp x22, x23, [sp, #0xb0]
 ldp x24, x25, [sp, #0xc0]
 ldp x26, x27, [sp, #0xd0]
 ldp x28, x29, [sp, #0xe0]
-ldr x30, [sp, #0xf0]
-ret
+add sp, sp, #0x110
+eret
 
 .p2align 11
 .globl exception_vector_table
@@ -58,70 +66,55 @@ adr x0, sp0_serror
 b invalid_vector
 // The next four are system exceptions with kernel stack, which is what we use.
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl synchronous_vector
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
+
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl irq_vector
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl fiq_vector
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl serror_vector
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 // The next lot are the user mode vectors in aarch64 mode.
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl synchronous_vector_user
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl irq_vector_user
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl fiq_vector_user
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 .p2align 7
-sub sp, sp, #0x100
+sub sp, sp, #0x110
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl serror_vector_user
-bl restore_registers
-add sp, sp, #0x100
-eret
+b restore_registers_and_eret
 // The last lot are for aarch32, which we don't support.
 .p2align 7
 adr x0, user32_synch
