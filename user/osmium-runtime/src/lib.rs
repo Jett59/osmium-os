@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(naked_functions)]
+#![feature(naked_functions, asm_const)]
 
 use core::arch::asm;
 
@@ -23,20 +23,22 @@ pub extern "C" fn _start() -> ! {
         // Set up the stack pointer
         #[cfg(target_arch = "aarch64")]
         asm!(
-            "adr x0, {}",
+            "adr x0, {} + {}",
             "mov sp, x0",
             "bl {}",
             "b .",
             sym STACK,
+            const STACK_SIZE,
             sym main,
             options(noreturn)
         );
         #[cfg(target_arch = "x86_64")]
         asm!(
-            "lea {}(%rip), %rsp",
+            "lea {} + {}(%rip), %rsp",
             "call {}",
             "jmp .",
             sym STACK,
+            const STACK_SIZE,
             sym main,
             options(noreturn, att_syntax)
         );
