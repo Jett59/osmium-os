@@ -3,6 +3,8 @@
 set +x
 set -e
 
+export RUSTFLAGS='-C link-arg=--script=linker.ld -C link-arg=--nmagic'
+
 cargo build --target $ARCH-unknown-none $PROFILE_OPTION
 
 mkdir -p build

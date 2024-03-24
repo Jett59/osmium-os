@@ -429,3 +429,7 @@ pub(super) fn initialize_paging() {
     assert_eq!(slice_in_low_memory, slice_in_high_memory);
     unmap_page(4096);
 }
+
+pub fn is_valid_user_address(address: usize) -> bool {
+    address < 0x0000_8000_0000_0000
+}

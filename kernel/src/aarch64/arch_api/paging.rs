@@ -377,3 +377,7 @@ pub(in crate::arch) fn initialize_lower_half_table() {
         asm::write_ttbr0(page_table_address as u64);
     }
 }
+
+pub fn is_valid_user_address(address: usize) -> bool {
+    address < LOWER_RECURSIVE_MAPPING_ADDRESS as usize
+}

@@ -26,6 +26,7 @@ mod acpi;
 mod assert;
 mod buddy;
 mod console;
+mod elf;
 mod font_renderer;
 mod heap;
 mod initial_ramdisk;
@@ -34,16 +35,18 @@ mod memory;
 mod mmio;
 mod paging;
 mod physical_memory_manager;
+mod user_memory;
 
 #[cfg_attr(target_arch = "x86_64", path = "x86_64/mod.rs")]
 #[cfg_attr(target_arch = "aarch64", path = "aarch64/mod.rs")]
 mod arch;
 
 pub use arch::arch_api;
+use common::elf::load_elf;
 
 use core::panic::PanicInfo;
 
-use crate::initial_ramdisk::read_initial_ramdisk;
+use crate::{elf::map_sections, initial_ramdisk::read_initial_ramdisk};
 
 extern crate alloc;
 
@@ -67,7 +70,11 @@ extern "C" fn kmain() -> ! {
     let initial_ramdisk = read_initial_ramdisk(
         arch_api::initial_ramdisk::get_initial_ramdisk().expect("No initial_ramdisk found"),
     );
-    println!("Files in initial ramdisk: {:?}", initial_ramdisk.keys());
+    let startup_program = initial_ramdisk
+        .get("services/startup")
+        .expect("No startup program found in initial ramdisk");
+    let startup_elf_info = load_elf(startup_program).expect("Failed to parse startup program");
+    map_sections(&startup_elf_info, startup_program);
 
     loop {}
 }

@@ -1,8 +1,8 @@
 use core::{marker::PhantomData, mem::size_of, ops::Deref, slice};
 
 pub trait Validateable {
-    // Ensure that an instance of this type is valid. This is used to ensure that
-    // objects which are created by reinterpreting some region of memory are in fact instances of the correct type.
+    /// Ensure that an instance of this type is valid. This is used to ensure that
+    /// objects which are created by reinterpreting some region of memory are in fact instances of the correct type.
     fn validate(&self) -> bool;
 }
 
