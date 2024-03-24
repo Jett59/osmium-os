@@ -13,7 +13,7 @@ use core::mem::size_of;
 use core::ptr::null;
 use core::slice;
 
-use super::paging::MemoryType;
+use super::paging::{self, MemoryType};
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
 static mut STACK: Stack = Stack::default();
@@ -70,6 +70,8 @@ pub fn arch_init() {
             );
         }
     }
+
+    paging::initialize_lower_half_table();
 
     unsafe {
         framebuffer::init(framebuffer::FrameBuffer {
