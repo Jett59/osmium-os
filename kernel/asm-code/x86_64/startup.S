@@ -121,14 +121,24 @@ high_gdt_pointer:
 .word gdt_end - gdt - 1
 .quad gdt
 
+#define GDT_WRITEABLE (1 << 41)
 #define GDT_EXECUTABLE (1 << 43)
 #define GDT_NOT_SYSTEM (1 << 44)
+#define GDT_USER_ACCESSIBLE (3 << 45)
 #define GDT_PRESENT (1 << 47)
 #define GDT_LONG (1 << 53)
 
 gdt:
 .quad 0
-.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE /*Kernel code segment*/
+/*Kernel code segment*/
+.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE
+/*Kernel stack segment (for syscall)*/
+.quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM
+
+/*User mode code segment*/
+.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE | GDT_USER_ACCESSIBLE
+/*User mode data segment*/
+.quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM | GDT_USER_ACCESSIBLE
 gdt_end:
 
 .section .bootstrap.bss, "aw", @nobits

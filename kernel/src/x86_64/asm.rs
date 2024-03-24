@@ -18,3 +18,20 @@ pub fn io_wait() {
 pub unsafe fn enable_interrupts() {
     asm!("sti", options(nomem, nostack));
 }
+
+pub unsafe fn iret(
+    stack_segment: u64,
+    stack_pointer: u64,
+    flags: u64,
+    code_segment: u64,
+    instruction_pointer: u64,
+) -> ! {
+    asm!(
+        "push {}",
+        "push {}",
+        "push {}",
+        "push {}",
+        "push {}",
+        "iretq",
+        in(reg) stack_segment, in(reg) stack_pointer, in(reg) flags, in(reg) code_segment, in(reg) instruction_pointer, options(nomem, nostack, noreturn));
+}

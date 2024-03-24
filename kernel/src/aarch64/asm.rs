@@ -23,3 +23,9 @@ pub fn yield_instruction() {
 pub fn enable_interrupts() {
     unsafe { asm!("msr daifclr, #15", options(nomem, nostack)) }
 }
+
+pub unsafe fn eret(elr: u64, spsr: u64) -> ! {
+    unsafe {
+        asm!("msr elr_el1, {}", "msr spsr_el1, {}", "eret", in(reg) elr, in(reg) spsr, options(nomem, nostack, noreturn));
+    }
+}

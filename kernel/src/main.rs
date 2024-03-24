@@ -46,7 +46,9 @@ use common::elf::load_elf;
 
 use core::panic::PanicInfo;
 
-use crate::{elf::map_sections, initial_ramdisk::read_initial_ramdisk};
+use crate::{
+    arch_api::user_mode::enter_user_mode, elf::map_sections, initial_ramdisk::read_initial_ramdisk,
+};
 
 extern crate alloc;
 
@@ -75,8 +77,7 @@ extern "C" fn kmain() -> ! {
         .expect("No startup program found in initial ramdisk");
     let startup_elf_info = load_elf(startup_program).expect("Failed to parse startup program");
     map_sections(&startup_elf_info, startup_program);
-
-    loop {}
+    unsafe { enter_user_mode(startup_elf_info.entrypoint) };
 }
 
 #[cfg(test)]
