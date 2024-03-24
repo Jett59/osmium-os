@@ -3,7 +3,7 @@
 set +x
 set -e
 
-export RUSTFLAGS='-C link-arg=--script=linker.ld -C link-arg=--nmagic'
+export RUSTFLAGS='-C link-arg=--script=linker.ld -C relocation-model=static'
 
 cargo build --target $ARCH-unknown-none $PROFILE_OPTION
 

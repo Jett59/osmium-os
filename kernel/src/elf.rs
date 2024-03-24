@@ -17,7 +17,7 @@ pub fn map_sections(elf: &ElfBinary, file: &[u8]) {
                 loadable_segment.size_in_memory,
             )
         };
-        bytes.copy_from_slice(
+        bytes[..loadable_segment.size_in_file].copy_from_slice(
             &file[loadable_segment.file_offset
                 ..loadable_segment.file_offset + loadable_segment.size_in_file],
         );

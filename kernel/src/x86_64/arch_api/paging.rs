@@ -162,7 +162,12 @@ fn free_page_table(address: usize) {
     }
 }
 
-fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: usize) {
+fn ensure_page_table_exists(
+    user_page: bool,
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+) {
     // Indexing with the first indices set to RECURSIVE_PAGE_TABLE_INDEX will give us the next layer up in the page tables.
     let pml4_entry = unsafe {
         read_page_table_entry(
@@ -178,7 +183,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -215,7 +220,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -248,7 +253,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -277,7 +282,13 @@ pub enum MemoryType {
 pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
-        ensure_page_table_exists(indices.pml4_index, indices.pml3_index, indices.pml2_index);
+        let user_page = virtual_address & (1 << 47) == 0;
+        ensure_page_table_exists(
+            user_page,
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+        );
         let entry = read_page_table_entry(
             indices.pml4_index,
             indices.pml3_index,
@@ -291,7 +302,7 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
             PageTableEntry {
                 present: true,
                 writeable: true,
-                user_accessible: virtual_address & (1 << 47) == 0,
+                user_accessible: user_page,
                 write_through: false,
                 cache_disabled: memory_type == MemoryType::Device,
                 accessed: false,
