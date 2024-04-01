@@ -163,7 +163,7 @@ pub extern "C" fn synchronous_vector_user(registers: &SavedRegisters) {
 
 #[no_mangle]
 pub extern "C" fn irq_vector_user(registers: &SavedRegisters) {
-    panic!("IRQ exception in user code\n{:x?}", registers);
+    irq_vector(registers);
 }
 #[no_mangle]
 pub extern "C" fn fiq_vector_user(registers: &SavedRegisters) {
