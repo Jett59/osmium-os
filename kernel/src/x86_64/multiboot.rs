@@ -1,13 +1,14 @@
 use core::mem::size_of;
 
 use crate::{
-    arch_api::{acpi, initial_ramdisk, paging::MemoryType},
+    arch_api::{acpi, initial_ramdisk},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         Validateable,
     },
+    paging::MemoryType,
     physical_memory_manager::{mark_range_as_free, mark_range_as_used, BLOCK_SIZE},
 };
 use common::framebuffer::{self, FrameBuffer};

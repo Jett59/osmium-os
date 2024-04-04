@@ -1,6 +1,6 @@
 use crate::{
-    arch_api::paging::{is_valid_user_address, MemoryType},
-    paging::map_block,
+    arch_api::paging::is_valid_user_address,
+    paging::{map_block, MemoryType},
     physical_memory_manager::{allocate_block_address, BLOCK_SIZE},
 };
 

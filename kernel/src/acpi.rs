@@ -9,9 +9,10 @@ use alloc::{
 };
 
 use crate::{
-    arch_api::{acpi, paging::MemoryType},
+    arch_api::acpi,
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{reinterpret_memory, Validateable},
+    paging::MemoryType,
     println,
 };
 

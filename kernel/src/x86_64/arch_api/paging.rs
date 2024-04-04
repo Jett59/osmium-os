@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, physical_memory_manager};
+use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, paging::MemoryType, physical_memory_manager};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -273,12 +273,6 @@ fn ensure_page_table_exists(
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum MemoryType {
-    Normal,
-    Device,
-}
-
 pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
@@ -308,7 +302,7 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
                 accessed: false,
                 dirty: false,
                 huge_page: false,
-                global: virtual_address & (1 << 47) != 0,
+                global: !user_page,
                 physical_address: physical_address as u64,
             },
             indices.pml4_index,

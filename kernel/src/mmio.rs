@@ -4,8 +4,9 @@ use core::{
 };
 
 use crate::{
-    arch_api::{asm::memory_barrier, paging::MemoryType},
+    arch_api::asm::memory_barrier,
     heap::{map_physical_memory, PhysicalAddressHandle},
+    paging::MemoryType,
 };
 
 #[derive(Copy, Clone)]

@@ -3,8 +3,7 @@ use core::arch::asm;
 use bitflags::bitflags;
 
 use crate::{
-    arch::asm, buddy::BuddyAllocator, heap::map_physical_memory, lazy_init::lazy_static,
-    physical_memory_manager,
+    arch::asm, buddy::BuddyAllocator, heap::map_physical_memory, lazy_init::lazy_static, paging::MemoryType, physical_memory_manager
 };
 
 pub const PAGE_SIZE: usize = 4096;
@@ -210,12 +209,6 @@ fn ensure_page_table_exists(
     create_page_table_if_absent(upper_half, recursive_index, recursive_index, level_0_index);
     create_page_table_if_absent(upper_half, recursive_index, level_0_index, level_1_index);
     create_page_table_if_absent(upper_half, level_0_index, level_1_index, level_2_index);
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum MemoryType {
-    Normal,
-    Device,
 }
 
 pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {

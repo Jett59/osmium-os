@@ -8,12 +8,11 @@ use core::{
 use alloc::boxed::Box;
 
 use crate::{
-    arch_api::paging::MemoryType,
     assert::const_assert,
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
     memory::align_address_up,
-    paging::{get_physical_address, map_block, unmap_block},
+    paging::{get_physical_address, map_block, unmap_block, MemoryType},
     physical_memory_manager::{self, mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
 };
 

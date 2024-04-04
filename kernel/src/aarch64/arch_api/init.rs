@@ -3,6 +3,7 @@ use common::framebuffer;
 use crate::arch::exceptions::load_exceptions;
 use crate::arch_api::stack::Stack;
 use crate::heap::{map_physical_memory, PhysicalAddressHandle};
+use crate::paging::MemoryType;
 use crate::physical_memory_manager;
 use common::beryllium::{
     BootRequestTagType, FrameBufferTag, MemoryMapEntry, MemoryMapEntryType, MemoryMapTag,
@@ -13,7 +14,7 @@ use core::mem::size_of;
 use core::ptr::null;
 use core::slice;
 
-use super::paging::{self, MemoryType};
+use super::paging;
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
 static mut STACK: Stack = Stack::default();
