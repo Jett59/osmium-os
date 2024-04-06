@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use bitflags::bitflags;
 
-use crate::mmio::MmioMemoryHandle;
+use crate::{mmio::MmioMemoryHandle, paging::PagePermissions};
 
 use super::interrupts::{SPURIOUS_INTERRUPT_VECTOR, TIMER_INTERRUPT};
 
@@ -41,7 +41,11 @@ const LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET: usize = 0x3E0;
 /// The physical address must both point to a APIC, and also not be in use by another instance of the APIC driver or be mapped anywhere else.
 /// Additionally, there will be massive confusion if the legacy PIC is not disabled by now, so callers must ensure that it is disabled.
 pub unsafe fn initialize(address: usize) {
-    APIC_HANDLE = Some(MmioMemoryHandle::new(address, LOCAL_APIC_MEMORY_RANGE_SIZE));
+    APIC_HANDLE = Some(MmioMemoryHandle::new(
+        address,
+        LOCAL_APIC_MEMORY_RANGE_SIZE,
+        PagePermissions::READ_WRITE,
+    ));
 
     let Some(apic_handle) = APIC_HANDLE.as_mut() else {
         panic!("APIC handle not initialized");

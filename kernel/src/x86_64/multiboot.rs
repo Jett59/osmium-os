@@ -8,7 +8,7 @@ use crate::{
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         Validateable,
     },
-    paging::MemoryType,
+    paging::{MemoryType, PagePermissions},
     physical_memory_manager::{mark_range_as_free, mark_range_as_used, BLOCK_SIZE},
 };
 use common::framebuffer::{self, FrameBuffer};
@@ -236,6 +236,7 @@ fn parse_module(module: &MbiModuleTag) {
             module.module_start as usize,
             module_size as usize,
             MemoryType::Normal,
+            PagePermissions::READ_ONLY,
         )
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
@@ -298,6 +299,7 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
                         frame_buffer.address as usize,
                         frame_buffer.pitch as usize * frame_buffer.height as usize,
                         MemoryType::Device,
+                        PagePermissions::READ_WRITE,
                     )
                 };
                 PhysicalAddressHandle::leak(physical_address_handle)

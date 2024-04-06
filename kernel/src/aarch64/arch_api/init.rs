@@ -3,7 +3,7 @@ use common::framebuffer;
 use crate::arch::exceptions::load_exceptions;
 use crate::arch_api::stack::Stack;
 use crate::heap::{map_physical_memory, PhysicalAddressHandle};
-use crate::paging::MemoryType;
+use crate::paging::{MemoryType, PagePermissions};
 use crate::physical_memory_manager;
 use common::beryllium::{
     BootRequestTagType, FrameBufferTag, MemoryMapEntry, MemoryMapEntryType, MemoryMapTag,
@@ -88,6 +88,7 @@ pub fn arch_init() {
                     FRAME_BUFFER_TAG.address,
                     FRAME_BUFFER_TAG.pitch as usize * FRAME_BUFFER_TAG.height as usize,
                     MemoryType::Device,
+                    PagePermissions::READ_WRITE,
                 );
                 PhysicalAddressHandle::leak(physical_memory_handle)
             },

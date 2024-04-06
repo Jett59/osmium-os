@@ -5,6 +5,7 @@ use alloc::{boxed::Box, vec::Vec};
 use crate::{
     arch_api::irq::{GenericInterruptController, InterruptInfo, Priority},
     mmio::MmioMemoryHandle,
+    paging::PagePermissions,
 };
 
 pub struct Gicv2 {
@@ -38,10 +39,16 @@ impl Gicv2 {
     /// # Safety
     /// There must be no other active drivers, and the provided addresses must point to valid GICs.
     pub unsafe fn new(distributor_address: usize, cpu_interface_address: usize) -> Self {
-        let distributor_registers =
-            MmioMemoryHandle::new(distributor_address, DISTRIBUTOR_RANGE_LENGTH);
-        let cpu_interface_registers =
-            MmioMemoryHandle::new(cpu_interface_address, CPU_INTERFACE_RANGE_LENGTH);
+        let distributor_registers = MmioMemoryHandle::new(
+            distributor_address,
+            DISTRIBUTOR_RANGE_LENGTH,
+            PagePermissions::READ_WRITE,
+        );
+        let cpu_interface_registers = MmioMemoryHandle::new(
+            cpu_interface_address,
+            CPU_INTERFACE_RANGE_LENGTH,
+            PagePermissions::READ_WRITE,
+        );
 
         // The GIC spec recommends that we disable the GIC distributor before doing any discovery.
         distributor_registers

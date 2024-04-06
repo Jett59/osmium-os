@@ -3,7 +3,12 @@ use core::arch::asm;
 use bitflags::bitflags;
 
 use crate::{
-    arch::asm, buddy::BuddyAllocator, heap::map_physical_memory, lazy_init::lazy_static, paging::MemoryType, physical_memory_manager
+    arch::asm,
+    buddy::BuddyAllocator,
+    heap::map_physical_memory,
+    lazy_init::lazy_static,
+    paging::{MemoryType, PagePermissions},
+    physical_memory_manager,
 };
 
 pub const PAGE_SIZE: usize = 4096;
@@ -30,7 +35,8 @@ bitflags! {
 
         const ACCESS = 1 << 10;
 
-        const EXECUTE_NEVER = 3 << 53;
+        const PRIVILEGED_EXECUTE_NEVER = 1 << 53;
+        const USER_EXECUTE_NEVER = 1 << 54;
     }
 }
 
@@ -211,7 +217,12 @@ fn ensure_page_table_exists(
     create_page_table_if_absent(upper_half, level_0_index, level_1_index, level_2_index);
 }
 
-pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
+pub fn map_page(
+    virtual_address: usize,
+    physical_address: usize,
+    memory_type: MemoryType,
+    permissions: PagePermissions,
+) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
         ensure_page_table_exists(
@@ -235,8 +246,15 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
             MemoryType::Normal => flags |= PageTableFlags::NORMAL_MEMORY,
             MemoryType::Device => flags |= PageTableFlags::DEVICE_MEMORY,
         }
-        if !indices.upper_half {
+        if permissions.user {
             flags |= PageTableFlags::USER_ACCESSIBLE;
+            flags |= PageTableFlags::PRIVILEGED_EXECUTE_NEVER;
+        }
+        if !permissions.writable {
+            flags |= PageTableFlags::READ_ONLY;
+        }
+        if !permissions.executable {
+            flags |= PageTableFlags::USER_EXECUTE_NEVER | PageTableFlags::PRIVILEGED_EXECUTE_NEVER;
         }
         write_page_table_entry(
             flags,
@@ -355,12 +373,15 @@ pub(in crate::arch) fn initialize_lower_half_table() {
         let recursive_mapping_entry_flags = PageTableFlags::VALID
             | PageTableFlags::NOT_BLOCK
             | PageTableFlags::NORMAL_MEMORY
-            | PageTableFlags::EXECUTE_NEVER
             | PageTableFlags::ACCESS;
         let recursive_mapping_entry =
             recursive_mapping_entry_flags.bits() | page_table_address as u64;
-        let mut page_table_handle =
-            map_physical_memory(page_table_address, PAGE_SIZE, MemoryType::Normal);
+        let mut page_table_handle = map_physical_memory(
+            page_table_address,
+            PAGE_SIZE,
+            MemoryType::Normal,
+            PagePermissions::READ_WRITE,
+        );
         let final_entry: &mut [u8; 8] = (&mut page_table_handle[PAGE_SIZE - 8..])
             .try_into()
             .unwrap();

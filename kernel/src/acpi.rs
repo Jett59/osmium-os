@@ -12,7 +12,7 @@ use crate::{
     arch_api::acpi,
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{reinterpret_memory, Validateable},
-    paging::MemoryType,
+    paging::{MemoryType, PagePermissions},
     println,
 };
 
@@ -72,6 +72,7 @@ impl AcpiTableHandle {
             physical_address,
             size_of::<AcpiTableHeader>(),
             MemoryType::Normal,
+            PagePermissions::READ_ONLY,
         );
         let header = reinterpret_memory::<AcpiTableHeader>(&physical_memory_handle)
             .ok_or(AcpiTableParseError::InvalidHeader)?;
@@ -79,8 +80,12 @@ impl AcpiTableHandle {
         let identifier = header.identifier;
         // To be certain that we don't map the same memory multiple times, we have to drop our handle before creating a new one.
         drop(physical_memory_handle);
-        let physical_memory_handle =
-            map_physical_memory(physical_address, length, MemoryType::Normal);
+        let physical_memory_handle = map_physical_memory(
+            physical_address,
+            length,
+            MemoryType::Normal,
+            PagePermissions::READ_ONLY,
+        );
         // Check the checksum.
         let sum = physical_memory_handle
             .iter()

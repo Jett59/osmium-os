@@ -6,7 +6,7 @@ use core::{
 use crate::{
     arch_api::asm::memory_barrier,
     heap::{map_physical_memory, PhysicalAddressHandle},
-    paging::MemoryType,
+    paging::{MemoryType, PagePermissions},
 };
 
 #[derive(Copy, Clone)]
@@ -71,8 +71,9 @@ pub struct MmioMemoryHandle {
 impl MmioMemoryHandle {
     /// # Safety
     /// see `heap::map_physical_memory`.
-    pub unsafe fn new(physical_address: usize, size: usize) -> Self {
-        let mut handle = map_physical_memory(physical_address, size, MemoryType::Device);
+    pub unsafe fn new(physical_address: usize, size: usize, permissions: PagePermissions) -> Self {
+        let mut handle =
+            map_physical_memory(physical_address, size, MemoryType::Device, permissions);
         let mmio_range = MmioRange::new(
             PhysicalAddressHandle::as_mut_ptr(&mut handle),
             PhysicalAddressHandle::size(&handle),

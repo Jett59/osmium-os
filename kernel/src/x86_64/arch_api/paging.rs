@@ -1,6 +1,11 @@
 use core::arch::asm;
 
-use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, paging::MemoryType, physical_memory_manager};
+use crate::{
+    buddy::BuddyAllocator,
+    lazy_init::lazy_static,
+    paging::{MemoryType, PagePermissions},
+    physical_memory_manager,
+};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -21,6 +26,7 @@ struct PageTableEntry {
     huge_page: bool,
     global: bool,
     physical_address: u64,
+    no_execute: bool,
 }
 
 fn construct_page_table_entry(data: PageTableEntry) -> u64 {
@@ -53,6 +59,9 @@ fn construct_page_table_entry(data: PageTableEntry) -> u64 {
         result |= 1 << 8;
     }
     result |= data.physical_address & 0x000f_ffff_ffff_f000;
+    if data.no_execute {
+        result |= 1 << 63;
+    }
     result
 }
 
@@ -81,6 +90,7 @@ fn deconstruct_page_table_entry(entry: u64) -> PageTableEntry {
         huge_page: entry & (1 << 7) != 0,
         global: entry & (1 << 8) != 0,
         physical_address: entry & 0x000f_ffff_ffff_f000,
+        no_execute: entry & (1 << 63) != 0,
     }
 }
 
@@ -191,6 +201,7 @@ fn ensure_page_table_exists(
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 RECURSIVE_PAGE_TABLE_INDEX,
@@ -228,6 +239,7 @@ fn ensure_page_table_exists(
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 RECURSIVE_PAGE_TABLE_INDEX,
@@ -261,6 +273,7 @@ fn ensure_page_table_exists(
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 pml4_index,
@@ -273,7 +286,12 @@ fn ensure_page_table_exists(
     }
 }
 
-pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
+pub fn map_page(
+    virtual_address: usize,
+    physical_address: usize,
+    memory_type: MemoryType,
+    permissions: PagePermissions,
+) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
         let user_page = virtual_address & (1 << 47) == 0;
@@ -295,8 +313,8 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
         write_page_table_entry(
             PageTableEntry {
                 present: true,
-                writeable: true,
-                user_accessible: user_page,
+                writeable: permissions.writable,
+                user_accessible: permissions.user,
                 write_through: false,
                 cache_disabled: memory_type == MemoryType::Device,
                 accessed: false,
@@ -304,6 +322,7 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
                 huge_page: false,
                 global: !user_page,
                 physical_address: physical_address as u64,
+                no_execute: !permissions.executable,
             },
             indices.pml4_index,
             indices.pml3_index,
@@ -382,6 +401,7 @@ pub fn unmap_page(virtual_address: usize) {
                 huge_page: false,
                 global: false,
                 physical_address: 0,
+                no_execute: false,
             },
             indices.pml4_index,
             indices.pml3_index,
@@ -427,7 +447,7 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(4096, 0, MemoryType::Normal);
+    map_page(4096, 0, MemoryType::Normal, PagePermissions::READ_ONLY);
     let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
