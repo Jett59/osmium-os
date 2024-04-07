@@ -15,6 +15,7 @@ const RECURSIVE_PAGE_TABLE_INDEX: usize = 256; // We are in the last 2g so we ca
 const RECURSIVE_PAGE_TABLE_POINTER: *mut u64 = 0xffff_8000_0000_0000 as *mut u64;
 
 // Not the actual layout, but has all of the right fields.
+#[derive(Debug, PartialEq, Clone, Copy)]
 struct PageTableEntry {
     present: bool,
     writeable: bool,
@@ -65,6 +66,17 @@ fn construct_page_table_entry(data: PageTableEntry) -> u64 {
     result
 }
 
+unsafe fn get_page_table_entry_address(
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+    pml1_index: usize,
+) -> *mut u64 {
+    let offset =
+        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
+    RECURSIVE_PAGE_TABLE_POINTER.add(offset)
+}
+
 unsafe fn write_page_table_entry(
     entry: PageTableEntry,
     pml4_index: usize,
@@ -72,10 +84,10 @@ unsafe fn write_page_table_entry(
     pml2_index: usize,
     pml1_index: usize,
 ) {
-    let offset =
-        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
+    let entry_address =
+        get_page_table_entry_address(pml4_index, pml3_index, pml2_index, pml1_index);
     let entry = construct_page_table_entry(entry);
-    *RECURSIVE_PAGE_TABLE_POINTER.add(offset) = entry;
+    *entry_address = entry;
 }
 
 fn deconstruct_page_table_entry(entry: u64) -> PageTableEntry {
@@ -100,21 +112,10 @@ unsafe fn read_page_table_entry(
     pml2_index: usize,
     pml1_index: usize,
 ) -> PageTableEntry {
-    let offset =
-        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
-    let entry = *RECURSIVE_PAGE_TABLE_POINTER.add(offset);
+    let entry_address =
+        get_page_table_entry_address(pml4_index, pml3_index, pml2_index, pml1_index);
+    let entry = *entry_address;
     deconstruct_page_table_entry(entry)
-}
-
-unsafe fn get_page_table_entry_address(
-    pml4_index: usize,
-    pml3_index: usize,
-    pml2_index: usize,
-    pml1_index: usize,
-) -> *mut u64 {
-    let offset =
-        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
-    RECURSIVE_PAGE_TABLE_POINTER.add(offset)
 }
 
 struct PageTableIndices {
@@ -457,4 +458,71 @@ pub(super) fn initialize_paging() {
 
 pub fn is_valid_user_address(address: usize) -> bool {
     address < 0x0000_8000_0000_0000
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_page_table_entry_address_test() {
+        let address = unsafe { get_page_table_entry_address(0, 0, 0, 0) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize);
+        let address = unsafe { get_page_table_entry_address(0, 0, 0, 1) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize + 8);
+        let address = unsafe { get_page_table_entry_address(0, 0, 1, 0) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 8);
+        let address = unsafe { get_page_table_entry_address(0, 1, 0, 0) as usize };
+        assert_eq!(
+            address,
+            RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 512 * 8
+        );
+        let address = unsafe { get_page_table_entry_address(1, 0, 0, 0) as usize };
+        assert_eq!(
+            address,
+            RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 512 * 512 * 8
+        );
+    }
+
+    #[test]
+    fn page_table_bits_test() {
+        let entry = PageTableEntry {
+            present: true,
+            writeable: true,
+            user_accessible: false,
+            write_through: false,
+            cache_disabled: true,
+            accessed: false,
+            dirty: true,
+            huge_page: true,
+            global: false,
+            physical_address: 0x0000_dead_8086_7000,
+            no_execute: true,
+        };
+        let entry_bits = construct_page_table_entry(entry);
+        assert_eq!(
+            entry_bits,
+            0x8000_0000_0000_0000 | 0x0000_dead_8086_7000 | 0x0d3
+        );
+        let entry2 = deconstruct_page_table_entry(entry_bits);
+        assert_eq!(entry, entry2);
+
+        let entry = PageTableEntry {
+            present: false,
+            writeable: false,
+            user_accessible: true,
+            write_through: true,
+            cache_disabled: false,
+            accessed: true,
+            dirty: false,
+            huge_page: false,
+            global: true,
+            physical_address: 0xffff_ffff_ffff_ffff,
+            no_execute: false,
+        };
+        let entry_bits = construct_page_table_entry(entry);
+        assert_eq!(entry_bits, 0x000f_ffff_ffff_f000 | 0x12c);
+        let entry2 = deconstruct_page_table_entry(entry_bits);
+        assert!(entry != entry2);
+    }
 }

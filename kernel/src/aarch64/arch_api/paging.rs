@@ -404,6 +404,7 @@ pub fn is_valid_user_address(address: usize) -> bool {
 mod test {
     use super::*;
 
+    #[test]
     fn calculate_page_table_address_test() {
         unsafe {
             let address = calculate_page_table_entry_address(true, 0, 0, 0, 0);
