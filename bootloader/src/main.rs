@@ -428,11 +428,7 @@ fn load_kernel(
 
     if let Some(memory_map_tag) = final_memory_map_tag {
         memory_map_tag.base = memory_map_virtual_address as *mut u8;
-        memory_map_tag.memory_size = memory_map
-            .entries()
-            .len()
-            .max(used_memory_map_storage_entries)
-            * size_of::<MemoryMapEntry>();
+        memory_map_tag.memory_size = used_memory_map_storage_entries * size_of::<MemoryMapEntry>();
     }
 
     arch::enter_kernel(
