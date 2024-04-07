@@ -11,11 +11,15 @@ use crate::{
     physical_memory_manager,
 };
 
+/// It was a lot simpler to use 4k pages, although we may consider using 16k or 64k pages in the future.
+/// It would improve performance to use larger pages, while not really changing very much since the memory manager works in blocks of 64k anyway.
 pub const PAGE_SIZE: usize = 4096;
 
+/// The recursive page index for the upper half (kernel) is set to 0 by the bootloader.
 const UPPER_RECURSIVE_MAPPING_INDEX: usize = 0;
 const UPPER_RECURSIVE_MAPPING_ADDRESS: *mut u64 = 0xffff_0000_0000_0000 as *mut u64;
 
+/// For the lower half, we set it to the top of the lower half address space (index 511).
 const LOWER_RECURSIVE_MAPPING_INDEX: usize = 511;
 const LOWER_RECURSIVE_MAPPING_ADDRESS: *mut u64 = 0x0000_ff80_0000_0000 as *mut u64;
 
@@ -394,4 +398,38 @@ pub(in crate::arch) fn initialize_lower_half_table() {
 
 pub fn is_valid_user_address(address: usize) -> bool {
     address < LOWER_RECURSIVE_MAPPING_ADDRESS as usize
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn calculate_page_table_address_test() {
+        unsafe {
+            let address = calculate_page_table_entry_address(true, 0, 0, 0, 0);
+            assert_eq!(address as usize, UPPER_RECURSIVE_MAPPING_ADDRESS as usize);
+            let address = calculate_page_table_entry_address(true, 0, 0, 0, 1);
+            assert_eq!(
+                address as usize,
+                UPPER_RECURSIVE_MAPPING_ADDRESS as usize + 8
+            );
+            let address = calculate_page_table_entry_address(true, 0, 0, 1, 0);
+            assert_eq!(
+                address as usize,
+                UPPER_RECURSIVE_MAPPING_ADDRESS as usize + 512 * 8
+            );
+            let address = calculate_page_table_entry_address(true, 0, 1, 0, 0);
+            assert_eq!(
+                address as usize,
+                UPPER_RECURSIVE_MAPPING_ADDRESS as usize + 512 * 512 * 8
+            );
+            let address = calculate_page_table_entry_address(true, 1, 0, 0, 0);
+            assert_eq!(
+                address as usize,
+                UPPER_RECURSIVE_MAPPING_ADDRESS as usize + 512 * 512 * 512 * 8
+            );
+            let address = calculate_page_table_entry_address(false, 0, 0, 0, 0);
+            assert_eq!(address as usize, LOWER_RECURSIVE_MAPPING_ADDRESS as usize);
+        }
+    }
 }

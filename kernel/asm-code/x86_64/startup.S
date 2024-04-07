@@ -68,15 +68,19 @@ mov $pml4, %eax
 mov %eax, %cr3
 
 /*now the three-step long mode transition*/
+
+/*First, enable Physical Address Extensions (PAE)*/
 movl %cr4, %eax
 orl $(1 << 5), %eax
 movl %eax, %cr4
 
+/*Then enable long mode (and the NX paging bit while we're here) in the EFER*/
 movl $0xC0000080, %ecx
 rdmsr
 orl $(1 << 8) | (1 << 11), %eax
 wrmsr
 
+/*Finally, enable paging in cr0*/
 movl %cr0, %eax
 orl $(1 << 31), %eax
 movl %eax, %cr0
