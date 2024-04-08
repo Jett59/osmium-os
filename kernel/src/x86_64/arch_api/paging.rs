@@ -545,4 +545,12 @@ mod test {
         let entry2 = deconstruct_page_table_entry(entry_bits);
         assert!(entry != entry2);
     }
+
+    #[test]
+    fn is_valid_user_address_test() {
+        assert!(is_valid_user_address(0));
+        assert!(is_valid_user_address(0x0000_7fff_ffff_ffff));
+        assert!(!is_valid_user_address(0x0000_8000_0000_0000));
+        assert!(!is_valid_user_address(0xffff_ffff_ffff_ffff));
+    }
 }
