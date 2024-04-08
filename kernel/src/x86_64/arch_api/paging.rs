@@ -30,40 +30,71 @@ struct PageTableEntry {
     no_execute: bool,
 }
 
+const PRESENT_BIT: u64 = 1;
+const WRITEABLE_BIT: u64 = 1 << 1;
+const USER_ACCESSIBLE_BIT: u64 = 1 << 2;
+const WRITE_THROUGH_BIT: u64 = 1 << 3;
+const CACHE_DISABLED_BIT: u64 = 1 << 4;
+const ACCESSED_BIT: u64 = 1 << 5;
+const DIRTY_BIT: u64 = 1 << 6;
+const HUGE_PAGE_BIT: u64 = 1 << 7;
+const GLOBAL_BIT: u64 = 1 << 8;
+const NO_EXECUTE_BIT: u64 = 1 << 63;
+
+const PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
+
+const VIRTUAL_ADDRESS_SIGN_BIT: usize = 1 << 47;
+
 fn construct_page_table_entry(data: PageTableEntry) -> u64 {
     let mut result = 0;
     if data.present {
-        result |= 1;
+        result |= PRESENT_BIT;
     }
     if data.writeable {
-        result |= 1 << 1;
+        result |= WRITEABLE_BIT;
     }
     if data.user_accessible {
-        result |= 1 << 2;
+        result |= USER_ACCESSIBLE_BIT;
     }
     if data.write_through {
-        result |= 1 << 3;
+        result |= WRITE_THROUGH_BIT;
     }
     if data.cache_disabled {
-        result |= 1 << 4;
+        result |= CACHE_DISABLED_BIT;
     }
     if data.accessed {
-        result |= 1 << 5;
+        result |= ACCESSED_BIT;
     }
     if data.dirty {
-        result |= 1 << 6;
+        result |= DIRTY_BIT;
     }
     if data.huge_page {
-        result |= 1 << 7;
+        result |= HUGE_PAGE_BIT;
     }
     if data.global {
-        result |= 1 << 8;
+        result |= GLOBAL_BIT;
     }
-    result |= data.physical_address & 0x000f_ffff_ffff_f000;
+    result |= data.physical_address & PHYSICAL_ADDRESS_MASK;
     if data.no_execute {
-        result |= 1 << 63;
+        result |= NO_EXECUTE_BIT;
     }
     result
+}
+
+fn deconstruct_page_table_entry(entry: u64) -> PageTableEntry {
+    PageTableEntry {
+        present: entry & PRESENT_BIT != 0,
+        writeable: entry & WRITEABLE_BIT != 0,
+        user_accessible: entry & USER_ACCESSIBLE_BIT != 0,
+        write_through: entry & WRITE_THROUGH_BIT != 0,
+        cache_disabled: entry & CACHE_DISABLED_BIT != 0,
+        accessed: entry & ACCESSED_BIT != 0,
+        dirty: entry & DIRTY_BIT != 0,
+        huge_page: entry & HUGE_PAGE_BIT != 0,
+        global: entry & GLOBAL_BIT != 0,
+        physical_address: entry & PHYSICAL_ADDRESS_MASK,
+        no_execute: entry & NO_EXECUTE_BIT != 0,
+    }
 }
 
 unsafe fn get_page_table_entry_address(
@@ -88,22 +119,6 @@ unsafe fn write_page_table_entry(
         get_page_table_entry_address(pml4_index, pml3_index, pml2_index, pml1_index);
     let entry = construct_page_table_entry(entry);
     *entry_address = entry;
-}
-
-fn deconstruct_page_table_entry(entry: u64) -> PageTableEntry {
-    PageTableEntry {
-        present: entry & 1 != 0,
-        writeable: entry & (1 << 1) != 0,
-        user_accessible: entry & (1 << 2) != 0,
-        write_through: entry & (1 << 3) != 0,
-        cache_disabled: entry & (1 << 4) != 0,
-        accessed: entry & (1 << 5) != 0,
-        dirty: entry & (1 << 6) != 0,
-        huge_page: entry & (1 << 7) != 0,
-        global: entry & (1 << 8) != 0,
-        physical_address: entry & 0x000f_ffff_ffff_f000,
-        no_execute: entry & (1 << 63) != 0,
-    }
 }
 
 unsafe fn read_page_table_entry(
@@ -295,7 +310,7 @@ pub fn map_page(
 ) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
-        let user_page = virtual_address & (1 << 47) == 0;
+        let user_page = virtual_address & VIRTUAL_ADDRESS_SIGN_BIT == 0;
         ensure_page_table_exists(
             user_page,
             indices.pml4_index,
@@ -448,7 +463,12 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(4096, 0, MemoryType::Normal, PagePermissions::READ_ONLY);
+    map_page(
+        4096,
+        0,
+        MemoryType::Normal,
+        PagePermissions::KERNEL_READ_ONLY,
+    );
     let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
@@ -457,7 +477,7 @@ pub(super) fn initialize_paging() {
 }
 
 pub fn is_valid_user_address(address: usize) -> bool {
-    address < 0x0000_8000_0000_0000
+    address & VIRTUAL_ADDRESS_SIGN_BIT == 0
 }
 
 #[cfg(test)]

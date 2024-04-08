@@ -44,7 +44,7 @@ pub unsafe fn initialize(address: usize) {
     APIC_HANDLE = Some(MmioMemoryHandle::new(
         address,
         LOCAL_APIC_MEMORY_RANGE_SIZE,
-        PagePermissions::READ_WRITE,
+        PagePermissions::KERNEL_READ_WRITE,
     ));
 
     let Some(apic_handle) = APIC_HANDLE.as_mut() else {

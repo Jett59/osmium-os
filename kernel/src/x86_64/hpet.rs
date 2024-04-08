@@ -20,7 +20,7 @@ impl Hpet {
         let mmio_handle = MmioMemoryHandle::new(
             physical_address,
             HPET_MMIO_SIZE,
-            PagePermissions::READ_WRITE,
+            PagePermissions::KERNEL_READ_WRITE,
         );
 
         let capabilities = mmio_handle

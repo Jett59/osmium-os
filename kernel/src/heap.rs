@@ -103,7 +103,7 @@ impl SlabAllocator {
                         virtual_address,
                         physical_address,
                         MemoryType::Normal,
-                        PagePermissions::READ_WRITE,
+                        PagePermissions::KERNEL_READ_WRITE,
                     );
                     return virtual_address as *mut SlabEntry<SIZE>;
                 }
@@ -243,7 +243,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
                             virtual_block_address,
                             physical_address,
                             MemoryType::Normal,
-                            PagePermissions::READ_WRITE,
+                            PagePermissions::KERNEL_READ_WRITE,
                         );
                     } else {
                         return null_mut();
@@ -399,7 +399,12 @@ pub unsafe fn map_physical_memory(
                 .step_by(BLOCK_SIZE),
         )
     {
-        map_block(virtual_block_address, physical_block_address, memory_type, permissions);
+        map_block(
+            virtual_block_address,
+            physical_block_address,
+            memory_type,
+            permissions,
+        );
     }
     PhysicalAddressHandle {
         base_pointer: address as *mut u8,

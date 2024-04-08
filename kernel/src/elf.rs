@@ -12,7 +12,7 @@ pub fn map_sections(elf: &ElfBinary, file: &[u8]) {
         allocate_user_memory_at(
             loadable_segment.virtual_address,
             loadable_segment.size_in_memory,
-            PagePermissions::READ_WRITE, // Allows us to write the contents first.
+            PagePermissions::KERNEL_READ_WRITE, // Allows us to write the contents first.
         );
         // TODO: There must be a cleaner way than this.
         let bytes = unsafe {

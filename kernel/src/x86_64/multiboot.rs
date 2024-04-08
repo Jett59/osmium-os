@@ -236,7 +236,7 @@ fn parse_module(module: &MbiModuleTag) {
             module.module_start as usize,
             module_size as usize,
             MemoryType::Normal,
-            PagePermissions::READ_ONLY,
+            PagePermissions::KERNEL_READ_ONLY,
         )
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
@@ -299,7 +299,7 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
                         frame_buffer.address as usize,
                         frame_buffer.pitch as usize * frame_buffer.height as usize,
                         MemoryType::Device,
-                        PagePermissions::READ_WRITE,
+                        PagePermissions::KERNEL_READ_WRITE,
                     )
                 };
                 PhysicalAddressHandle::leak(physical_address_handle)

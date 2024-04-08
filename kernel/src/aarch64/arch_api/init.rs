@@ -88,7 +88,7 @@ pub fn arch_init() {
                     FRAME_BUFFER_TAG.address,
                     FRAME_BUFFER_TAG.pitch as usize * FRAME_BUFFER_TAG.height as usize,
                     MemoryType::Device,
-                    PagePermissions::READ_WRITE,
+                    PagePermissions::KERNEL_READ_WRITE,
                 );
                 PhysicalAddressHandle::leak(physical_memory_handle)
             },

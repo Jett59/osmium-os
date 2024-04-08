@@ -42,12 +42,12 @@ impl Gicv2 {
         let distributor_registers = MmioMemoryHandle::new(
             distributor_address,
             DISTRIBUTOR_RANGE_LENGTH,
-            PagePermissions::READ_WRITE,
+            PagePermissions::KERNEL_READ_WRITE,
         );
         let cpu_interface_registers = MmioMemoryHandle::new(
             cpu_interface_address,
             CPU_INTERFACE_RANGE_LENGTH,
-            PagePermissions::READ_WRITE,
+            PagePermissions::KERNEL_READ_WRITE,
         );
 
         // The GIC spec recommends that we disable the GIC distributor before doing any discovery.

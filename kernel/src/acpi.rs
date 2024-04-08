@@ -72,7 +72,7 @@ impl AcpiTableHandle {
             physical_address,
             size_of::<AcpiTableHeader>(),
             MemoryType::Normal,
-            PagePermissions::READ_ONLY,
+            PagePermissions::KERNEL_READ_ONLY,
         );
         let header = reinterpret_memory::<AcpiTableHeader>(&physical_memory_handle)
             .ok_or(AcpiTableParseError::InvalidHeader)?;
@@ -84,7 +84,7 @@ impl AcpiTableHandle {
             physical_address,
             length,
             MemoryType::Normal,
-            PagePermissions::READ_ONLY,
+            PagePermissions::KERNEL_READ_ONLY,
         );
         // Check the checksum.
         let sum = physical_memory_handle

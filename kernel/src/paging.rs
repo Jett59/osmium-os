@@ -23,17 +23,17 @@ impl PagePermissions {
         }
     }
 
-    pub const READ_ONLY: Self = Self {
+    pub const KERNEL_READ_ONLY: Self = Self {
         user: false,
         writable: false,
         executable: false,
     };
-    pub const READ_WRITE: Self = Self {
+    pub const KERNEL_READ_WRITE: Self = Self {
         user: false,
         writable: true,
         executable: false,
     };
-    pub const READ_EXECUTE: Self = Self {
+    pub const KERNEL_READ_EXECUTE: Self = Self {
         user: false,
         writable: false,
         executable: true,
@@ -94,10 +94,6 @@ pub fn change_block_permissions(
     permissions: PagePermissions,
 ) {
     for i in 0..PAGES_PER_BLOCK {
-        change_page_permissions(
-            virtual_address + i * PAGE_SIZE,
-            memory_type,
-            permissions,
-        );
+        change_page_permissions(virtual_address + i * PAGE_SIZE, memory_type, permissions);
     }
 }
