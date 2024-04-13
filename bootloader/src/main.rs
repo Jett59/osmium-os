@@ -373,6 +373,7 @@ fn load_kernel(
             MEMORY_MAP_ALLOCATED_SIZE,
         )
     };
+    memory_map_storage.fill(0);
     page_tables.map(
         &mut page_allocator,
         memory_map_virtual_address,
