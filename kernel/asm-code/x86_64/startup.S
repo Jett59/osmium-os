@@ -68,15 +68,19 @@ mov $pml4, %eax
 mov %eax, %cr3
 
 /*now the three-step long mode transition*/
+
+/*First, enable Physical Address Extensions (PAE)*/
 movl %cr4, %eax
 orl $(1 << 5), %eax
 movl %eax, %cr4
 
+/*Then enable long mode (and the NX paging bit while we're here) in the EFER*/
 movl $0xC0000080, %ecx
 rdmsr
-orl $(1 << 8), %eax
+orl $(1 << 8) | (1 << 11), %eax
 wrmsr
 
+/*Finally, enable paging in cr0*/
 movl %cr0, %eax
 orl $(1 << 31), %eax
 movl %eax, %cr0
@@ -121,14 +125,30 @@ high_gdt_pointer:
 .word gdt_end - gdt - 1
 .quad gdt
 
+#define GDT_WRITEABLE (1 << 41)
 #define GDT_EXECUTABLE (1 << 43)
 #define GDT_NOT_SYSTEM (1 << 44)
+#define GDT_USER_ACCESSIBLE (3 << 45)
 #define GDT_PRESENT (1 << 47)
 #define GDT_LONG (1 << 53)
 
 gdt:
 .quad 0
-.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE /*Kernel code segment*/
+/*Kernel code segment*/
+.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE
+/*Kernel stack segment (for syscall)*/
+.quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM
+
+/*User mode code segment*/
+.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE | GDT_USER_ACCESSIBLE
+/*User mode data segment*/
+.quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM | GDT_USER_ACCESSIBLE
+
+.globl task_state_segment_descriptor
+task_state_segment_descriptor:
+/*This will be filled in later*/
+.quad 0
+.quad 0
 gdt_end:
 
 .section .bootstrap.bss, "aw", @nobits
@@ -143,6 +163,7 @@ pml2:
 .bss
 stack:
 .fill 8192
+.globl stack_end
 stack_end:
 
 .globl mbi_pointer

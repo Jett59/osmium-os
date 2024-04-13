@@ -6,3 +6,4 @@ pub mod irq;
 pub mod paging;
 pub mod stack;
 pub mod timer;
+pub mod user_mode;

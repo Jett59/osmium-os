@@ -8,12 +8,11 @@ use core::{
 use alloc::boxed::Box;
 
 use crate::{
-    arch_api::paging::MemoryType,
     assert::const_assert,
     buddy::BuddyAllocator,
     lazy_init::lazy_static,
     memory::align_address_up,
-    paging::{get_physical_address, map_block, unmap_block},
+    paging::{get_physical_address, map_block, unmap_block, MemoryType, PagePermissions},
     physical_memory_manager::{self, mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
 };
 
@@ -100,7 +99,12 @@ impl SlabAllocator {
             if let Some(virtual_address) = virtual_address {
                 let physical_address = physical_memory_manager::allocate_block_address();
                 if let Some(physical_address) = physical_address {
-                    map_block(virtual_address, physical_address, MemoryType::Normal);
+                    map_block(
+                        virtual_address,
+                        physical_address,
+                        MemoryType::Normal,
+                        PagePermissions::KERNEL_READ_WRITE,
+                    );
                     return virtual_address as *mut SlabEntry<SIZE>;
                 }
             }
@@ -128,11 +132,15 @@ impl SlabAllocator {
             first_unused_entry: 1,
             allocated_count: 0,
         };
-        for (i, entry) in entries.iter_mut().skip(1).enumerate() {
+        for (i, entry) in entries.iter_mut().enumerate().skip(1) {
             entry.unused = SlabUnusedEntry {
                 next_index: (i + 1) as u16,
             };
         }
+        // We need to set the last entry to u16::MAX to indicate the end of the list.
+        entries[entry_count - 1].unused = SlabUnusedEntry {
+            next_index: u16::MAX,
+        };
     }
 
     fn get_partial_list<const SIZE: usize>(&mut self) -> *mut SlabEntry<SIZE> {
@@ -231,7 +239,12 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
                     let physical_block_address = physical_memory_manager::allocate_block_address();
                     if let Some(physical_address) = physical_block_address {
-                        map_block(virtual_block_address, physical_address, MemoryType::Normal);
+                        map_block(
+                            virtual_block_address,
+                            physical_address,
+                            MemoryType::Normal,
+                            PagePermissions::KERNEL_READ_WRITE,
+                        );
                     } else {
                         return null_mut();
                     }
@@ -366,6 +379,7 @@ pub unsafe fn map_physical_memory(
     physical_address: usize,
     size: usize,
     memory_type: MemoryType,
+    permissions: PagePermissions,
 ) -> PhysicalAddressHandle {
     // There are a few things we need to handle:
     // Firstly, the address may not be aligned to a block boundary. This means we will have to map a little before the actual address, and add an offset from base_pointer to pointer.
@@ -385,7 +399,12 @@ pub unsafe fn map_physical_memory(
                 .step_by(BLOCK_SIZE),
         )
     {
-        map_block(virtual_block_address, physical_block_address, memory_type);
+        map_block(
+            virtual_block_address,
+            physical_block_address,
+            memory_type,
+            permissions,
+        );
     }
     PhysicalAddressHandle {
         base_pointer: address as *mut u8,

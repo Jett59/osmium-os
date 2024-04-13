@@ -1,6 +1,11 @@
 use core::arch::asm;
 
-use crate::{buddy::BuddyAllocator, lazy_init::lazy_static, physical_memory_manager};
+use crate::{
+    buddy::BuddyAllocator,
+    lazy_init::lazy_static,
+    paging::{MemoryType, PagePermissions},
+    physical_memory_manager,
+};
 
 pub const PAGE_SIZE: usize = 4096;
 
@@ -10,6 +15,7 @@ const RECURSIVE_PAGE_TABLE_INDEX: usize = 256; // We are in the last 2g so we ca
 const RECURSIVE_PAGE_TABLE_POINTER: *mut u64 = 0xffff_8000_0000_0000 as *mut u64;
 
 // Not the actual layout, but has all of the right fields.
+#[derive(Debug, PartialEq, Clone, Copy)]
 struct PageTableEntry {
     present: bool,
     writeable: bool,
@@ -21,79 +27,74 @@ struct PageTableEntry {
     huge_page: bool,
     global: bool,
     physical_address: u64,
+    no_execute: bool,
 }
+
+const PRESENT_BIT: u64 = 1;
+const WRITEABLE_BIT: u64 = 1 << 1;
+const USER_ACCESSIBLE_BIT: u64 = 1 << 2;
+const WRITE_THROUGH_BIT: u64 = 1 << 3;
+const CACHE_DISABLED_BIT: u64 = 1 << 4;
+const ACCESSED_BIT: u64 = 1 << 5;
+const DIRTY_BIT: u64 = 1 << 6;
+const HUGE_PAGE_BIT: u64 = 1 << 7;
+const GLOBAL_BIT: u64 = 1 << 8;
+const NO_EXECUTE_BIT: u64 = 1 << 63;
+
+const PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
+
+const VIRTUAL_ADDRESS_SIGN_BIT: usize = 1 << 47;
 
 fn construct_page_table_entry(data: PageTableEntry) -> u64 {
     let mut result = 0;
     if data.present {
-        result |= 1;
+        result |= PRESENT_BIT;
     }
     if data.writeable {
-        result |= 1 << 1;
+        result |= WRITEABLE_BIT;
     }
     if data.user_accessible {
-        result |= 1 << 2;
+        result |= USER_ACCESSIBLE_BIT;
     }
     if data.write_through {
-        result |= 1 << 3;
+        result |= WRITE_THROUGH_BIT;
     }
     if data.cache_disabled {
-        result |= 1 << 4;
+        result |= CACHE_DISABLED_BIT;
     }
     if data.accessed {
-        result |= 1 << 5;
+        result |= ACCESSED_BIT;
     }
     if data.dirty {
-        result |= 1 << 6;
+        result |= DIRTY_BIT;
     }
     if data.huge_page {
-        result |= 1 << 7;
+        result |= HUGE_PAGE_BIT;
     }
     if data.global {
-        result |= 1 << 8;
+        result |= GLOBAL_BIT;
     }
-    result |= data.physical_address & 0x000f_ffff_ffff_f000;
+    result |= data.physical_address & PHYSICAL_ADDRESS_MASK;
+    if data.no_execute {
+        result |= NO_EXECUTE_BIT;
+    }
     result
-}
-
-unsafe fn write_page_table_entry(
-    entry: PageTableEntry,
-    pml4_index: usize,
-    pml3_index: usize,
-    pml2_index: usize,
-    pml1_index: usize,
-) {
-    let offset =
-        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
-    let entry = construct_page_table_entry(entry);
-    *RECURSIVE_PAGE_TABLE_POINTER.add(offset) = entry;
 }
 
 fn deconstruct_page_table_entry(entry: u64) -> PageTableEntry {
     PageTableEntry {
-        present: entry & 1 != 0,
-        writeable: entry & (1 << 1) != 0,
-        user_accessible: entry & (1 << 2) != 0,
-        write_through: entry & (1 << 3) != 0,
-        cache_disabled: entry & (1 << 4) != 0,
-        accessed: entry & (1 << 5) != 0,
-        dirty: entry & (1 << 6) != 0,
-        huge_page: entry & (1 << 7) != 0,
-        global: entry & (1 << 8) != 0,
-        physical_address: entry & 0x000f_ffff_ffff_f000,
+        present: entry & PRESENT_BIT != 0,
+        writeable: entry & WRITEABLE_BIT != 0,
+        user_accessible: entry & USER_ACCESSIBLE_BIT != 0,
+        write_through: entry & WRITE_THROUGH_BIT != 0,
+        cache_disabled: entry & CACHE_DISABLED_BIT != 0,
+        accessed: entry & ACCESSED_BIT != 0,
+        dirty: entry & DIRTY_BIT != 0,
+        huge_page: entry & HUGE_PAGE_BIT != 0,
+        global: entry & GLOBAL_BIT != 0,
+        physical_address: entry & PHYSICAL_ADDRESS_MASK,
+        no_execute: entry & NO_EXECUTE_BIT != 0,
     }
-}
-
-unsafe fn read_page_table_entry(
-    pml4_index: usize,
-    pml3_index: usize,
-    pml2_index: usize,
-    pml1_index: usize,
-) -> PageTableEntry {
-    let offset =
-        pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
-    let entry = *RECURSIVE_PAGE_TABLE_POINTER.add(offset);
-    deconstruct_page_table_entry(entry)
 }
 
 unsafe fn get_page_table_entry_address(
@@ -105,6 +106,31 @@ unsafe fn get_page_table_entry_address(
     let offset =
         pml1_index + pml2_index * 512 + pml3_index * 512 * 512 + pml4_index * 512 * 512 * 512;
     RECURSIVE_PAGE_TABLE_POINTER.add(offset)
+}
+
+unsafe fn write_page_table_entry(
+    entry: PageTableEntry,
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+    pml1_index: usize,
+) {
+    let entry_address =
+        get_page_table_entry_address(pml4_index, pml3_index, pml2_index, pml1_index);
+    let entry = construct_page_table_entry(entry);
+    *entry_address = entry;
+}
+
+unsafe fn read_page_table_entry(
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+    pml1_index: usize,
+) -> PageTableEntry {
+    let entry_address =
+        get_page_table_entry_address(pml4_index, pml3_index, pml2_index, pml1_index);
+    let entry = *entry_address;
+    deconstruct_page_table_entry(entry)
 }
 
 struct PageTableIndices {
@@ -162,7 +188,12 @@ fn free_page_table(address: usize) {
     }
 }
 
-fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: usize) {
+fn ensure_page_table_exists(
+    user_page: bool,
+    pml4_index: usize,
+    pml3_index: usize,
+    pml2_index: usize,
+) {
     // Indexing with the first indices set to RECURSIVE_PAGE_TABLE_INDEX will give us the next layer up in the page tables.
     let pml4_entry = unsafe {
         read_page_table_entry(
@@ -178,7 +209,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -186,6 +217,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 RECURSIVE_PAGE_TABLE_INDEX,
@@ -215,7 +247,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -223,6 +255,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 RECURSIVE_PAGE_TABLE_INDEX,
@@ -248,7 +281,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                 PageTableEntry {
                     present: true,
                     writeable: true,
-                    user_accessible: pml4_index < 256,
+                    user_accessible: user_page,
                     write_through: false,
                     cache_disabled: false,
                     accessed: false,
@@ -256,6 +289,7 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
                     huge_page: false,
                     global: false,
                     physical_address: allocate_page_table() as u64,
+                    no_execute: false,
                 },
                 RECURSIVE_PAGE_TABLE_INDEX,
                 pml4_index,
@@ -268,16 +302,21 @@ fn ensure_page_table_exists(pml4_index: usize, pml3_index: usize, pml2_index: us
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum MemoryType {
-    Normal,
-    Device,
-}
-
-pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: MemoryType) {
+pub fn map_page(
+    virtual_address: usize,
+    physical_address: usize,
+    memory_type: MemoryType,
+    permissions: PagePermissions,
+) {
     unsafe {
         let indices = deconstruct_virtual_address(virtual_address);
-        ensure_page_table_exists(indices.pml4_index, indices.pml3_index, indices.pml2_index);
+        let user_page = virtual_address & VIRTUAL_ADDRESS_SIGN_BIT == 0;
+        ensure_page_table_exists(
+            user_page,
+            indices.pml4_index,
+            indices.pml3_index,
+            indices.pml2_index,
+        );
         let entry = read_page_table_entry(
             indices.pml4_index,
             indices.pml3_index,
@@ -290,15 +329,16 @@ pub fn map_page(virtual_address: usize, physical_address: usize, memory_type: Me
         write_page_table_entry(
             PageTableEntry {
                 present: true,
-                writeable: true,
-                user_accessible: virtual_address & (1 << 47) == 0,
+                writeable: permissions.writable,
+                user_accessible: permissions.user,
                 write_through: false,
                 cache_disabled: memory_type == MemoryType::Device,
                 accessed: false,
                 dirty: false,
                 huge_page: false,
-                global: virtual_address & (1 << 47) != 0,
+                global: !user_page,
                 physical_address: physical_address as u64,
+                no_execute: !permissions.executable,
             },
             indices.pml4_index,
             indices.pml3_index,
@@ -377,6 +417,7 @@ pub fn unmap_page(virtual_address: usize) {
                 huge_page: false,
                 global: false,
                 physical_address: 0,
+                no_execute: false,
             },
             indices.pml4_index,
             indices.pml3_index,
@@ -422,10 +463,94 @@ pub(super) fn initialize_paging() {
         unmap_page(get_page_table_entry_address(RECURSIVE_PAGE_TABLE_INDEX, 511, 0, 0) as usize);
     }
     // We'll do a quick sanity check: Mapping the first 4k of physical memory to some address and then compare that with the first 4k of the last 2g (where the kernel lives).
-    map_page(4096, 0, MemoryType::Normal);
+    map_page(
+        4096,
+        0,
+        MemoryType::Normal,
+        PagePermissions::KERNEL_READ_ONLY,
+    );
     let slice_in_low_memory = unsafe { core::slice::from_raw_parts(4096 as *const u8, 4096) };
     let slice_in_high_memory =
         unsafe { core::slice::from_raw_parts(0xffffffff80000000 as *const u8, 4096) };
     assert_eq!(slice_in_low_memory, slice_in_high_memory);
     unmap_page(4096);
+}
+
+pub fn is_valid_user_address(address: usize) -> bool {
+    address & VIRTUAL_ADDRESS_SIGN_BIT == 0
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_page_table_entry_address_test() {
+        let address = unsafe { get_page_table_entry_address(0, 0, 0, 0) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize);
+        let address = unsafe { get_page_table_entry_address(0, 0, 0, 1) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize + 8);
+        let address = unsafe { get_page_table_entry_address(0, 0, 1, 0) as usize };
+        assert_eq!(address, RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 8);
+        let address = unsafe { get_page_table_entry_address(0, 1, 0, 0) as usize };
+        assert_eq!(
+            address,
+            RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 512 * 8
+        );
+        let address = unsafe { get_page_table_entry_address(1, 0, 0, 0) as usize };
+        assert_eq!(
+            address,
+            RECURSIVE_PAGE_TABLE_POINTER as usize + 512 * 512 * 512 * 8
+        );
+    }
+
+    #[test]
+    fn page_table_bits_test() {
+        let entry = PageTableEntry {
+            present: true,
+            writeable: true,
+            user_accessible: false,
+            write_through: false,
+            cache_disabled: true,
+            accessed: false,
+            dirty: true,
+            huge_page: true,
+            global: false,
+            physical_address: 0x0000_dead_8086_7000,
+            no_execute: true,
+        };
+        let entry_bits = construct_page_table_entry(entry);
+        assert_eq!(
+            entry_bits,
+            0x8000_0000_0000_0000 | 0x0000_dead_8086_7000 | 0x0d3
+        );
+        let entry2 = deconstruct_page_table_entry(entry_bits);
+        assert_eq!(entry, entry2);
+
+        let entry = PageTableEntry {
+            present: false,
+            writeable: false,
+            user_accessible: true,
+            write_through: true,
+            cache_disabled: false,
+            accessed: true,
+            dirty: false,
+            huge_page: false,
+            global: true,
+            physical_address: 0xffff_ffff_ffff_ffff,
+            no_execute: false,
+        };
+        let entry_bits = construct_page_table_entry(entry);
+        assert_eq!(entry_bits, 0x000f_ffff_ffff_f000 | 0x12c);
+        let entry2 = deconstruct_page_table_entry(entry_bits);
+        assert!(entry != entry2);
+    }
+
+    #[test]
+    fn is_valid_user_address_test() {
+        assert!(is_valid_user_address(0));
+        assert!(is_valid_user_address(0x0000_7fff_ffff_ffff));
+        assert!(!is_valid_user_address(0x0000_8000_0000_0000));
+        assert!(!is_valid_user_address(0xffff_ffff_ffff_ffff));
+    }
 }

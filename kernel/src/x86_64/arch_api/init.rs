@@ -1,4 +1,9 @@
-use crate::{arch::interrupts, memory, physical_memory_manager};
+use core::ptr::addr_of;
+
+use crate::{
+    arch::{interrupts, task_state_segment},
+    memory, physical_memory_manager,
+};
 
 use super::{super::multiboot, paging};
 
@@ -8,10 +13,17 @@ extern "C" {
     // Note that this is not a pointer, it is actually the first thing after the kernel (in physical addressing), and therefore uses the unit type.
     #[allow(improper_ctypes)]
     static KERNEL_PHYSICAL_END: ();
+
+    #[allow(improper_ctypes)]
+    static stack_end: ();
 }
 
 #[cfg(test)]
 static KERNEL_PHYSICAL_END: () = ();
+
+#[cfg(test)]
+#[allow(non_upper_case_globals)]
+static stack_end: () = ();
 
 #[allow(unused_unsafe)] // It isn't actually unused, but I think there is a bug in the compiler since removing it causes an error.
 pub fn arch_init() {
@@ -26,4 +38,6 @@ pub fn arch_init() {
         ),
     );
     paging::initialize_paging();
+
+    task_state_segment::initialize(unsafe { addr_of!(stack_end) as u64 });
 }

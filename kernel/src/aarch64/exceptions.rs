@@ -103,7 +103,9 @@ pub struct SavedRegisters {
     x28: u64,
     x29: u64,
     x30: u64,
+    sp: u64,
     elr: u64, // Exception Link Register, giving the address of the interrupted instruction.
+    spsr: u64,
 }
 
 #[no_mangle]
@@ -140,18 +142,28 @@ pub extern "C" fn serror_vector(registers: &SavedRegisters) {
     panic!("SError exception\n{:x?}", registers);
 }
 
+const ESR_CLASS_SVC: u64 = 0b010101;
+
 #[no_mangle]
 pub extern "C" fn synchronous_vector_user(registers: &SavedRegisters) {
-    panic!(
-        "synchronous exception in user code at {:p}: {:x}\n{:x?}",
-        registers.elr as *const (),
-        get_esr(),
-        registers
-    );
+    let esr_value = get_esr();
+    let esr_class = (esr_value >> 26) & 0b111111;
+    if esr_class == ESR_CLASS_SVC {
+        // It was a system call instruction.
+        crate::println!("System call from user mode");
+    } else {
+        panic!(
+            "synchronous exception in user code at {:p}: {:x}\n{:x?}",
+            registers.elr as *const (),
+            get_esr(),
+            registers
+        );
+    }
 }
+
 #[no_mangle]
 pub extern "C" fn irq_vector_user(registers: &SavedRegisters) {
-    panic!("IRQ exception in user code\n{:x?}", registers);
+    irq_vector(registers);
 }
 #[no_mangle]
 pub extern "C" fn fiq_vector_user(registers: &SavedRegisters) {

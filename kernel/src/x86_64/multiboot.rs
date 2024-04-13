@@ -1,13 +1,14 @@
 use core::mem::size_of;
 
 use crate::{
-    arch_api::{acpi, initial_ramdisk, paging::MemoryType},
+    arch_api::{acpi, initial_ramdisk},
     heap::{map_physical_memory, PhysicalAddressHandle},
     memory::{
         align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         Validateable,
     },
+    paging::{MemoryType, PagePermissions},
     physical_memory_manager::{mark_range_as_free, mark_range_as_used, BLOCK_SIZE},
 };
 use common::framebuffer::{self, FrameBuffer};
@@ -235,6 +236,7 @@ fn parse_module(module: &MbiModuleTag) {
             module.module_start as usize,
             module_size as usize,
             MemoryType::Normal,
+            PagePermissions::KERNEL_READ_ONLY,
         )
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
@@ -297,6 +299,7 @@ fn parse_frame_buffer(frame_buffer: &MbiFrameBufferTag) {
                         frame_buffer.address as usize,
                         frame_buffer.pitch as usize * frame_buffer.height as usize,
                         MemoryType::Device,
+                        PagePermissions::KERNEL_READ_WRITE,
                     )
                 };
                 PhysicalAddressHandle::leak(physical_address_handle)

@@ -38,7 +38,7 @@ impl IdtEntry {
                         IdtFlags::INTERRUPT_GATE
                     }
                     .bits()
-                    | IdtFlags::KERNEL_PRIVILEGE.bits(),
+                    | IdtFlags::USER_PRIVILEGE.bits(),
             ),
             offset_middle: (offset >> 16) as u16,
             offset_high: (offset >> 32) as u32,

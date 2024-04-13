@@ -3,10 +3,9 @@
 set +x
 set -e
 
-cat > build/test.txt << EOF
-This is a test file!
-EOF
+mkdir -p build/initial_ramdisk
+cp -r user/build/* build/initial_ramdisk
 
-cd build
-tar -cf initial_ramdisk.tar test.txt
+cd build/initial_ramdisk
+tar -cf ../initial_ramdisk.tar *
 cd ..
