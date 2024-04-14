@@ -16,6 +16,7 @@
     new_uninit,
     asm_const,
     array_chunks,
+    naked_functions,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
