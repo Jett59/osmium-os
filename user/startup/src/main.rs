@@ -12,7 +12,8 @@ extern "C" fn main() {
     };
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        core::arch::asm!("int 0x80")
-    };
+        core::arch::asm!("syscall", in("rax") 0x1234);
+        core::arch::asm!("syscall", in("rax") 0xbeef);
+    }
     loop {}
 }
