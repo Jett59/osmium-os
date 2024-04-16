@@ -11,4 +11,9 @@ name = "startup"
 version = "0.1.0"
 dependencies = [
  "osmium-runtime",
+ "syscall-interface",
 ]
+
+[[package]]
+name = "syscall-interface"
+version = "0.1.0"

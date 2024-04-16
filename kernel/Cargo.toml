@@ -16,3 +16,4 @@ debug = true
 [dependencies]
 bitflags = "2.4.0"
 common = { path = "../common" }
+syscall-interface = { path = "./syscall-interface" }

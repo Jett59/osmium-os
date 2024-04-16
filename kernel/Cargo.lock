@@ -18,4 +18,9 @@ version = "0.0.1"
 dependencies = [
  "bitflags",
  "common",
+ "syscall-interface",
 ]
+
+[[package]]
+name = "syscall-interface"
+version = "0.1.0"
