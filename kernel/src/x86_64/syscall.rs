@@ -1,3 +1,4 @@
+use crate::user_memory::UserAddressSpaceHandle;
 use core::{
     arch::asm,
     ptr::null_mut,
@@ -53,7 +54,11 @@ extern "C" fn syscall_entrypoint() {
 }
 
 extern "C" fn syscall_handler(number: u16, arguments: &mut syscall_interface::RegisterValues) {
-    let result = crate::syscall::handle_syscall(decode_syscall(number, *arguments).unwrap());
+    // SAFETY: We are the syscall handler, and therefore know that there is no handle to the address space.
+    let address_space = unsafe { UserAddressSpaceHandle::new() };
+
+    let result =
+        crate::syscall::handle_syscall(decode_syscall(number, *arguments).unwrap(), address_space);
     *arguments = encode_syscall_result(result);
 }
 

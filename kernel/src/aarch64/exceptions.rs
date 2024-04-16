@@ -14,6 +14,7 @@ use crate::{
     },
     print,
     syscall::handle_syscall,
+    user_memory::UserAddressSpaceHandle,
 };
 
 // The vector table itself is defined in assembly language, since it requires low-level manipulation of registers and system instructions.
@@ -154,6 +155,10 @@ pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
     if esr_class == ESR_CLASS_SVC {
         // It was a syscall instruction, with the syscall number in ESR[15:0]
         let syscall_number = (esr_value & 0xffff) as u16;
+
+        // SAFETY: As an entrypoint of the kernel, this function knows that there is no handle to the address space.
+        let address_space = unsafe { UserAddressSpaceHandle::new() };
+
         let result = handle_syscall(
             decode_syscall(
                 syscall_number,
@@ -167,6 +172,7 @@ pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
                 },
             )
             .unwrap(),
+            address_space,
         );
         let result_registers = encode_syscall_result(result);
         registers.x0 = result_registers.x0;
