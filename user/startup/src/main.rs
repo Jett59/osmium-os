@@ -7,7 +7,6 @@ use syscall_interface::user::log;
 
 #[no_mangle]
 extern "C" fn main() {
-    log("Hello!");
-    log("Amazing! The syscall actually worked!");
-    loop {}
+    log("Hello!").unwrap();
+    log("Amazing! The syscall actually worked!").unwrap();
 }

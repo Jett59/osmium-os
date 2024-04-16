@@ -6,6 +6,10 @@ use core::{
     mem::{size_of, transmute},
 };
 
+mod log;
+
+pub use log::*;
+
 pub mod user;
 
 #[repr(u16)]
@@ -21,13 +25,6 @@ impl SyscallNumber {
     pub const fn as_integer(self) -> u16 {
         self as u16
     }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct LogArguments {
-    pub string_address: usize,
-    pub length: usize,
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -62,7 +59,7 @@ union EncodedArguments {
 }
 
 // Compile-time assertion that no syscall has too many arguments.
-const _: () = assert!(size_of::<EncodedArguments>() <= size_of::<RegisterValues>());
+const _: () = assert!(size_of::<EncodedArguments>() == size_of::<RegisterValues>());
 
 #[derive(Debug, Clone, Copy)]
 pub enum Syscall {
@@ -125,38 +122,58 @@ pub fn decode_syscall(
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 union EncodedResult {
     // The same rules apply for what is a valid result type.
-    // NOTE: not every syscall has a result type.
+    log_result: log::EncodedResult,
     register_values: RegisterValues,
 }
 
-#[derive(Debug, Clone, Copy)]
+const _: () = assert!(size_of::<EncodedResult>() == size_of::<RegisterValues>());
+
+#[derive(Debug)]
 pub enum SyscallResult {
-    None,
+    Log(Result<(), LogError>),
 }
 
 pub fn encode_syscall_result(result: SyscallResult) -> RegisterValues {
     let encoded_result = match result {
-        SyscallResult::None => EncodedResult {
-            register_values: RegisterValues::default(),
+        SyscallResult::Log(log_result) => EncodedResult {
+            log_result: log::encode_log_result(log_result),
         },
     };
     // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
     unsafe { encoded_result.register_values }
 }
 
+pub enum SyscallResultDecodeError {
+    InvalidResultField(&'static str),
+}
+
+impl Debug for SyscallResultDecodeError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidResultField(field) => {
+                write!(f, "Invalid {} in result", field)
+            }
+        }
+    }
+}
+
 pub fn decode_syscall_result(
     syscall_number: SyscallNumber,
     result_registers: RegisterValues,
-) -> SyscallResult {
-    let encoded_arguments = EncodedArguments {
+) -> Result<SyscallResult, SyscallResultDecodeError> {
+    let encoded_result = EncodedResult {
         register_values: result_registers,
     };
     // SAFETY: All specific result types are safe to transmute from `usize`.
     unsafe {
-        match (syscall_number, encoded_arguments) {
-            (SyscallNumber::Log, _) => SyscallResult::None,
+        match (syscall_number, encoded_result) {
+            (SyscallNumber::Log, EncodedResult { log_result }) => {
+                let decoded_log_result = log::decode_log_result(log_result)?;
+                Ok(SyscallResult::Log(decoded_log_result))
+            }
             (SyscallNumber::_Max, _) => unreachable!(),
         }
     }

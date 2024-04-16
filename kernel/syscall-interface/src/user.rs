@@ -1,6 +1,9 @@
 use core::arch::asm;
 
-use crate::{encode_syscall, LogArguments, RegisterValues, Syscall, SyscallNumber};
+use crate::{
+    decode_syscall_result, encode_syscall, LogArguments, LogError, RegisterValues, Syscall,
+    SyscallNumber, SyscallResult,
+};
 
 #[inline(always)]
 fn issue_syscall<const NUMBER: u16>(registers: RegisterValues) -> RegisterValues {
@@ -37,11 +40,16 @@ fn issue_syscall<const NUMBER: u16>(registers: RegisterValues) -> RegisterValues
 }
 
 #[inline(always)]
-pub fn log(message: &str) {
+pub fn log(message: &str) -> Result<(), LogError> {
     let message_bytes = message.as_bytes();
     let (_, register_values) = encode_syscall(Syscall::Log(LogArguments {
         string_address: message_bytes.as_ptr() as usize,
         length: message_bytes.len(),
     }));
-    issue_syscall::<{ SyscallNumber::Log.as_integer() }>(register_values);
+    let result = issue_syscall::<{ SyscallNumber::Log.as_integer() }>(register_values);
+    let SyscallResult::Log(result) = decode_syscall_result(SyscallNumber::Log, result).unwrap()
+    else {
+        unreachable!();
+    };
+    result
 }
