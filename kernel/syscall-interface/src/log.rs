@@ -29,6 +29,7 @@ pub(crate) struct EncodedResult {
 
 const INVALID_UTF8_STATUS_CODE: u8 = 1;
 
+#[inline]
 pub(crate) fn encode_log_result(result: Result<(), LogError>) -> EncodedResult {
     match result {
         Ok(()) => EncodedResult {
@@ -44,6 +45,7 @@ pub(crate) fn encode_log_result(result: Result<(), LogError>) -> EncodedResult {
     }
 }
 
+#[inline]
 pub(crate) fn decode_log_result(
     result: EncodedResult,
 ) -> Result<Result<(), LogError>, SyscallResultDecodeError> {

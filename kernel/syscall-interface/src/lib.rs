@@ -136,6 +136,7 @@ pub enum SyscallResult {
     Log(Result<(), LogError>),
 }
 
+#[inline]
 pub fn encode_syscall_result(result: SyscallResult) -> RegisterValues {
     let encoded_result = match result {
         SyscallResult::Log(log_result) => EncodedResult {
@@ -160,6 +161,7 @@ impl Debug for SyscallResultDecodeError {
     }
 }
 
+#[inline]
 pub fn decode_syscall_result(
     syscall_number: SyscallNumber,
     result_registers: RegisterValues,
