@@ -34,23 +34,23 @@ pub struct LogArguments {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RegisterValues {
-    pub rdi: usize,
-    pub rsi: usize,
-    pub rdx: usize,
-    pub r10: usize,
-    pub r8: usize,
-    pub r9: usize,
+    pub rdi: u64,
+    pub rsi: u64,
+    pub rdx: u64,
+    pub r10: u64,
+    pub r8: u64,
+    pub r9: u64,
 }
 #[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RegisterValues {
-    pub x0: usize,
-    pub x1: usize,
-    pub x2: usize,
-    pub x3: usize,
-    pub x4: usize,
-    pub x5: usize,
+    pub x0: u64,
+    pub x1: u64,
+    pub x2: u64,
+    pub x3: u64,
+    pub x4: u64,
+    pub x5: u64,
 }
 
 #[repr(C)]
@@ -79,7 +79,7 @@ pub fn encode_syscall(syscall: Syscall) -> (u16, RegisterValues) {
             },
         ),
     };
-    // SAFETY: `usize` can store any combinations of bits, so this will never be undefined behaviour.
+    // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
     (syscall_number as u16, unsafe {
         encoded_arguments.register_values
     })
@@ -119,6 +119,44 @@ pub fn decode_syscall(
             (SyscallNumber::Log, EncodedArguments { log_arguments }) => {
                 Ok(Syscall::Log(log_arguments))
             }
+            (SyscallNumber::_Max, _) => unreachable!(),
+        }
+    }
+}
+
+#[repr(C)]
+union EncodedResult {
+    // The same rules apply for what is a valid result type.
+    // NOTE: not every syscall has a result type.
+    register_values: RegisterValues,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SyscallResult {
+    None,
+}
+
+pub fn encode_syscall_result(result: SyscallResult) -> RegisterValues {
+    let encoded_result = match result {
+        SyscallResult::None => EncodedResult {
+            register_values: RegisterValues::default(),
+        },
+    };
+    // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
+    unsafe { encoded_result.register_values }
+}
+
+pub fn decode_syscall_result(
+    syscall_number: SyscallNumber,
+    result_registers: RegisterValues,
+) -> SyscallResult {
+    let encoded_arguments = EncodedArguments {
+        register_values: result_registers,
+    };
+    // SAFETY: All specific result types are safe to transmute from `usize`.
+    unsafe {
+        match (syscall_number, encoded_arguments) {
+            (SyscallNumber::Log, _) => SyscallResult::None,
             (SyscallNumber::_Max, _) => unreachable!(),
         }
     }

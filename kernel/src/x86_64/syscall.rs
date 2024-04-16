@@ -3,6 +3,7 @@ use core::{
     ptr::null_mut,
     sync::atomic::{self, AtomicPtr},
 };
+use syscall_interface::{decode_syscall, encode_syscall_result};
 
 use crate::arch::asm::{LSTAR_MSR, SFMASK_MSR, STAR_MSR, USER_DATA_SELECTOR};
 
@@ -30,9 +31,10 @@ extern "C" fn syscall_entrypoint() {
             "push rsi",
             "push rdi",
             "push rax",
-            "mov rdi, rsp",
+            "mov rdi, rax",
+            "lea rsi, [rsp + 8]",
             "call {syscall_handler}",
-            "add rsp, 8",
+            "pop rax",
             "pop rdi",
             "pop rsi",
             "pop rdx",
@@ -50,19 +52,9 @@ extern "C" fn syscall_entrypoint() {
     }
 }
 
-pub struct SyscallArgumentRegisters {
-    rax: u64,
-    rdi: u64,
-    rsi: u64,
-    rdx: u64,
-    r10: u64,
-    r8: u64,
-    r9: u64,
-}
-
-extern "C" fn syscall_handler(argument_registers: &SyscallArgumentRegisters) -> u64 {
-    crate::println!("Syscall: {:#x}", argument_registers.rax);
-    0
+extern "C" fn syscall_handler(number: u16, arguments: &mut syscall_interface::RegisterValues) {
+    let result = crate::syscall::handle_syscall(decode_syscall(number, *arguments).unwrap());
+    *arguments = encode_syscall_result(result);
 }
 
 static SYSCALL_STACK_POINTER: AtomicPtr<u8> = AtomicPtr::new(null_mut());

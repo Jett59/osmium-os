@@ -36,6 +36,7 @@ mod memory;
 mod mmio;
 mod paging;
 mod physical_memory_manager;
+mod syscall;
 mod user_memory;
 
 #[cfg_attr(target_arch = "x86_64", path = "x86_64/mod.rs")]

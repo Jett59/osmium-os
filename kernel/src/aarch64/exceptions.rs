@@ -4,6 +4,8 @@ use core::{
     fmt::Debug,
 };
 
+use syscall_interface::{decode_syscall, encode_syscall_result};
+
 use crate::{
     arch::registers::{get_cntfrq, get_cntvct, get_esr, set_cntv_cval},
     arch_api::{
@@ -11,6 +13,7 @@ use crate::{
         timer,
     },
     print,
+    syscall::handle_syscall,
 };
 
 // The vector table itself is defined in assembly language, since it requires low-level manipulation of registers and system instructions.
@@ -145,12 +148,33 @@ pub extern "C" fn serror_vector(registers: &SavedRegisters) {
 const ESR_CLASS_SVC: u64 = 0b010101;
 
 #[no_mangle]
-pub extern "C" fn synchronous_vector_user(registers: &SavedRegisters) {
+pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
     let esr_value = get_esr();
     let esr_class = (esr_value >> 26) & 0b111111;
     if esr_class == ESR_CLASS_SVC {
-        // It was a system call instruction.
-        crate::println!("System call from user mode");
+        // It was a syscall instruction, with the syscall number in ESR[15:0]
+        let syscall_number = (esr_value & 0xffff) as u16;
+        let result = handle_syscall(
+            decode_syscall(
+                syscall_number,
+                syscall_interface::RegisterValues {
+                    x0: registers.x0,
+                    x1: registers.x1,
+                    x2: registers.x2,
+                    x3: registers.x3,
+                    x4: registers.x4,
+                    x5: registers.x5,
+                },
+            )
+            .unwrap(),
+        );
+        let result_registers = encode_syscall_result(result);
+        registers.x0 = result_registers.x0;
+        registers.x1 = result_registers.x1;
+        registers.x2 = result_registers.x2;
+        registers.x3 = result_registers.x3;
+        registers.x4 = result_registers.x4;
+        registers.x5 = result_registers.x5;
     } else {
         panic!(
             "synchronous exception in user code at {:p}: {:x}\n{:x?}",
