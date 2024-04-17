@@ -120,15 +120,17 @@ pub enum Syscall {
 
 #[inline]
 pub fn encode_syscall(syscall: Syscall) -> (u16, RegisterValues) {
-    let (syscall_number, encoded_arguments) = match syscall {
-        Syscall::Log(arguments) => (
-            SyscallNumber::Log,
-            EncodedArguments {
-                log_arguments: arguments,
-            },
-        ),
+    let mut encoded_arguments = EncodedArguments {
+        register_values: RegisterValues::default(),
+    };
+    let syscall_number = match syscall {
+        Syscall::Log(arguments) => {
+            encoded_arguments.log_arguments = arguments;
+            SyscallNumber::Log
+        }
     };
     // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
+    // Additionally there should be no `undef` values since we zero-initialized it first.
     (syscall_number as u16, unsafe {
         encoded_arguments.register_values
     })
@@ -190,12 +192,16 @@ pub enum SyscallResult {
 
 #[inline]
 pub fn encode_syscall_result(result: SyscallResult) -> RegisterValues {
-    let encoded_result = match result {
-        SyscallResult::Log(log_result) => EncodedResult {
-            log_result: log::encode_log_result(log_result),
-        },
+    let mut encoded_result = EncodedResult {
+        register_values: RegisterValues::default(),
+    };
+    match result {
+        SyscallResult::Log(log_result) => {
+            encoded_result.log_result = log::encode_log_result(log_result)
+        }
     };
     // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
+    // Additionally there should be no `undef` values since we zero-initialized it first.
     unsafe { encoded_result.register_values }
 }
 
