@@ -184,9 +184,7 @@ pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
     } else {
         panic!(
             "synchronous exception in user code at {:p}: {:x}\n{:x?}",
-            registers.elr as *const (),
-            get_esr(),
-            registers
+            registers.elr as *const (), esr_value, registers
         );
     }
 }
