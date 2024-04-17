@@ -1,11 +1,10 @@
-name: kernel
+name: syscall-interface
 
 on:
   push:
     paths:
-      - 'kernel/src/**'
-      - 'kernel/Cargo.lock'
-      - '.github/workflows/kernel.yml'
+      - 'kernel/syscall-interface/**'
+      - '.github/workflows/syscall-interface.yml'
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
     defaults:
       run:
-        working-directory: ./kernel
+        working-directory: ./kernel/syscall-interface
     steps:
       - uses: actions/checkout@v3
 
@@ -72,14 +71,3 @@ jobs:
       - name: run tests natively (x86_64 only)
         if: matrix.arch == 'x86_64'
         run: ./test.sh
-
-      - name: Build
-        run: |
-          ARCH=${{ matrix.arch }} PROFILE=release PROFILE_OPTION=--release SOURCED_CONFIG=y ./build.sh
-
-      - name: upload kernel as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: osmium-${{ matrix.arch }}
-          # The upload-artifact action doesn't respect the default working directory
-          path: kernel/target/${{ matrix.arch }}/release/osmium
