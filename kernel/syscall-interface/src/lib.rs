@@ -4,6 +4,7 @@
 use core::{
     fmt::{self, Debug, Formatter},
     mem::{size_of, transmute},
+    ops::{Index, IndexMut},
 };
 
 mod log;
@@ -48,6 +49,57 @@ pub struct RegisterValues {
     pub x3: u64,
     pub x4: u64,
     pub x5: u64,
+}
+
+impl Index<usize> for RegisterValues {
+    type Output = u64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        #[cfg(target_arch = "x86_64")]
+        match index {
+            0 => &self.rdi,
+            1 => &self.rsi,
+            2 => &self.rdx,
+            3 => &self.r10,
+            4 => &self.r8,
+            5 => &self.r9,
+            _ => panic!("Invalid register index: {}", index),
+        }
+        #[cfg(target_arch = "aarch64")]
+        match index {
+            0 => &self.x0,
+            1 => &self.x1,
+            2 => &self.x2,
+            3 => &self.x3,
+            4 => &self.x4,
+            5 => &self.x5,
+            _ => panic!("Invalid register index: {}", index),
+        }
+    }
+}
+impl IndexMut<usize> for RegisterValues {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        #[cfg(target_arch = "x86_64")]
+        match index {
+            0 => &mut self.rdi,
+            1 => &mut self.rsi,
+            2 => &mut self.rdx,
+            3 => &mut self.r10,
+            4 => &mut self.r8,
+            5 => &mut self.r9,
+            _ => panic!("Invalid register index: {}", index),
+        }
+        #[cfg(target_arch = "aarch64")]
+        match index {
+            0 => &mut self.x0,
+            1 => &mut self.x1,
+            2 => &mut self.x2,
+            3 => &mut self.x3,
+            4 => &mut self.x4,
+            5 => &mut self.x5,
+            _ => panic!("Invalid register index: {}", index),
+        }
+    }
 }
 
 #[repr(C)]
@@ -207,5 +259,25 @@ mod test {
         let result = decode_syscall_result(SyscallNumber::Log, encode_syscall_result(original));
         assert!(result.is_ok());
         assert_eq!(original, result.unwrap());
+    }
+
+    #[test]
+    fn invalid_syscall() {
+        let result = decode_syscall(0xbad, RegisterValues::default());
+        assert!(matches!(
+            result,
+            Err(SyscallDecodeError::InvalidSyscallNumber(0xbad))
+        ));
+    }
+
+    #[test]
+    fn invalid_result() {
+        let mut registers = RegisterValues::default();
+        registers[0] = 0xdeadbeef0badc0de;
+        let result = decode_syscall_result(SyscallNumber::Log, registers);
+        assert!(matches!(
+            result,
+            Err(SyscallResultDecodeError::InvalidResultField("status_code"))
+        ));
     }
 }
