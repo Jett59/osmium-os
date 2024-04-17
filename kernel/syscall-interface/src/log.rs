@@ -1,13 +1,13 @@
 use crate::SyscallResultDecodeError;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LogArguments {
     pub string_address: usize,
     pub length: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LogError {
     InvalidUtf8 { position: usize },
 }

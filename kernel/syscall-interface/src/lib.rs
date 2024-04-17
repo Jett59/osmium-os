@@ -61,7 +61,7 @@ union EncodedArguments {
 // Compile-time assertion that no syscall has too many arguments.
 const _: () = assert!(size_of::<EncodedArguments>() == size_of::<RegisterValues>());
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Syscall {
     Log(LogArguments),
 }
@@ -131,7 +131,7 @@ union EncodedResult {
 
 const _: () = assert!(size_of::<EncodedResult>() == size_of::<RegisterValues>());
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SyscallResult {
     Log(Result<(), LogError>),
 }
@@ -178,5 +178,34 @@ pub fn decode_syscall_result(
             }
             (SyscallNumber::_Max, _) => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn encode_decode_roundtrip() {
+        let message = "Hello, world!";
+        let message_bytes = message.as_bytes();
+
+        let original = Syscall::Log(LogArguments {
+            string_address: message_bytes.as_ptr() as usize,
+            length: message_bytes.len(),
+        });
+        let result =
+            decode_syscall(SyscallNumber::Log.as_integer(), encode_syscall(original).1).unwrap();
+        assert_eq!(original, result);
+
+        let original = SyscallResult::Log(Ok(()));
+        let result = decode_syscall_result(SyscallNumber::Log, encode_syscall_result(original));
+        assert!(result.is_ok());
+        assert_eq!(original, result.unwrap());
+
+        let original = SyscallResult::Log(Err(LogError::InvalidUtf8 { position: 62 }));
+        let result = decode_syscall_result(SyscallNumber::Log, encode_syscall_result(original));
+        assert!(result.is_ok());
+        assert_eq!(original, result.unwrap());
     }
 }
