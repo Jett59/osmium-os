@@ -7,7 +7,7 @@
     "os": "unknown",
     "position-independent-executables": false,
     "disable-redzone": true,
-    "features": "",
+    "features": "+v8a,+strict-align,-neon,-fp-armv8",
     "pre-link-args": {
         "ld.lld": [
             "--gc-sections",

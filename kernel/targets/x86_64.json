@@ -10,7 +10,7 @@
     "os": "unknown",
     "position-independent-executables": false,
     "disable-redzone": true,
-    "features": "-mmx,-sse,+soft-float",
+    "features": "-sse,-sse2,+soft-float",
     "pre-link-args": {
         "ld.lld": [
             "--gc-sections",
