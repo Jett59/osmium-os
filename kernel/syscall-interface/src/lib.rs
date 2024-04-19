@@ -1,0 +1,289 @@
+#![no_std]
+#![feature(asm_const)]
+
+use core::{
+    fmt::{self, Debug, Formatter},
+    mem::{size_of, transmute},
+    ops::{Index, IndexMut},
+};
+
+mod log;
+
+pub use log::*;
+
+pub mod user;
+
+#[repr(u16)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SyscallNumber {
+    /// Append the given string to the kernel log.
+    Log = 0,
+    #[doc(hidden)]
+    _Max,
+}
+
+impl SyscallNumber {
+    pub const fn as_integer(self) -> u16 {
+        self as u16
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RegisterValues {
+    pub rdi: u64,
+    pub rsi: u64,
+    pub rdx: u64,
+    pub r10: u64,
+    pub r8: u64,
+    pub r9: u64,
+}
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RegisterValues {
+    pub x0: u64,
+    pub x1: u64,
+    pub x2: u64,
+    pub x3: u64,
+    pub x4: u64,
+    pub x5: u64,
+}
+
+impl Index<usize> for RegisterValues {
+    type Output = u64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        #[cfg(target_arch = "x86_64")]
+        match index {
+            0 => &self.rdi,
+            1 => &self.rsi,
+            2 => &self.rdx,
+            3 => &self.r10,
+            4 => &self.r8,
+            5 => &self.r9,
+            _ => panic!("Invalid register index: {}", index),
+        }
+        #[cfg(target_arch = "aarch64")]
+        match index {
+            0 => &self.x0,
+            1 => &self.x1,
+            2 => &self.x2,
+            3 => &self.x3,
+            4 => &self.x4,
+            5 => &self.x5,
+            _ => panic!("Invalid register index: {}", index),
+        }
+    }
+}
+impl IndexMut<usize> for RegisterValues {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        #[cfg(target_arch = "x86_64")]
+        match index {
+            0 => &mut self.rdi,
+            1 => &mut self.rsi,
+            2 => &mut self.rdx,
+            3 => &mut self.r10,
+            4 => &mut self.r8,
+            5 => &mut self.r9,
+            _ => panic!("Invalid register index: {}", index),
+        }
+        #[cfg(target_arch = "aarch64")]
+        match index {
+            0 => &mut self.x0,
+            1 => &mut self.x1,
+            2 => &mut self.x2,
+            3 => &mut self.x3,
+            4 => &mut self.x4,
+            5 => &mut self.x5,
+            _ => panic!("Invalid register index: {}", index),
+        }
+    }
+}
+
+#[repr(C)]
+union EncodedArguments {
+    // every field *must* consist only of values that are safe to transmute from `usize`.
+    // IMPORTANT: This even excludes pointers: https://github.com/rust-lang/unsafe-code-guidelines/issues/286.
+    log_arguments: LogArguments,
+    register_values: RegisterValues,
+}
+
+// Compile-time assertion that no syscall has too many arguments.
+const _: () = assert!(size_of::<EncodedArguments>() == size_of::<RegisterValues>());
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Syscall {
+    Log(LogArguments),
+}
+
+#[inline]
+pub fn encode_syscall(syscall: Syscall) -> (u16, RegisterValues) {
+    let mut encoded_arguments = EncodedArguments {
+        register_values: RegisterValues::default(),
+    };
+    let syscall_number = match syscall {
+        Syscall::Log(arguments) => {
+            encoded_arguments.log_arguments = arguments;
+            SyscallNumber::Log
+        }
+    };
+    // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
+    // Additionally there should be no `undef` values since we zero-initialized it first.
+    (syscall_number as u16, unsafe {
+        encoded_arguments.register_values
+    })
+}
+
+#[derive(Copy, Clone)]
+pub enum SyscallDecodeError {
+    InvalidSyscallNumber(u16),
+}
+
+impl Debug for SyscallDecodeError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidSyscallNumber(number) => {
+                write!(f, "Invalid syscall number: {}", number)
+            }
+        }
+    }
+}
+
+#[inline]
+pub fn decode_syscall(
+    number: u16,
+    arguments: RegisterValues,
+) -> Result<Syscall, SyscallDecodeError> {
+    if number >= SyscallNumber::_Max as u16 {
+        return Err(SyscallDecodeError::InvalidSyscallNumber(number));
+    }
+    // SAFETY: We checked above that `number` is within the range of valid `SyscallNumber`s.
+    let syscall_number = unsafe { transmute::<u16, SyscallNumber>(number) };
+    let encoded_arguments = EncodedArguments {
+        register_values: arguments,
+    };
+    // SAFETY: All specific argument types are safe to transmute from `usize`.
+    unsafe {
+        match (syscall_number, encoded_arguments) {
+            (SyscallNumber::Log, EncodedArguments { log_arguments }) => {
+                Ok(Syscall::Log(log_arguments))
+            }
+            (SyscallNumber::_Max, _) => unreachable!(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+union EncodedResult {
+    // The same rules apply for what is a valid result type.
+    log_result: log::EncodedResult,
+    register_values: RegisterValues,
+}
+
+const _: () = assert!(size_of::<EncodedResult>() == size_of::<RegisterValues>());
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SyscallResult {
+    Log(Result<(), LogError>),
+}
+
+#[inline]
+pub fn encode_syscall_result(result: SyscallResult) -> RegisterValues {
+    let mut encoded_result = EncodedResult {
+        register_values: RegisterValues::default(),
+    };
+    match result {
+        SyscallResult::Log(log_result) => {
+            encoded_result.log_result = log::encode_log_result(log_result)
+        }
+    };
+    // SAFETY: `usize` can store any combination of bits, so this will never be undefined behaviour.
+    // Additionally there should be no `undef` values since we zero-initialized it first.
+    unsafe { encoded_result.register_values }
+}
+
+pub enum SyscallResultDecodeError {
+    InvalidResultField(&'static str),
+}
+
+impl Debug for SyscallResultDecodeError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidResultField(field) => {
+                write!(f, "Invalid {} in result", field)
+            }
+        }
+    }
+}
+
+#[inline]
+pub fn decode_syscall_result(
+    syscall_number: SyscallNumber,
+    result_registers: RegisterValues,
+) -> Result<SyscallResult, SyscallResultDecodeError> {
+    let encoded_result = EncodedResult {
+        register_values: result_registers,
+    };
+    // SAFETY: All specific result types are safe to transmute from `usize`.
+    unsafe {
+        match (syscall_number, encoded_result) {
+            (SyscallNumber::Log, EncodedResult { log_result }) => {
+                let decoded_log_result = log::decode_log_result(log_result)?;
+                Ok(SyscallResult::Log(decoded_log_result))
+            }
+            (SyscallNumber::_Max, _) => unreachable!(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn encode_decode_roundtrip() {
+        let message = "Hello, world!";
+        let message_bytes = message.as_bytes();
+
+        let original = Syscall::Log(LogArguments {
+            string_address: message_bytes.as_ptr() as usize,
+            length: message_bytes.len(),
+        });
+        let result =
+            decode_syscall(SyscallNumber::Log.as_integer(), encode_syscall(original).1).unwrap();
+        assert_eq!(original, result);
+
+        let original = SyscallResult::Log(Ok(()));
+        let result = decode_syscall_result(SyscallNumber::Log, encode_syscall_result(original));
+        assert!(result.is_ok());
+        assert_eq!(original, result.unwrap());
+
+        let original = SyscallResult::Log(Err(LogError::InvalidUtf8 { position: 62 }));
+        let result = decode_syscall_result(SyscallNumber::Log, encode_syscall_result(original));
+        assert!(result.is_ok());
+        assert_eq!(original, result.unwrap());
+    }
+
+    #[test]
+    fn invalid_syscall() {
+        let result = decode_syscall(0xbad, RegisterValues::default());
+        assert!(matches!(
+            result,
+            Err(SyscallDecodeError::InvalidSyscallNumber(0xbad))
+        ));
+    }
+
+    #[test]
+    fn invalid_result() {
+        let mut registers = RegisterValues::default();
+        registers[0] = 0xdeadbeef0badc0de;
+        let result = decode_syscall_result(SyscallNumber::Log, registers);
+        assert!(matches!(
+            result,
+            Err(SyscallResultDecodeError::InvalidResultField("status_code"))
+        ));
+    }
+}

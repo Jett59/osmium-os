@@ -1,7 +1,7 @@
 use core::ptr::addr_of;
 
 use crate::{
-    arch::{interrupts, task_state_segment},
+    arch::{interrupts, syscall, task_state_segment},
     memory, physical_memory_manager,
 };
 
@@ -40,4 +40,5 @@ pub fn arch_init() {
     paging::initialize_paging();
 
     task_state_segment::initialize(unsafe { addr_of!(stack_end) as u64 });
+    syscall::initialize(unsafe { addr_of!(stack_end) } as *mut u8);
 }

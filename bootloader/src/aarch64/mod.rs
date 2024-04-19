@@ -38,12 +38,13 @@ impl PageTables {
         let mut flags = paging::PageTableFlags::VALID
             | paging::PageTableFlags::NORMAL_MEMORY
             | paging::PageTableFlags::NOT_BLOCK
-            | paging::PageTableFlags::ACCESS;
+            | paging::PageTableFlags::ACCESS
+            | paging::PageTableFlags::USER_EXECUTE_NEVER;
         if !writable {
             flags |= paging::PageTableFlags::READ_ONLY;
         }
         if !executable {
-            flags |= paging::PageTableFlags::EXECUTE_NEVER;
+            flags |= paging::PageTableFlags::PRIVILEGED_EXECUTE_NEVER;
         }
         self.0
             .map(allocator, virtual_address, physical_address, length, flags);

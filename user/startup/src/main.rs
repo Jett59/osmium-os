@@ -3,16 +3,10 @@
 
 #[allow(unused_imports)]
 use osmium_runtime::panic as _;
+use syscall_interface::user::log;
 
 #[no_mangle]
 extern "C" fn main() {
-    #[cfg(target_arch = "aarch64")]
-    unsafe {
-        core::arch::asm!("svc 0")
-    };
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        core::arch::asm!("int 0x80")
-    };
-    loop {}
+    log("Hello!").unwrap();
+    log("Amazing! The syscall actually worked!").unwrap();
 }

@@ -253,6 +253,8 @@ pub fn map_page(
         if permissions.user {
             flags |= PageTableFlags::USER_ACCESSIBLE;
             flags |= PageTableFlags::PRIVILEGED_EXECUTE_NEVER;
+        } else {
+            flags |= PageTableFlags::USER_EXECUTE_NEVER;
         }
         if !permissions.writable {
             flags |= PageTableFlags::READ_ONLY;
@@ -437,9 +439,15 @@ mod test {
     #[test]
     fn is_valid_user_address_test() {
         assert!(is_valid_user_address(0));
-        assert!(is_valid_user_address(LOWER_RECURSIVE_MAPPING_ADDRESS as usize - 1));
-        assert!(!is_valid_user_address(LOWER_RECURSIVE_MAPPING_ADDRESS as usize));
-        assert!(!is_valid_user_address(UPPER_RECURSIVE_MAPPING_ADDRESS as usize));
+        assert!(is_valid_user_address(
+            LOWER_RECURSIVE_MAPPING_ADDRESS as usize - 1
+        ));
+        assert!(!is_valid_user_address(
+            LOWER_RECURSIVE_MAPPING_ADDRESS as usize
+        ));
+        assert!(!is_valid_user_address(
+            UPPER_RECURSIVE_MAPPING_ADDRESS as usize
+        ));
         assert!(!is_valid_user_address(0xffff_ffff_ffff_ffff));
     }
 }
