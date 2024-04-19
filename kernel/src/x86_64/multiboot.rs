@@ -135,7 +135,6 @@ impl Validateable for MbiAcpiOldTag {
         self.base_tag.tag_type == MBI_TAG_ACPI_OLD
             && self.base_tag.size == size_of::<MbiAcpiOldTag>() as u32
             && self.rsdp_signature == *b"RSD PTR "
-            && self.rsdp_revision == 0
     }
 }
 

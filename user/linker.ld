@@ -15,4 +15,8 @@ SECTIONS {
     .bss : ALIGN(64k) {
         *(.bss*)
     }
+    /DISCARD/ : {
+        *(.eh_*)
+        *(.got)
+    }
 }
