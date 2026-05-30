@@ -2,7 +2,7 @@ use common::framebuffer;
 
 use crate::arch::exceptions::load_exceptions;
 use crate::arch_api::stack::Stack;
-use crate::heap::{map_physical_memory, PhysicalAddressHandle};
+use crate::heap::{PhysicalAddressHandle, map_physical_memory};
 use crate::paging::{MemoryType, PagePermissions};
 use crate::physical_memory_manager;
 use common::beryllium::{
@@ -18,18 +18,18 @@ use super::paging;
 
 // We include the stack pointer request tag here because I don't know where else it should go. TODO: maybe change this later?
 static mut STACK: Stack = Stack::default();
-#[cfg_attr(not(test), link_section = ".beryllium")]
-#[no_mangle]
+#[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
+#[unsafe(no_mangle)]
 pub static mut STACK_POINTER_TAG: StackPointerTag = StackPointerTag {
     tag_type: BootRequestTagType::StackPointer,
     size: size_of::<StackPointerTag>() as u16,
     flags: 0,
-    base: unsafe { STACK.as_mut_ptr() },
+    base: &raw mut STACK as *mut Stack as *mut u8,
     memory_size: size_of::<Stack>(),
 };
 
-#[cfg_attr(not(test), link_section = ".beryllium")]
-#[no_mangle]
+#[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
+#[unsafe(no_mangle)]
 pub static mut FRAME_BUFFER_TAG: FrameBufferTag = FrameBufferTag {
     tag_type: BootRequestTagType::FrameBuffer,
     size: size_of::<FrameBufferTag>() as u16,
@@ -44,8 +44,8 @@ pub static mut FRAME_BUFFER_TAG: FrameBufferTag = FrameBufferTag {
     blue_byte: 0,
 };
 
-#[cfg_attr(not(test), link_section = ".beryllium")]
-#[no_mangle]
+#[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
+#[unsafe(no_mangle)]
 pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
     tag_type: BootRequestTagType::MemoryMap,
     size: size_of::<MemoryMapTag>() as u16,

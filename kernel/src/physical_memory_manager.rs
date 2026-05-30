@@ -22,7 +22,7 @@ where
 {
     pub const fn new() -> Self {
         // A bit of a dirty hack, but there is no easy way to create a zero-initialised array of AtomicUsizes in a const context.
-        let mut result = MaybeUninit::uninit_array();
+        let mut result = [const { MaybeUninit::uninit() }; get_bitmap_size(BITS)];
         // And there is also no for loop, so we do a range manually.
         let mut i = 0;
         while i < get_bitmap_size(BITS) {

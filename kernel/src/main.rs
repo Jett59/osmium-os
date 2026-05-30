@@ -5,22 +5,16 @@
 #![feature(
     generic_const_exprs,
     const_trait_impl,
-    // Why all of these maybe_uninit things are separate is beyond me.
-    maybe_uninit_uninit_array,
+    iter_array_chunks,
+    // Every other part of MaybeUninit is stable, but this is still unstable for some reason.
     maybe_uninit_array_assume_init,
-    const_maybe_uninit_uninit_array,
-    const_mut_refs,
-    const_maybe_uninit_write,
-    const_maybe_uninit_array_assume_init,
-    let_chains,
-    new_uninit,
-    asm_const,
-    array_chunks,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
 // While I don't enjoy surpressing warnings, I think that this particular warning is unnecessary at this stage of development. It would be more useful when the basic components are in place and working.
 #![allow(dead_code)]
+// TEMPORARY: we need to fix the compile errors first.
+#![allow(unsafe_op_in_unsafe_fn)]
 
 mod acpi;
 mod assert;
@@ -58,7 +52,7 @@ fn kpanic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn kmain() -> ! {
     arch_api::init::arch_init();
     physical_memory_manager::sanity_check();
