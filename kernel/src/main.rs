@@ -8,6 +8,7 @@
     iter_array_chunks,
     // Every other part of MaybeUninit is stable, but this is still unstable for some reason.
     maybe_uninit_array_assume_init,
+    sync_unsafe_cell,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
@@ -24,7 +25,6 @@ mod elf;
 mod font_renderer;
 mod heap;
 mod initial_ramdisk;
-mod lazy_init;
 mod memory;
 mod mmio;
 mod paging;

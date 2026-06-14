@@ -31,7 +31,7 @@ impl<T> MmioPointer<T> {
     /// # Safety
     /// Since this function is essentially a wrapper around a raw pointer, it is inherently unsafe.
     /// Additionally, MMIO accesses may have side effects, so this function is unsafe for that reason as well.
-    pub unsafe fn write(&mut self, value: T) {
+    pub unsafe fn write(&self, value: T) {
         unsafe { self.ptr.write_volatile(value) };
         memory_barrier();
     }
@@ -52,10 +52,6 @@ impl MmioRange {
     pub unsafe fn at_offset<T>(&self, offset: usize) -> MmioPointer<T> {
         assert!(offset + size_of::<T>() <= self.size);
         MmioPointer::new(unsafe { self.start.add(offset) as *mut T })
-    }
-
-    pub fn resize(&mut self, new_size: usize) {
-        self.size = new_size;
     }
 
     pub fn size(&self) -> usize {
@@ -106,7 +102,7 @@ mod test {
     #[test]
     fn mmio_pointer_test() {
         let mut memory = [1u8, 2u8, 3u8, 4u8];
-        let mut mmio_pointer = MmioPointer::<u32>::new(memory.as_mut_ptr() as *mut u32);
+        let mmio_pointer = MmioPointer::<u32>::new(memory.as_mut_ptr() as *mut u32);
         // SAFETY: It is safe to dereference this pointer, since we are allowed to construct a u32 from arbitrary bytes (assuming the pointer is aligned, which local variables always are).
         #[cfg(target_endian = "little")]
         assert_eq!(unsafe { mmio_pointer.read() }, 0x04030201);
@@ -127,7 +123,7 @@ mod test {
         let mmio_range = MmioRange::new(memory.as_mut_ptr(), memory.len());
 
         // SAFETY: The offset is within the bounds of the memory range.
-        let mut mmio_pointer = unsafe { mmio_range.at_offset::<u32>(0) };
+        let mmio_pointer = unsafe { mmio_range.at_offset::<u32>(0) };
 
         #[cfg(target_endian = "little")]
         assert_eq!(unsafe { mmio_pointer.read() }, 0x04030201);
@@ -140,7 +136,7 @@ mod test {
         #[cfg(target_endian = "big")]
         assert_eq!(memory[..4], [0xde, 0xad, 0xbe, 0xef]);
 
-        let mut mmio_pointer = unsafe { mmio_range.at_offset::<u32>(4) };
+        let mmio_pointer = unsafe { mmio_range.at_offset::<u32>(4) };
 
         #[cfg(target_endian = "little")]
         assert_eq!(unsafe { mmio_pointer.read() }, 0x08070605);

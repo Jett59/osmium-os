@@ -35,6 +35,9 @@ const LOW_PRIORITY: u8 = 0xd0;
 const NORMAL_PRIORITY: u8 = 0xc0;
 const HIGH_PRIORITY: u8 = 0xb0;
 
+// SAFETY: the GIC must be thread-safe
+unsafe impl Sync for Gicv2 {}
+
 impl Gicv2 {
     /// # Safety
     /// There must be no other active drivers, and the provided addresses must point to valid GICs.
@@ -142,7 +145,7 @@ impl Gicv2 {
 }
 
 impl GenericInterruptController for Gicv2 {
-    fn acknowledge_interrupt(&mut self) -> Option<InterruptInfo> {
+    fn acknowledge_interrupt(&self) -> Option<InterruptInfo> {
         // SAFETY: we were created with an address, which was required to be valid.
         let acknowledge_register_value = unsafe {
             self.cpu_interface_registers
@@ -160,7 +163,7 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
-    fn end_of_interrupt(&mut self, interrupt_info: InterruptInfo) {
+    fn end_of_interrupt(&self, interrupt_info: InterruptInfo) {
         // SAFETY: we were created with an address, which was required to be valid.
         unsafe {
             self.cpu_interface_registers
@@ -169,7 +172,7 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
-    fn enable_interrupt(&mut self, interrupt_number: u32) {
+    fn enable_interrupt(&self, interrupt_number: u32) {
         assert!(
             self.interrupt_is_usable(interrupt_number),
             "attempted to enable an interrupt that is not usable"
@@ -184,7 +187,7 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
-    fn disable_interrupt(&mut self, interrupt_number: u32) {
+    fn disable_interrupt(&self, interrupt_number: u32) {
         assert!(
             self.interrupt_is_usable(interrupt_number),
             "attempted to disable an interrupt that is not usable"
@@ -199,12 +202,7 @@ impl GenericInterruptController for Gicv2 {
         }
     }
 
-    fn configure_interrupt(
-        &mut self,
-        interrupt_number: u32,
-        edge_triggered: bool,
-        priority: Priority,
-    ) {
+    fn configure_interrupt(&self, interrupt_number: u32, edge_triggered: bool, priority: Priority) {
         assert!(
             self.interrupt_is_usable(interrupt_number),
             "attempted to configure an interrupt that is not usable"
@@ -248,7 +246,7 @@ impl GenericInterruptController for Gicv2 {
         false
     }
 
-    fn enable_interrupts_for_this_cpu(&mut self) {
+    fn enable_interrupts_for_this_cpu(&self) {
         // SAFETY: we were created with an address, which was required to be valid.
         unsafe {
             self.cpu_interface_registers

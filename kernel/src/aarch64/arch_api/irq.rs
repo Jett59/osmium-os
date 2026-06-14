@@ -1,3 +1,5 @@
+use core::cell::SyncUnsafeCell;
+
 use alloc::boxed::Box;
 
 use crate::arch::{asm::enable_interrupts, gicv2::Gicv2};
@@ -16,32 +18,27 @@ pub(in crate::arch) enum Priority {
     High,
 }
 
-pub(in crate::arch) trait GenericInterruptController {
+pub(in crate::arch) trait GenericInterruptController: Sync {
     /// Acknowledge that an interrupt was received, getting the interrupt number at the same time.
     /// On GICv2, this is done by reading the `IAR` register in the CPU interface.
-    fn acknowledge_interrupt(&mut self) -> Option<InterruptInfo>;
+    fn acknowledge_interrupt(&self) -> Option<InterruptInfo>;
 
     /// Signal the end of interrupt handling, providing the interrupt number.
-    fn end_of_interrupt(&mut self, interrupt_info: InterruptInfo);
+    fn end_of_interrupt(&self, interrupt_info: InterruptInfo);
 
-    fn enable_interrupt(&mut self, interrupt_number: u32);
-    fn disable_interrupt(&mut self, interrupt_number: u32);
+    fn enable_interrupt(&self, interrupt_number: u32);
+    fn disable_interrupt(&self, interrupt_number: u32);
 
-    fn configure_interrupt(
-        &mut self,
-        interrupt_number: u32,
-        edge_triggered: bool,
-        priority: Priority,
-    );
+    fn configure_interrupt(&self, interrupt_number: u32, edge_triggered: bool, priority: Priority);
 
     fn interrupt_is_usable(&self, interrupt_number: u32) -> bool;
 
     /// Enables the interrupts for this CPU.
     /// On GICV2, this means enabling the CPU interface.
-    fn enable_interrupts_for_this_cpu(&mut self);
+    fn enable_interrupts_for_this_cpu(&self);
 }
 
-static mut GIC: Option<Box<dyn GenericInterruptController>> = None;
+static GIC: SyncUnsafeCell<Option<Box<dyn GenericInterruptController>>> = SyncUnsafeCell::new(None);
 
 pub fn initialize(acpi_info: &AcpiInfo) {
     assert!(
@@ -85,8 +82,9 @@ pub fn initialize(acpi_info: &AcpiInfo) {
 
         // SAFETY: The provided addresses are from ACPI, so they are correct.
         // Also, there are no other GIC drivers running at this point, so there will be no conflicts.
+        // This runs before interrupts are enabled, so there will be no concurrent access to the address.
         unsafe {
-            GIC = Some(Box::new(Gicv2::new(
+            *GIC.get() = Some(Box::new(Gicv2::new(
                 distributor_address as usize,
                 cpu_interface_address as usize,
             )));
@@ -95,28 +93,44 @@ pub fn initialize(acpi_info: &AcpiInfo) {
         panic!("GICv{} not supported yet", gic_distributor.gic_version);
     }
 
+    // TODO: reconsider when this should happen
     enable_interrupts_for_this_cpu();
     enable_interrupts();
 }
 
 pub(in crate::arch) fn acknowledge_interrupt() -> Option<InterruptInfo> {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_mut().unwrap().acknowledge_interrupt() }
+    unsafe { (&*GIC.get()).as_ref().unwrap().acknowledge_interrupt() }
 }
 
 pub(in crate::arch) fn end_of_interrupt(interrupt_info: InterruptInfo) {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_mut().unwrap().end_of_interrupt(interrupt_info) }
+    unsafe {
+        (&*GIC.get())
+            .as_ref()
+            .unwrap()
+            .end_of_interrupt(interrupt_info)
+    }
 }
 
 pub(in crate::arch) fn enable_interrupt(interrupt_number: u32) {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_mut().unwrap().enable_interrupt(interrupt_number) }
+    unsafe {
+        (&*GIC.get())
+            .as_ref()
+            .unwrap()
+            .enable_interrupt(interrupt_number)
+    }
 }
 
 pub(in crate::arch) fn disable_interrupt(interrupt_number: u32) {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_mut().unwrap().disable_interrupt(interrupt_number) }
+    unsafe {
+        (&*GIC.get())
+            .as_ref()
+            .unwrap()
+            .disable_interrupt(interrupt_number)
+    }
 }
 
 pub(in crate::arch) fn configure_interrupt(
@@ -126,18 +140,25 @@ pub(in crate::arch) fn configure_interrupt(
 ) {
     // SAFETY: The GIC is designed to work across threads.
     unsafe {
-        GIC.as_mut()
-            .unwrap()
-            .configure_interrupt(interrupt_number, edge_triggered, priority)
+        (&*GIC.get()).as_ref().unwrap().configure_interrupt(
+            interrupt_number,
+            edge_triggered,
+            priority,
+        )
     }
 }
 
 pub(in crate::arch) fn interrupt_is_usable(interrupt_number: u32) -> bool {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_ref().unwrap().interrupt_is_usable(interrupt_number) }
+    unsafe {
+        (&*GIC.get())
+            .as_ref()
+            .unwrap()
+            .interrupt_is_usable(interrupt_number)
+    }
 }
 
 pub(in crate::arch) fn enable_interrupts_for_this_cpu() {
     // SAFETY: The GIC is designed to work across threads.
-    unsafe { GIC.as_mut().unwrap().enable_interrupts_for_this_cpu() }
+    unsafe { (&*GIC.get()).as_ref().unwrap().enable_interrupts_for_this_cpu() }
 }

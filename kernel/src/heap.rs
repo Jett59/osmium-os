@@ -6,25 +6,23 @@ use core::{
 };
 
 use alloc::boxed::Box;
+use spin::LazyLock;
 
 use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
-    lazy_init::lazy_static,
     memory::align_address_up,
-    paging::{get_physical_address, map_block, unmap_block, MemoryType, PagePermissions},
-    physical_memory_manager::{self, mark_as_free, BLOCK_SIZE, LOG2_BLOCK_SIZE},
+    paging::{MemoryType, PagePermissions, get_physical_address, map_block, unmap_block},
+    physical_memory_manager::{self, BLOCK_SIZE, LOG2_BLOCK_SIZE, mark_as_free},
 };
 
 #[cfg(target_arch = "x86_64")]
 const VIRTUAL_HEAP_START: usize = 0xffffa00000000000;
-
 #[cfg(target_arch = "x86_64")]
 const HEAP_SIZE: usize = 0x1000000000; // 64GB
 
 #[cfg(target_arch = "aarch64")]
 const VIRTUAL_HEAP_START: usize = 0xffffa00000000000;
-
 #[cfg(target_arch = "aarch64")]
 const HEAP_SIZE: usize = 0x1000000000; // 64GB
 
@@ -35,18 +33,17 @@ const_assert!(
     "HEAP_SIZE must be a power of two"
 );
 
-lazy_static! {
-    static ref HEAP_VIRTUAL_MEMORY_ALLOCATOR: &mut BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE> = {
-        static mut REAL_ALLOCATOR: BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE> =
-            BuddyAllocator::unusable();
-        unsafe {
-            REAL_ALLOCATOR
-                .all_unused()
-                .add_entry(HEAP_SIZE, VIRTUAL_HEAP_START);
-            &mut REAL_ALLOCATOR
-        }
-    };
-}
+static HEAP_VIRTUAL_MEMORY_ALLOCATOR: LazyLock<
+    &spin::Mutex<BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>>,
+> = LazyLock::new(|| {
+    static REAL_ALLOCATOR: spin::Mutex<BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>> =
+        spin::Mutex::new(BuddyAllocator::unusable());
+    REAL_ALLOCATOR
+        .lock()
+        .all_unused()
+        .add_entry(HEAP_SIZE, VIRTUAL_HEAP_START);
+    &REAL_ALLOCATOR
+});
 
 #[derive(Clone, Copy)]
 struct SlabUnusedEntry {
@@ -75,8 +72,8 @@ struct SlabAllocator {
     // The empty ones are removed immediately and so are the full ones, so we just need to keep track of the partials.
 }
 
-// TODO: Add locking to the allocator so that this is actually safe.
-unsafe impl Sync for SlabAllocator {}
+// SAFETY: SlabAllocator makes sure to only touch data it uniquely owns (TODO: build type-level guarantees for this)
+unsafe impl Send for SlabAllocator {}
 
 struct HeapAllocator;
 
@@ -92,34 +89,32 @@ impl SlabAllocator {
     }
 
     fn allocate_entry_list<const SIZE: usize>() -> *mut SlabEntry<SIZE> {
-        unsafe {
-            // Rust doesn't let us use any kind of allocator api or anything, so this is the best I can think of.
-            // It is a bit of repetition, but it's not too bad.
-            let virtual_address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(BLOCK_SIZE);
-            if let Some(virtual_address) = virtual_address {
-                let physical_address = physical_memory_manager::allocate_block_address();
-                if let Some(physical_address) = physical_address {
-                    map_block(
-                        virtual_address,
-                        physical_address,
-                        MemoryType::Normal,
-                        PagePermissions::KERNEL_READ_WRITE,
-                    );
-                    return virtual_address as *mut SlabEntry<SIZE>;
-                }
+        // Rust doesn't let us use any kind of allocator api or anything, so this is the best I can think of.
+        // It is a bit of repetition, but it's not too bad.
+        let virtual_address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(BLOCK_SIZE);
+        if let Some(virtual_address) = virtual_address {
+            let physical_address = physical_memory_manager::allocate_block_address();
+            if let Some(physical_address) = physical_address {
+                map_block(
+                    virtual_address,
+                    physical_address,
+                    MemoryType::Normal,
+                    PagePermissions::KERNEL_READ_WRITE,
+                );
+                return virtual_address as *mut SlabEntry<SIZE>;
             }
-            panic!("Out of memory allocating slab entry block");
         }
+        panic!("Out of memory allocating slab entry block");
     }
 
     fn free_entry_list<const SIZE: usize>(entry_list: *mut SlabEntry<SIZE>) {
-        unsafe {
-            let virtual_address = entry_list as usize;
-            let physical_address = get_physical_address(virtual_address);
-            unmap_block(virtual_address);
-            mark_as_free(physical_address);
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(BLOCK_SIZE, virtual_address);
-        }
+        let virtual_address = entry_list as usize;
+        let physical_address = get_physical_address(virtual_address);
+        unmap_block(virtual_address);
+        mark_as_free(physical_address);
+        HEAP_VIRTUAL_MEMORY_ALLOCATOR
+            .lock()
+            .free(BLOCK_SIZE, virtual_address);
     }
 
     /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
@@ -146,7 +141,6 @@ impl SlabAllocator {
     fn get_partial_list<const SIZE: usize>(&mut self) -> *mut SlabEntry<SIZE> {
         let index = SIZE.trailing_zeros();
         if let Some(partial_list) = self.partial_lists[index as usize] {
-            // TODO: I don't think the intermediary cast should be necessary (maybe a compiler bug?)
             partial_list as *mut u8 as *mut SlabEntry<SIZE>
         } else {
             let result = Self::allocate_entry_list::<SIZE>();
@@ -218,13 +212,14 @@ impl SlabAllocator {
                 self.remove_entry_list(entry_list);
                 Self::free_entry_list(entry_list);
             } else if old_first_unused_index == u16::MAX {
+                // TODO: shouldn't it add the entry list?
                 self.remove_entry_list(entry_list);
             }
         }
     }
 }
 
-static mut SLAB_ALLOCATOR: SlabAllocator = SlabAllocator::new();
+static SLAB_ALLOCATOR: spin::Mutex<SlabAllocator> = spin::Mutex::new(SlabAllocator::new());
 
 unsafe impl GlobalAlloc for HeapAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
@@ -232,9 +227,10 @@ unsafe impl GlobalAlloc for HeapAllocator {
         // Otherwise we simply allocate the required amount of virtual memory and map it to freshly allocated physical memory.
         let size = layout.size().next_power_of_two();
         // All of our algorithms align objects to their size, so this should be no problem.
+        // TODO: this isn't true, it only aligns to a power of 2 greater than the size
         assert!(layout.align() <= size);
         if size >= BLOCK_SIZE {
-            let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.allocate(size);
+            let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(size);
             if let Some(address) = address {
                 for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
                     let physical_block_address = physical_memory_manager::allocate_block_address();
@@ -246,6 +242,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
                             PagePermissions::KERNEL_READ_WRITE,
                         );
                     } else {
+                        // TODO: fix the memory leak
                         return null_mut();
                     }
                 }
@@ -257,20 +254,21 @@ unsafe impl GlobalAlloc for HeapAllocator {
             // We must make sure the size is at least the minimum supported size, otherwise bad things will happen.
             let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // This is a little annoying, but I don't think there is a better approach and it isn't really that bad.
+            let mut slab_allocator = SLAB_ALLOCATOR.lock();
             match size {
-                8 => SLAB_ALLOCATOR.allocate::<8>(),
-                16 => SLAB_ALLOCATOR.allocate::<16>(),
-                32 => SLAB_ALLOCATOR.allocate::<32>(),
-                64 => SLAB_ALLOCATOR.allocate::<64>(),
-                128 => SLAB_ALLOCATOR.allocate::<128>(),
-                256 => SLAB_ALLOCATOR.allocate::<256>(),
-                512 => SLAB_ALLOCATOR.allocate::<512>(),
-                1024 => SLAB_ALLOCATOR.allocate::<1024>(),
-                2048 => SLAB_ALLOCATOR.allocate::<2048>(),
-                4096 => SLAB_ALLOCATOR.allocate::<4096>(),
-                8192 => SLAB_ALLOCATOR.allocate::<8192>(),
-                16384 => SLAB_ALLOCATOR.allocate::<16384>(),
-                32768 => SLAB_ALLOCATOR.allocate::<32768>(),
+                8 => slab_allocator.allocate::<8>(),
+                16 => slab_allocator.allocate::<16>(),
+                32 => slab_allocator.allocate::<32>(),
+                64 => slab_allocator.allocate::<64>(),
+                128 => slab_allocator.allocate::<128>(),
+                256 => slab_allocator.allocate::<256>(),
+                512 => slab_allocator.allocate::<512>(),
+                1024 => slab_allocator.allocate::<1024>(),
+                2048 => slab_allocator.allocate::<2048>(),
+                4096 => slab_allocator.allocate::<4096>(),
+                8192 => slab_allocator.allocate::<8192>(),
+                16384 => slab_allocator.allocate::<16384>(),
+                32768 => slab_allocator.allocate::<32768>(),
                 _ => panic!("Invalid slab allocator size: {}", size),
             }
         }
@@ -285,24 +283,25 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 mark_as_free(get_physical_address(block_address));
                 unmap_block(block_address);
             }
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR.free(size, address);
+            HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(size, address);
         } else {
             let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // Again, we have to match on the size.
+            let mut slab_allocator = SLAB_ALLOCATOR.lock();
             match size {
-                8 => SLAB_ALLOCATOR.free::<8>(ptr),
-                16 => SLAB_ALLOCATOR.free::<16>(ptr),
-                32 => SLAB_ALLOCATOR.free::<32>(ptr),
-                64 => SLAB_ALLOCATOR.free::<64>(ptr),
-                128 => SLAB_ALLOCATOR.free::<128>(ptr),
-                256 => SLAB_ALLOCATOR.free::<256>(ptr),
-                512 => SLAB_ALLOCATOR.free::<512>(ptr),
-                1024 => SLAB_ALLOCATOR.free::<1024>(ptr),
-                2048 => SLAB_ALLOCATOR.free::<2048>(ptr),
-                4096 => SLAB_ALLOCATOR.free::<4096>(ptr),
-                8192 => SLAB_ALLOCATOR.free::<8192>(ptr),
-                16384 => SLAB_ALLOCATOR.free::<16384>(ptr),
-                32768 => SLAB_ALLOCATOR.free::<32768>(ptr),
+                8 => slab_allocator.free::<8>(ptr),
+                16 => slab_allocator.free::<16>(ptr),
+                32 => slab_allocator.free::<32>(ptr),
+                64 => slab_allocator.free::<64>(ptr),
+                128 => slab_allocator.free::<128>(ptr),
+                256 => slab_allocator.free::<256>(ptr),
+                512 => slab_allocator.free::<512>(ptr),
+                1024 => slab_allocator.free::<1024>(ptr),
+                2048 => slab_allocator.free::<2048>(ptr),
+                4096 => slab_allocator.free::<4096>(ptr),
+                8192 => slab_allocator.free::<8192>(ptr),
+                16384 => slab_allocator.free::<16384>(ptr),
+                32768 => slab_allocator.free::<32768>(ptr),
                 _ => panic!("Invalid slab allocator size: {}", size),
             }
         }
@@ -387,11 +386,10 @@ pub unsafe fn map_physical_memory(
     let offset_from_block = physical_address % BLOCK_SIZE;
     let aligned_physical_address = physical_address - offset_from_block;
     let allocated_size = align_address_up(size + offset_from_block, BLOCK_SIZE);
-    let address = unsafe {
-        HEAP_VIRTUAL_MEMORY_ALLOCATOR
-            .allocate(allocated_size)
-            .unwrap()
-    };
+    let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR
+        .lock()
+        .allocate(allocated_size)
+        .unwrap();
     for (virtual_block_address, physical_block_address) in (address..(address + allocated_size))
         .step_by(BLOCK_SIZE)
         .zip(
@@ -422,6 +420,7 @@ fn unmap_physical_memory(pointer: *mut u8, size: usize) {
 }
 
 // It's rather difficult to use the unit testing here since this bit depends rather a lot on paging which we can't manage very well in a hosted environment.
+// TODO: implement test drivers etc., as per plan
 
 pub fn sanity_check() {
     // The one thing we can't let happen is the optimizer to optimize out these checks, which would be trivial to do.

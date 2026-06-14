@@ -1,6 +1,6 @@
 use crate::{assert::const_assert, paging::PAGE_SIZE};
 use core::{
-    mem::{size_of, MaybeUninit},
+    mem::{MaybeUninit, size_of},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -40,12 +40,12 @@ where
         (index, bit_offset)
     }
 
-    pub fn mark_as_free(&mut self, bit: usize) {
+    pub fn mark_as_free(&self, bit: usize) {
         let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
         self.bits[index].fetch_or(1 << bit_offset, Ordering::SeqCst);
     }
 
-    pub fn mark_as_used(&mut self, bit: usize) {
+    pub fn mark_as_used(&self, bit: usize) {
         let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
         self.bits[index].fetch_and(!(1 << bit_offset), Ordering::SeqCst);
     }
@@ -58,7 +58,7 @@ where
         mask
     }
 
-    pub fn mark_range_as_free(&mut self, start: usize, end: usize) {
+    pub fn mark_range_as_free(&self, start: usize, end: usize) {
         // If the start is outside the range, we can just return.
         if start >= BITS {
             return;
@@ -93,7 +93,7 @@ where
         }
     }
 
-    pub fn mark_range_as_used(&mut self, start: usize, end: usize) {
+    pub fn mark_range_as_used(&self, start: usize, end: usize) {
         // If the start is outside the range, we can just return.
         if start >= BITS {
             return;
@@ -124,7 +124,7 @@ where
         }
     }
 
-    pub fn allocate_block(&mut self) -> Option<usize> {
+    pub fn allocate_block(&self) -> Option<usize> {
         // Simply traverse the list of usizes and find the first non-zero one. If there are none, we will return None.
         // This does have a race condition if someone goes and frees some memory while we are allocating, however this is an edge-case and can be safely ignored to make it simpler and faster.
         for i in 0..get_bitmap_size(BITS) {
@@ -173,34 +173,26 @@ pub fn get_address(block_index: usize) -> usize {
     block_index * BLOCK_SIZE
 }
 
-pub static mut GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
+pub static GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
 
 pub fn mark_as_free(address: usize) {
-    unsafe {
-        GLOBAL_PMM.mark_as_free(get_block_index(address));
-    }
+    GLOBAL_PMM.mark_as_free(get_block_index(address));
 }
 
 pub fn mark_as_used(address: usize) {
-    unsafe {
-        GLOBAL_PMM.mark_as_used(get_block_index(address));
-    }
+    GLOBAL_PMM.mark_as_used(get_block_index(address));
 }
 
 pub fn mark_range_as_free(start_address: usize, end_address: usize) {
-    unsafe {
-        GLOBAL_PMM.mark_range_as_free(get_block_index(start_address), get_block_index(end_address));
-    }
+    GLOBAL_PMM.mark_range_as_free(get_block_index(start_address), get_block_index(end_address));
 }
 
 pub fn mark_range_as_used(start_address: usize, end_address: usize) {
-    unsafe {
-        GLOBAL_PMM.mark_range_as_used(get_block_index(start_address), get_block_index(end_address));
-    }
+    GLOBAL_PMM.mark_range_as_used(get_block_index(start_address), get_block_index(end_address));
 }
 
 pub fn allocate_block_address() -> Option<usize> {
-    unsafe { GLOBAL_PMM.allocate_block().map(get_address) }
+    GLOBAL_PMM.allocate_block().map(get_address)
 }
 
 // This is outside the test module because it is for testing in the real kernel environment and not part of the unit testing suite.
@@ -217,7 +209,7 @@ mod test {
 
     #[test]
     fn pmm_bitmap_test() {
-        let mut allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
+        let allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
         assert_eq!(allocator.allocate_block(), None);
         allocator.mark_range_as_free(52, 60);
         for i in 52..60 {
@@ -230,7 +222,7 @@ mod test {
 
     #[test]
     fn pmm_bitmap_test_boundaries() {
-        let mut allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
+        let allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
         allocator.mark_range_as_free(0, 1024);
         for i in 0..1024 {
             assert_eq!(allocator.allocate_block(), Some(i));

@@ -1,7 +1,7 @@
-use crate::lazy_init::lazy_static;
 use alloc::boxed::Box;
 use common::font::{get_character_dimensions, get_glyph_count, render_character};
 use common::framebuffer::{get_bytes_per_pixel, get_pixel_row, get_screen_dimensions, PixelFormat};
+use spin::LazyLock;
 
 // We cache the rendered versions of the characters here since they will be redrawn rather a lot (especially during scrolling).
 fn get_character_cache_offset(glyph_index: usize) -> usize {
@@ -9,8 +9,7 @@ fn get_character_cache_offset(glyph_index: usize) -> usize {
     glyph_index * character_width * character_height * get_bytes_per_pixel()
 }
 
-lazy_static! {
-    static ref CHARACTER_CACHE: Box<[u8]> = {
+    static CHARACTER_CACHE: LazyLock<Box<[u8]>> = LazyLock::new(|| {
         let glyph_count = get_glyph_count();
         let mut result =
             unsafe { Box::new_zeroed_slice(get_character_cache_offset(glyph_count)).assume_init() };
@@ -24,8 +23,7 @@ lazy_static! {
             };
         }
         result
-    };
-}
+    });
 
 pub fn draw_character(character: char, x: usize, y: usize) {
     let (character_width, character_height) = get_character_dimensions();
@@ -34,10 +32,10 @@ pub fn draw_character(character: char, x: usize, y: usize) {
         return;
     }
     let mut character_cache_offset = get_character_cache_offset(character as usize);
-    if character_cache_offset >= unsafe { CHARACTER_CACHE.len() } {
+    if character_cache_offset >= CHARACTER_CACHE.len() {
         character_cache_offset = get_character_cache_offset(0);
     }
-    let character_cache = unsafe { &CHARACTER_CACHE[character_cache_offset..] };
+    let character_cache = &CHARACTER_CACHE[character_cache_offset..];
     let bytes_per_pixel = get_bytes_per_pixel();
     for row in 0..character_height {
         let row_pixel_cache = &character_cache[row * character_width * bytes_per_pixel
