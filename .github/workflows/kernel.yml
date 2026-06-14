@@ -21,7 +21,7 @@ jobs:
       run:
         working-directory: ./kernel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: install qemu-user
         if: matrix.arch == 'aarch64'
@@ -77,7 +77,7 @@ jobs:
           ARCH=${{ matrix.arch }} PROFILE=release PROFILE_OPTION=--release SOURCED_CONFIG=y ./build.sh
 
       - name: upload kernel as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: osmium-${{ matrix.arch }}
           # The upload-artifact action doesn't respect the default working directory
