@@ -65,12 +65,12 @@ static mut TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment {
     iomap_base: 0,
 };
 
-extern "C" {
+unsafe extern "C" {
     static mut task_state_segment_descriptor: TaskStateSegmentDescriptor;
 }
 
 pub fn initialize(rsp0_address: u64) {
-    let task_state_segment_address = unsafe { addr_of!(TASK_STATE_SEGMENT) as usize };
+    let task_state_segment_address = addr_of!(TASK_STATE_SEGMENT) as usize;
     let limit = size_of::<TaskStateSegment>() - 1;
     unsafe {
         task_state_segment_descriptor = TaskStateSegmentDescriptor {

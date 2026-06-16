@@ -64,6 +64,10 @@ pub struct MmioMemoryHandle {
     mmio_range: MmioRange,
 }
 
+// Since every method is unsafe anyway, we can just make the whole struct Send and Sync without worrying about it.
+unsafe impl Send for MmioMemoryHandle {}
+unsafe impl Sync for MmioMemoryHandle {}
+
 impl MmioMemoryHandle {
     /// # Safety
     /// see `heap::map_physical_memory`.

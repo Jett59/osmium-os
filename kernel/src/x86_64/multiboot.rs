@@ -1,15 +1,16 @@
 use core::mem::size_of;
+#[cfg(test)]
+use core::ptr::null;
 
 use crate::{
     arch_api::{acpi, initial_ramdisk},
-    heap::{map_physical_memory, PhysicalAddressHandle},
+    heap::{PhysicalAddressHandle, map_physical_memory},
     memory::{
-        align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
-        Validateable,
+        Validateable, align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
     },
     paging::{MemoryType, PagePermissions},
-    physical_memory_manager::{mark_range_as_free, mark_range_as_used, BLOCK_SIZE},
+    physical_memory_manager::{BLOCK_SIZE, mark_range_as_free, mark_range_as_used},
 };
 use common::framebuffer::{self, FrameBuffer};
 
@@ -22,18 +23,18 @@ struct MbiHeader {
 impl Validateable for MbiHeader {
     fn validate(&self) -> bool {
         // We must be at least 8 bytes and aligned to an 8-byte boundary.
-        self.total_size >= 8 && self.total_size % 8 == 0
+        self.total_size >= 8 && self.total_size.is_multiple_of(8)
     }
 }
 
 #[cfg(not(test))] // Unless you want a link error
-extern "C" {
+unsafe extern "C" {
     static mbi_pointer: *const u8;
 }
 
 #[cfg(test)]
 #[allow(non_upper_case_globals)]
-const mbi_pointer: *const u8 = 0 as *const u8;
+const mbi_pointer: *const u8 = null();
 
 #[repr(C, packed)]
 struct MbiTag {
@@ -87,7 +88,7 @@ impl Validateable for MbiMemoryMapTag {
         // Make sure we are the right type, the entry size is at least the minimum (24) and a multiple of 8 bytes and also make sure there is at least one entry.
         self.base_tag.tag_type == MBI_TAG_MEMORY_MAP
             && self.entry_size >= 24
-            && self.entry_size % 8 == 0
+            && self.entry_size.is_multiple_of(8)
             && self.base_tag.size > size_of::<MbiMemoryMapTag>() as u32
     }
 }
@@ -115,7 +116,7 @@ impl Validateable for MbiFrameBufferTag {
         self.base_tag.tag_type == MBI_TAG_FRAME_BUFFER
         // If we are an rgb framebuffer tag, we should have exactly the size of this structure. Otherwise we don't know.
             && (self.framebuffer_type != 1 || self.base_tag.size == size_of::<MbiFrameBufferTag>() as u32)
-            && self.bits_per_pixel % 8 == 0
+            && self.bits_per_pixel.is_multiple_of(8)
             && self.pitch >= self.width * self.bits_per_pixel as u32 / 8
     }
 }

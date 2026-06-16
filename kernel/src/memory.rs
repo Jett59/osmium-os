@@ -319,9 +319,9 @@ pub fn align_address_down(address: usize, alignment: usize) -> usize {
 }
 pub fn align_address_up(address: usize, alignment: usize) -> usize {
     if alignment.is_power_of_two() {
-        (address + alignment - 1) & !(alignment - 1)
+        (address + alignment - 1) & !(alignment - 1) // I promise this works.
     } else {
-        ((address + alignment - 1) / alignment) * alignment
+        address.div_ceil(alignment) * alignment
     }
 }
 

@@ -151,7 +151,7 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
         for table_address in table_body
-            .into_iter()
+            .iter()
             .copied()
             .array_chunks::<{ size_of::<u32>() }>()
         {
@@ -172,7 +172,7 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
         for table_address in table_body
-            .into_iter()
+            .iter()
             .copied()
             .array_chunks::<{ size_of::<u64>() }>()
         {

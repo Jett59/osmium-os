@@ -185,7 +185,7 @@ where
 
     pub fn add_entry(&mut self, size: usize, address: usize) -> &mut Self {
         assert!(
-            address % size.next_power_of_two() == 0,
+            address.is_multiple_of(size.next_power_of_two()),
             "Address not naturally aligned"
         );
         let index = self.find_unused_index();
@@ -346,7 +346,10 @@ where
             let entry = *self.entries[index as usize].as_leaf();
             if entry.sibling != Self::NON_EXISTANT_INDEX {
                 let sibling_index = entry.sibling;
-                if let BuddyEntry::Leaf(sibling) = self.entries[sibling_index as usize] && entry.free && sibling.free {
+                if let BuddyEntry::Leaf(sibling) = self.entries[sibling_index as usize]
+                    && entry.free
+                    && sibling.free
+                {
                     let parent_address = usize::min(entry.address, sibling.address);
                     let parent = *self.entries[entry.parent as usize].as_parent();
                     let new_parent_entry = LeafBuddyEntry {
@@ -383,7 +386,10 @@ where
     }
 
     pub fn free(&mut self, size: usize, address: usize) {
-        assert!(address % size == 0, "Attempt to free non-aligned address");
+        assert!(
+            address.is_multiple_of(size),
+            "Attempt to free non-aligned address"
+        );
         let order = Self::get_order(size);
         // We unfortunately have to traverse the list of allocated chunks for this order to find our allocation.
         // TODO: Maybe we could traverse as a binary tree from the root blocks (not exactly sure how to keep track of those properly though).
@@ -402,7 +408,10 @@ where
                 optional_index = None;
             }
         }
-        panic!("Attempt to free address which was either not allocated (as this size) or already freed: {}", address);
+        panic!(
+            "Attempt to free address which was either not allocated (as this size) or already freed: {}",
+            address
+        );
     }
 }
 

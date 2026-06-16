@@ -24,7 +24,7 @@ pub static mut STACK_POINTER_TAG: StackPointerTag = StackPointerTag {
     tag_type: BootRequestTagType::StackPointer,
     size: size_of::<StackPointerTag>() as u16,
     flags: 0,
-    base: &raw mut STACK as *mut Stack as *mut u8,
+    base: &raw mut STACK as *mut u8,
     memory_size: size_of::<Stack>(),
 };
 

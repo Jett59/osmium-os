@@ -37,6 +37,6 @@ pub extern "C" fn _start() -> ! {
         sym STACK,
         const STACK_SIZE,
         sym main,
-        options(noreturn, att_syntax)
+        options(att_syntax)
     );
 }

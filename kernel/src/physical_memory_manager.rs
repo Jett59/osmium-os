@@ -5,7 +5,7 @@ use core::{
 };
 
 pub const fn get_bitmap_size(bits: usize) -> usize {
-    (bits + usize::BITS as usize - 1) / usize::BITS as usize
+    bits.div_ceil(usize::BITS as usize)
 }
 
 pub struct MemoryBitmapAllocator<const BITS: usize>
@@ -155,7 +155,7 @@ const_assert!(
 );
 
 const_assert!(
-    PAGE_SIZE < BLOCK_SIZE && BLOCK_SIZE % PAGE_SIZE == 0,
+    PAGE_SIZE < BLOCK_SIZE && BLOCK_SIZE.is_multiple_of(PAGE_SIZE),
     "Block size must be larger and divisible by (platform-specific) page size."
 );
 
