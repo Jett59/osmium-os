@@ -168,19 +168,19 @@ impl PageTables {
         length: usize,
         flags: PageTableFlags,
     ) {
-        if virtual_address % PAGE_SIZE != 0 {
+        if !virtual_address.is_multiple_of(PAGE_SIZE) {
             panic!("Virtual address must be page aligned");
         }
         if virtual_address >> 48 != 0 && virtual_address >> 48 != 0xffff {
             panic!("Virtual address must be canonical");
         }
-        if physical_address % PAGE_SIZE != 0 {
+        if !physical_address.is_multiple_of(PAGE_SIZE) {
             panic!("Physical address must be page aligned");
         }
         if physical_address > 0x0000_ffff_ffff_f000 {
             panic!("Physical address must be 48 bits or less");
         }
-        if length % PAGE_SIZE != 0 {
+        if !length.is_multiple_of(PAGE_SIZE) {
             panic!("Length must be page aligned");
         }
 

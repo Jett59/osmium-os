@@ -1,7 +1,8 @@
 use bitflags::bitflags;
 use core::arch::{asm, global_asm};
+use spin::LazyLock;
 
-use crate::{arch::local_apic, lazy_init::lazy_static, print, println};
+use crate::{arch::local_apic, print, println};
 
 bitflags! {
     struct IdtFlags: u8 {
@@ -92,7 +93,7 @@ macro_rules! asm_interrupt_handler {
                 handler = sym $handler,
                 error_code_length = const $error_code_length,
             );
-            extern "C" {
+            unsafe extern "C" {
                 static $function_name: u8;
             }
     };
@@ -168,7 +169,7 @@ struct SavedRegisters {
 
 macro_rules! unhandled_interrupt {
     ($function_name:ident, $interrupt_name:expr) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         extern "C" fn $function_name(number: u64, saved_registers: &SavedRegisters) {
             panic!(
                 "Unhandled interrupt: {} (0x{:x})\n{:x?}",
@@ -218,11 +219,11 @@ macro_rules! idt {
     };
 }
 
-lazy_static! {
-    static ref IDT: [IdtEntry; 256] = idt! {
+static IDT: LazyLock<[IdtEntry; 256]> = LazyLock::new(|| {
+    idt! {
         h0 true, h1 true, h2 true, h3 true, h4 true, h5 true, h6 true, h7 true, h8 true, h9 true, h10 true, h11 true, h12 true, h13 true, h14 true, h15 true, h16 true, h17 true, h18 true, h19 true, h20 true, h21 true, h22 true, h23 true, h24 true, h25 true, h26 true, h27 true, h28 true, h29 true, h30 true, h31 true, h32 false, h33 false, h34 false, h35 false, h36 false, h37 false, h38 false, h39 false, h40 false, h41 false, h42 false, h43 false, h44 false, h45 false, h46 false, h47 false, h48 false, h49 false, h50 false, h51 false, h52 false, h53 false, h54 false, h55 false, h56 false, h57 false, h58 false, h59 false, h60 false, h61 false, h62 false, h63 false, h64 false, h65 false, h66 false, h67 false, h68 false, h69 false, h70 false, h71 false, h72 false, h73 false, h74 false, h75 false, h76 false, h77 false, h78 false, h79 false, h80 false, h81 false, h82 false, h83 false, h84 false, h85 false, h86 false, h87 false, h88 false, h89 false, h90 false, h91 false, h92 false, h93 false, h94 false, h95 false, h96 false, h97 false, h98 false, h99 false, h100 false, h101 false, h102 false, h103 false, h104 false, h105 false, h106 false, h107 false, h108 false, h109 false, h110 false, h111 false, h112 false, h113 false, h114 false, h115 false, h116 false, h117 false, h118 false, h119 false, h120 false, h121 false, h122 false, h123 false, h124 false, h125 false, h126 false, h127 false, h128 false, h129 false, h130 false, h131 false, h132 false, h133 false, h134 false, h135 false, h136 false, h137 false, h138 false, h139 false, h140 false, h141 false, h142 false, h143 false, h144 false, h145 false, h146 false, h147 false, h148 false, h149 false, h150 false, h151 false, h152 false, h153 false, h154 false, h155 false, h156 false, h157 false, h158 false, h159 false, h160 false, h161 false, h162 false, h163 false, h164 false, h165 false, h166 false, h167 false, h168 false, h169 false, h170 false, h171 false, h172 false, h173 false, h174 false, h175 false, h176 false, h177 false, h178 false, h179 false, h180 false, h181 false, h182 false, h183 false, h184 false, h185 false, h186 false, h187 false, h188 false, h189 false, h190 false, h191 false, h192 false, h193 false, h194 false, h195 false, h196 false, h197 false, h198 false, h199 false, h200 false, h201 false, h202 false, h203 false, h204 false, h205 false, h206 false, h207 false, h208 false, h209 false, h210 false, h211 false, h212 false, h213 false, h214 false, h215 false, h216 false, h217 false, h218 false, h219 false, h220 false, h221 false, h222 false, h223 false, h224 false, h225 false, h226 false, h227 false, h228 false, h229 false, h230 false, h231 false, h232 false, h233 false, h234 false, h235 false, h236 false, h237 false, h238 false, h239 false, h240 false, h241 false, h242 false, h243 false, h244 false, h245 false, h246 false, h247 false, h248 false, h249 false, h250 false, h251 false, h252 false, h253 false, h254 false, h255 false,
-    };
-}
+    }
+});
 
 #[repr(C, packed)]
 struct Idtr {

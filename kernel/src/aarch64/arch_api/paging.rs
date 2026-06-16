@@ -1,12 +1,12 @@
 use core::arch::asm;
 
 use bitflags::bitflags;
+use spin::lazylock::LazyLock;
 
 use crate::{
     arch::asm,
     buddy::BuddyAllocator,
     heap::map_physical_memory,
-    lazy_init::lazy_static,
     paging::{MemoryType, PagePermissions},
     physical_memory_manager,
 };
@@ -130,38 +130,38 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
     }
 }
 
-lazy_static! {
-    static ref PAGE_TABLE_ALLOCATION_POOL: &'static mut BuddyAllocator<128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12> = {
-        static mut ACTUAL_ALLOCATOR: BuddyAllocator<128, 16, 12> = BuddyAllocator::unusable();
-        unsafe { ACTUAL_ALLOCATOR.all_unused() }
-    };
-}
+static PAGE_TABLE_ALLOCATION_POOL: LazyLock<
+    &'static spin::Mutex<BuddyAllocator<128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>>,
+> = LazyLock::new(|| {
+    static ACTUAL_ALLOCATOR: spin::Mutex<BuddyAllocator<128, 16, 12>> =
+        spin::Mutex::new(BuddyAllocator::unusable());
+    ACTUAL_ALLOCATOR.lock().all_unused();
+    &ACTUAL_ALLOCATOR
+});
 
 fn allocate_page_table() -> usize {
-    unsafe {
-        if let Some(allocated_page) = PAGE_TABLE_ALLOCATION_POOL.allocate(4096) {
-            allocated_page
-        } else {
-            PAGE_TABLE_ALLOCATION_POOL.add_entry(
-                physical_memory_manager::BLOCK_SIZE,
-                physical_memory_manager::allocate_block_address()
-                    .expect("Failed to get physical memory for page tables"),
-            );
-            PAGE_TABLE_ALLOCATION_POOL
-                .allocate(4096)
-                .expect("Adding new entry to page table allocation pool didn't change anything")
-        }
+    let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
+    if let Some(allocated_page) = page_allocation_pool.allocate(4096) {
+        allocated_page
+    } else {
+        page_allocation_pool.add_entry(
+            physical_memory_manager::BLOCK_SIZE,
+            physical_memory_manager::allocate_block_address()
+                .expect("Failed to get physical memory for page tables"),
+        );
+        page_allocation_pool
+            .allocate(4096)
+            .expect("Adding new entry to page table allocation pool didn't change anything")
     }
 }
 fn free_page_table(address: usize) {
-    unsafe {
-        PAGE_TABLE_ALLOCATION_POOL.free(4096, address);
-        // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
-        if let Some(free_block) =
-            PAGE_TABLE_ALLOCATION_POOL.allocate(physical_memory_manager::BLOCK_SIZE)
-        {
-            physical_memory_manager::mark_as_free(free_block);
-        }
+    let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
+    page_allocation_pool.free(4096, address);
+    // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
+    if let Some(free_block) = page_allocation_pool.allocate(physical_memory_manager::BLOCK_SIZE) {
+        // Unlock the page allocation pool
+        drop(page_allocation_pool);
+        physical_memory_manager::mark_as_free(free_block);
     }
 }
 

@@ -2,8 +2,8 @@ use core::{mem::size_of, ptr::null};
 
 use common::beryllium::{BootRequestTagType, InitialRamdiskTag};
 
-#[cfg_attr(not(test), link_section = ".beryllium")]
-#[no_mangle]
+#[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
+#[unsafe(no_mangle)]
 pub static mut INITIAL_RAMDISK_TAG: InitialRamdiskTag = InitialRamdiskTag {
     tag_type: BootRequestTagType::InitialRamdisk,
     size: size_of::<InitialRamdiskTag>() as u16,

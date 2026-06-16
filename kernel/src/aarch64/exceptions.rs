@@ -22,7 +22,7 @@ use crate::{
 global_asm!(include_str!("exceptions.s"));
 
 #[cfg(not(test))]
-extern "C" {
+unsafe extern "C" {
     static exception_vector_table: u8;
 }
 
@@ -38,33 +38,33 @@ pub fn load_exceptions() {
 }
 
 // Below are the string constants referenced in the assembly:
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub static sp0_synch: &str = "sp0_synch";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub static sp0_irq: &str = "sp0_irq";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub static sp0_fiq: &str = "sp0_fiq";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes_definitions)]
 pub static sp0_serror: &str = "sp0_serror";
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes)]
 pub static user32_synch: &str = "user32_synch";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes)]
 pub static user32_irq: &str = "user32_irq";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes)]
 pub static user32_fiq: &str = "user32_fiq";
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(improper_ctypes)]
 pub static user32_serror: &str = "user32_serror";
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn invalid_vector(vector: *const &str) {
     // # Safety
     // This function is only called by the assembly code, which guarantees that the pointer is valid.
@@ -112,7 +112,7 @@ pub struct SavedRegisters {
     spsr: u64,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn synchronous_vector(registers: &SavedRegisters) {
     panic!(
         "Synchronous exception at {:p}: {:x}\n{:x?}",
@@ -121,7 +121,7 @@ pub extern "C" fn synchronous_vector(registers: &SavedRegisters) {
         registers
     );
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn irq_vector(registers: &SavedRegisters) {
     let Some(irq_info) = acknowledge_interrupt() else {
         return;
@@ -137,18 +137,18 @@ pub extern "C" fn irq_vector(registers: &SavedRegisters) {
     }
     end_of_interrupt(irq_info);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn fiq_vector(registers: &SavedRegisters) {
     panic!("FIQ exception\n{:x?}", registers);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn serror_vector(registers: &SavedRegisters) {
     panic!("SError exception\n{:x?}", registers);
 }
 
 const ESR_CLASS_SVC: u64 = 0b010101;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
     let esr_value = get_esr();
     let esr_class = (esr_value >> 26) & 0b111111;
@@ -189,15 +189,15 @@ pub extern "C" fn synchronous_vector_user(registers: &mut SavedRegisters) {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn irq_vector_user(registers: &SavedRegisters) {
     irq_vector(registers);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn fiq_vector_user(registers: &SavedRegisters) {
     panic!("FIQ exception in user code\n{:x?}", registers);
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn serror_vector_user(registers: &SavedRegisters) {
     panic!("SError exception in user code\n{:x?}", registers);
 }

@@ -43,7 +43,7 @@ pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions:
 pub struct UserAddressSpaceHandle(PhantomData<()>);
 
 impl UserAddressSpaceHandle {
-    pub fn memory(&self, address: usize, length: usize) -> UserMemoryHandle {
+    pub fn memory(&self, address: usize, length: usize) -> UserMemoryHandle<'_> {
         assert!(is_valid_user_address(address));
         assert!(is_valid_user_address(address + length));
         UserMemoryHandle {

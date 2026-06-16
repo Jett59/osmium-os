@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(asm_const)]
 
 use core::{
     fmt::{self, Debug, Formatter},
@@ -186,6 +185,7 @@ union EncodedResult {
 const _: () = assert!(size_of::<EncodedResult>() == size_of::<RegisterValues>());
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub enum SyscallResult {
     Log(Result<(), LogError>),
 }

@@ -8,7 +8,7 @@ use crate::{
 use super::{super::multiboot, paging};
 
 #[cfg(not(test))]
-extern "C" {
+unsafe extern "C" {
     // The physical end of the kernel.
     // Note that this is not a pointer, it is actually the first thing after the kernel (in physical addressing), and therefore uses the unit type.
     #[allow(improper_ctypes)]
