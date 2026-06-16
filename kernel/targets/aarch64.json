@@ -9,7 +9,7 @@
     "os": "none",
     "position-independent-executables": false,
     "disable-redzone": true,
-    "features": "",
+    "features": "-neon",
     "pre-link-args": {
         "ld.lld": [
             "--gc-sections",

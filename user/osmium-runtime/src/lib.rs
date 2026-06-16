@@ -11,7 +11,7 @@ pub fn panic(_info: &core::panic::PanicInfo) -> ! {
 const STACK_SIZE: usize = 65536;
 static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
-extern "C" {
+unsafe extern "C" {
     fn main();
 }
 
