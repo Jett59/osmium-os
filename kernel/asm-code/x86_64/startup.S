@@ -74,10 +74,10 @@ movl %cr4, %eax
 orl $(1 << 5), %eax
 movl %eax, %cr4
 
-/*Then enable long mode (and the NX paging bit while we're here) in the EFER*/
+/*Then enable long mode (and the NX and SYSCALL bits while we're here) in the EFER*/
 movl $0xC0000080, %ecx
 rdmsr
-orl $(1 << 8) | (1 << 11), %eax
+orl $(1 << 0) | (1 << 8) | (1 << 11), %eax
 wrmsr
 
 /*Finally, enable paging in cr0*/
@@ -139,10 +139,10 @@ gdt:
 /*Kernel stack segment (for syscall)*/
 .quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM
 
-/*User mode code segment*/
-.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE | GDT_USER_ACCESSIBLE
 /*User mode data segment*/
 .quad GDT_PRESENT | GDT_WRITEABLE | GDT_NOT_SYSTEM | GDT_USER_ACCESSIBLE
+/*User mode code segment*/
+.quad GDT_PRESENT | GDT_LONG | GDT_NOT_SYSTEM | GDT_EXECUTABLE | GDT_USER_ACCESSIBLE
 
 .globl task_state_segment_descriptor
 task_state_segment_descriptor:

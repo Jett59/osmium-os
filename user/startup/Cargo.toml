@@ -7,3 +7,4 @@ edition = "2024"
 
 [dependencies]
 osmium-runtime = { path = "../osmium-runtime" }
+syscall-interface = { path = "../../kernel/syscall-interface" }

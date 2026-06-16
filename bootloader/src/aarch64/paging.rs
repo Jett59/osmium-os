@@ -15,7 +15,8 @@ bitflags! {
 
         const ACCESS = 1 << 10;
 
-        const EXECUTE_NEVER = 3 << 53;
+        const PRIVILEGED_EXECUTE_NEVER = 1 << 53;
+        const USER_EXECUTE_NEVER = 1 << 54;
     }
 }
 
@@ -81,7 +82,8 @@ impl PageTable {
         let flags = PageTableFlags::VALID
             | PageTableFlags::NOT_BLOCK
             | PageTableFlags::NORMAL_MEMORY
-            | PageTableFlags::ACCESS;
+            | PageTableFlags::ACCESS
+            | PageTableFlags::USER_EXECUTE_NEVER;
         self.entries[index] = subtable as *mut _ as u64 | flags.bits();
     }
 }

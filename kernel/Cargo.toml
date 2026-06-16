@@ -17,3 +17,4 @@ debug = true
 bitflags = "2.4.0"
 common = { path = "../common" }
 spin = "0.12.0"
+syscall-interface = { path = "./syscall-interface" }

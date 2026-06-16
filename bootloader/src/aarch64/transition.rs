@@ -18,7 +18,9 @@ pub fn enter_kernel(entrypoint: usize, stack_pointer: usize, page_tables: &mut P
         | (PageTableFlags::VALID
             | PageTableFlags::NOT_BLOCK
             | PageTableFlags::NORMAL_MEMORY
-            | PageTableFlags::ACCESS)
+            | PageTableFlags::ACCESS
+            | PageTableFlags::PRIVILEGED_EXECUTE_NEVER
+            | PageTableFlags::USER_EXECUTE_NEVER)
             .bits();
 
     unsafe {

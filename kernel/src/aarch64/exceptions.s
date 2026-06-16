@@ -1,4 +1,5 @@
 // Sets up the data structure for the exception handlers to interpret.
+// x30 has to be stored before calling this function, since the bl instruction overwrites this register
 save_registers:
 stp x0, x1, [sp, #0x00]
 stp x2, x3, [sp, #0x10]
@@ -16,7 +17,7 @@ stp x24, x25, [sp, #0xc0]
 stp x26, x27, [sp, #0xd0]
 stp x28, x29, [sp, #0xe0]
 mrs x0, sp_el0
-stp x30, x0, [sp, #0xf0]
+str x0, [sp, #0xf8]
 mrs x0, elr_el1
 mrs x1, spsr_el1
 stp x0, x1, [sp, #0x100]
@@ -67,6 +68,7 @@ b invalid_vector
 // The next four are system exceptions with kernel stack, which is what we use.
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl synchronous_vector
@@ -74,18 +76,21 @@ b restore_registers_and_eret
 
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl irq_vector
 b restore_registers_and_eret
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl fiq_vector
 b restore_registers_and_eret
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl serror_vector
@@ -93,24 +98,28 @@ b restore_registers_and_eret
 // The next lot are the user mode vectors in aarch64 mode.
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl synchronous_vector_user
 b restore_registers_and_eret
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl irq_vector_user
 b restore_registers_and_eret
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl fiq_vector_user
 b restore_registers_and_eret
 .p2align 7
 sub sp, sp, #0x110
+str x30, [sp, #0xf0]
 bl save_registers
 mov x0, sp // Passing the registers as the first argument.
 bl serror_vector_user

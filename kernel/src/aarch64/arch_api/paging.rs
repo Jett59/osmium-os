@@ -253,6 +253,8 @@ pub fn map_page(
         if permissions.user {
             flags |= PageTableFlags::USER_ACCESSIBLE;
             flags |= PageTableFlags::PRIVILEGED_EXECUTE_NEVER;
+        } else {
+            flags |= PageTableFlags::USER_EXECUTE_NEVER;
         }
         if !permissions.writable {
             flags |= PageTableFlags::READ_ONLY;
