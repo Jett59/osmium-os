@@ -1,6 +1,4 @@
 use core::mem::size_of;
-#[cfg(test)]
-use core::ptr::null;
 
 use crate::{
     arch_api::{acpi, initial_ramdisk},
@@ -34,7 +32,7 @@ unsafe extern "C" {
 
 #[cfg(test)]
 #[allow(non_upper_case_globals)]
-const mbi_pointer: *const u8 = null();
+const mbi_pointer: *const u8 = core::ptr::null();
 
 #[repr(C, packed)]
 struct MbiTag {
