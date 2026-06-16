@@ -135,9 +135,7 @@ static PAGE_TABLE_ALLOCATION_POOL: LazyLock<
 > = LazyLock::new(|| {
     static ACTUAL_ALLOCATOR: spin::Mutex<BuddyAllocator<128, 16, 12>> =
         spin::Mutex::new(BuddyAllocator::unusable());
-    let mut allocator_handle = ACTUAL_ALLOCATOR.lock();
-    allocator_handle.all_unused();
-    drop(allocator_handle);
+    ACTUAL_ALLOCATOR.lock().all_unused();
     &ACTUAL_ALLOCATOR
 });
 
