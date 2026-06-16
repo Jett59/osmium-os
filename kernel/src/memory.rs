@@ -134,8 +134,8 @@ macro_rules! memory_struct {
         ),* $(,)?
     }) => {
         #[derive(Copy, Clone)]
-        $visibility struct $Name<$lifetime> {
-            memory: &$lifetime [u8],
+        $visibility struct $Name<'lifetime> {
+            memory: &'lifetime [u8],
             endianness: $crate::memory::Endianness,
         }
 
@@ -171,27 +171,27 @@ macro_rules! memory_struct {
             }
         }
 
-        // Isolates the Layout struct, since there would otherwise be naming conflicts with other memory_structs.
-        const _: () = {
-            #[repr(C, packed)]
-            struct Layout<$lifetime> {
-                $(
-                    $field_name: [u8; <$field_type as $crate::memory::FromBytes>::SIZE]
-                ),*
-            }
-            impl<'lifetime> $Name<'lifetime>
-            where
-                $($field_type: $crate::memory::FromBytes<'lifetime>),*
-            {
-                $(
-                    $visibility fn $field_name(&self) -> $field_type {
-                        let offset = core::mem::offset_of!(Layout, $field_name);
-                        let bytes = &self.memory[offset..offset + <$field_type as $crate::memory::FromBytes>::SIZE];
-                        $crate::memory::FromBytes::from_bytes(self.endianness, bytes).unwrap()
-                    }
-                )*
-            }
-        };
+        impl<'lifetime> $Name<'lifetime>
+        where
+            $($field_type: $crate::memory::FromBytes<'lifetime>),*,
+        {
+            $crate::__internal_memory_struct_accessors!{$visibility, 0, $($field_name: $field_type),*}
+        }
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __internal_memory_struct_accessors {
+    ($visibility:vis, $offset_acc:expr,) => {};
+    ($visibility:vis, $offset_acc:expr, $field_name:ident: $field_type:ty$(, $extra_field_names:ident: $extra_field_types:ty)*) => {
+        $visibility fn $field_name(&self) -> $field_type {
+            let offset = $offset_acc;
+            let bytes = &self.memory[offset..offset + <$field_type as $crate::memory::FromBytes>::SIZE];
+            let value = $crate::memory::FromBytes::from_bytes(self.endianness, bytes).unwrap();
+            value
+        }
+        $crate::__internal_memory_struct_accessors!{$visibility, ($offset_acc + <$field_type as $crate::memory::FromBytes>::SIZE), $($extra_field_names: $extra_field_types),*}
     };
 }
 
@@ -319,9 +319,9 @@ pub fn align_address_down(address: usize, alignment: usize) -> usize {
 }
 pub fn align_address_up(address: usize, alignment: usize) -> usize {
     if alignment.is_power_of_two() {
-        (address + alignment - 1) & !(alignment - 1)
+        (address + alignment - 1) & !(alignment - 1) // I promise this works.
     } else {
-        ((address + alignment - 1) / alignment) * alignment
+        address.div_ceil(alignment) * alignment
     }
 }
 

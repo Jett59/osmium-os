@@ -3,7 +3,7 @@
 set +x
 set -e
 
-cargo build --target ./targets/$ARCH.json $PROFILE_OPTION -Zbuild-std=core,alloc
+cargo build --target ./targets/$ARCH.json $PROFILE_OPTION -Zbuild-std=core,alloc -Zjson-target-spec
 
 mkdir -p build
 

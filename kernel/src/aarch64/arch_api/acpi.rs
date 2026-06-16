@@ -8,8 +8,8 @@ use crate::{
     arch::gtdt::GtdtInfo,
 };
 
-#[cfg_attr(not(test), link_section = ".beryllium")]
-#[no_mangle]
+#[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
+#[unsafe(no_mangle)]
 pub static mut ACPI_TAG: AcpiTag = AcpiTag {
     tag_type: BootRequestTagType::Acpi,
     size: size_of::<AcpiTag>() as u16,

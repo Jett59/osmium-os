@@ -10,8 +10,8 @@ use alloc::{
 
 use crate::{
     arch_api::acpi,
-    heap::{map_physical_memory, PhysicalAddressHandle},
-    memory::{reinterpret_memory, Validateable},
+    heap::{PhysicalAddressHandle, map_physical_memory},
+    memory::{Validateable, reinterpret_memory},
     paging::{MemoryType, PagePermissions},
     println,
 };
@@ -150,8 +150,12 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
         if table_body.len() % size_of::<u32>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        for table_address in table_body.array_chunks::<{ size_of::<u32>() }>() {
-            let table_address = u32::from_le_bytes(*table_address) as usize;
+        for table_address in table_body
+            .iter()
+            .copied()
+            .array_chunks::<{ size_of::<u32>() }>()
+        {
+            let table_address = u32::from_le_bytes(table_address) as usize;
             // # Safety
             // It is obviously safe to interpret the pointers in the RSDT as ACPI tables, since that is the point of the RSDT.
             let table = unsafe { AcpiTableHandle::new(table_address)? };
@@ -167,8 +171,12 @@ pub fn find_required_acpi_tables() -> Result<Vec<AcpiTableHandle>, AcpiTableSear
         if table_body.len() % size_of::<u64>() != 0 {
             return Err(AcpiTableSearchError::InvalidRootTableSize);
         }
-        for table_address in table_body.array_chunks::<{ size_of::<u64>() }>() {
-            let table_address = u64::from_le_bytes(*table_address) as usize;
+        for table_address in table_body
+            .iter()
+            .copied()
+            .array_chunks::<{ size_of::<u64>() }>()
+        {
+            let table_address = u64::from_le_bytes(table_address) as usize;
             // # Safety
             // It is obviously safe to interpret the pointers in the XSDT as ACPI tables, since that is the point of the XSDT.
             let table = unsafe { AcpiTableHandle::new(table_address) }?;

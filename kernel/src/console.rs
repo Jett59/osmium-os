@@ -3,8 +3,9 @@ use core::fmt::Write;
 use alloc::boxed::Box;
 use common::font::get_character_dimensions;
 use common::framebuffer::get_screen_dimensions;
+use spin::LazyLock;
 
-use crate::{font_renderer, lazy_init::lazy_static};
+use crate::font_renderer;
 
 pub fn get_console_dimensions() -> (usize, usize) {
     let screen_dimensions = get_screen_dimensions();
@@ -15,12 +16,12 @@ pub fn get_console_dimensions() -> (usize, usize) {
     )
 }
 
-lazy_static! {
-    static ref CONSOLE_BACKBUFFER: Box<[char]> = {
-        let console_dimensions = get_console_dimensions();
-        unsafe { Box::new_zeroed_slice(console_dimensions.0 * console_dimensions.1).assume_init() }
-    };
-}
+static CONSOLE_BACKBUFFER: LazyLock<spin::Mutex<Box<[char]>>> = LazyLock::new(|| {
+    let console_dimensions = get_console_dimensions();
+    spin::Mutex::new(unsafe {
+        Box::new_zeroed_slice(console_dimensions.0 * console_dimensions.1).assume_init()
+    })
+});
 
 static mut X: usize = 0;
 static mut Y: usize = 0;
@@ -29,11 +30,13 @@ fn possibly_scroll() {
     unsafe {
         let console_dimensions = get_console_dimensions();
         if Y >= console_dimensions.1 {
+            let mut console_backbuffer = CONSOLE_BACKBUFFER.lock();
+            let mut lines = console_backbuffer
+                .chunks_exact_mut(console_dimensions.0)
+                .peekable();
             for row in 1..console_dimensions.1 {
-                let source = &CONSOLE_BACKBUFFER
-                    [row * console_dimensions.0..(row + 1) * console_dimensions.0];
-                let destination = &mut CONSOLE_BACKBUFFER
-                    [(row - 1) * console_dimensions.0..row * console_dimensions.0];
+                let destination = lines.next().unwrap();
+                let source = lines.peek().unwrap();
                 let source_line_length = source
                     .iter()
                     .take_while(|&&character| character != '\n')
@@ -66,7 +69,7 @@ fn possibly_scroll() {
             }
             // Now clear out the last row.
             for x in 0..console_dimensions.0 {
-                CONSOLE_BACKBUFFER[(console_dimensions.1 - 1) * console_dimensions.0 + x] = ' ';
+                console_backbuffer[(console_dimensions.1 - 1) * console_dimensions.0 + x] = ' ';
                 font_renderer::draw_character(
                     ' ',
                     x * get_character_dimensions().0,
@@ -82,9 +85,7 @@ fn possibly_scroll() {
 pub fn write_character(character: char) {
     let x = unsafe { X };
     let y = unsafe { Y };
-    unsafe {
-        CONSOLE_BACKBUFFER[x + y * get_console_dimensions().0] = character;
-    }
+    CONSOLE_BACKBUFFER.lock()[x + y * get_console_dimensions().0] = character;
     if character == '\n' {
         unsafe {
             X = 0;
