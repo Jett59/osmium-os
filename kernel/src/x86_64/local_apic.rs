@@ -50,7 +50,7 @@ pub unsafe fn initialize(address: usize) {
         PagePermissions::KERNEL_READ_WRITE,
     ));
 
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_mut() else {
+    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
         panic!("APIC handle not initialized");
     };
 
@@ -63,7 +63,7 @@ pub unsafe fn initialize(address: usize) {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn end_of_interrupt() {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_mut() else {
+    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
         panic!("APIC handle not initialized");
     };
 
@@ -87,7 +87,7 @@ bitflags! {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn initialize_timer() {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_mut() else {
+    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
         panic!("APIC handle not initialized");
     };
 
@@ -121,7 +121,7 @@ pub fn get_timer_frequency() -> u64 {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn read_timer() -> u64 {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_mut() else {
+    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
         panic!("APIC handle not initialized");
     };
 
@@ -135,7 +135,7 @@ pub unsafe fn read_timer() -> u64 {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn set_timer(ticks: u64) {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_mut() else {
+    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
         panic!("APIC handle not initialized");
     };
 
