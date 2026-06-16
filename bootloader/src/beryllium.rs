@@ -14,7 +14,7 @@ pub struct BerylliumInfo<'lifetime> {
     pub initial_ramdisk_offset: Option<usize>,
 }
 
-pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo {
+pub fn parse_tags(tags: &mut [u8]) -> BerylliumInfo<'_> {
     let mut result = BerylliumInfo {
         stack_pointer: None,
         stack_pointer_offset: None,

@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 #[cfg_attr(target_arch = "aarch64", path = "aarch64/mod.rs")]
 mod arch;
@@ -14,19 +15,19 @@ use core::{mem::size_of, slice};
 use alloc::vec;
 use alloc::vec::Vec;
 use config::Config;
+use uefi::{CStr16, Result};
 use uefi::{
     prelude::*,
     proto::console::gop::{GraphicsOutput, ModeInfo, PixelFormat},
     table::{
         boot::{AllocateType, MemoryType, OpenProtocolAttributes, OpenProtocolParams},
-        cfg::{ACPI2_GUID, ACPI_GUID},
+        cfg::{ACPI_GUID, ACPI2_GUID},
     },
 };
-use uefi::{CStr16, Result};
 use uefi_services::println;
 
 use crate::{
-    arch::{page_align_up, PageAllocator, PAGE_SIZE},
+    arch::{PAGE_SIZE, PageAllocator, page_align_up},
     beryllium::{MemoryMapEntry, MemoryMapEntryType, MemoryMapTag},
     config::parse_config,
 };
@@ -328,13 +329,12 @@ fn load_kernel(
                 .add(segment.size_in_file)
                 .write_bytes(0, segment.size_in_memory - segment.size_in_file);
 
-            if segment.file_offset == beryllium_section.file_offset {
-                if let Some(memory_map_tag_offset) = memory_map_tag_offset {
-                    final_memory_map_tag = Some(
-                        &mut *(allocated_memory.add(16 + memory_map_tag_offset)
-                            as *mut MemoryMapTag),
-                    );
-                }
+            if segment.file_offset == beryllium_section.file_offset
+                && let Some(memory_map_tag_offset) = memory_map_tag_offset
+            {
+                final_memory_map_tag = Some(
+                    &mut *(allocated_memory.add(16 + memory_map_tag_offset) as *mut MemoryMapTag),
+                );
             }
         }
         page_tables.map(
@@ -402,14 +402,13 @@ fn load_kernel(
             MemoryType::ACPI_RECLAIM => MemoryMapEntryType::AcpiReclaimable,
             _ => MemoryMapEntryType::Reserved,
         };
-        if let Some(ref mut previous_storage_entry) = previous_storage_entry {
-            if previous_storage_entry.memory_type == memory_type
-                && previous_storage_entry.address as u64 + previous_storage_entry.size as u64
-                    == memory_map_entry.phys_start
-            {
-                previous_storage_entry.size += memory_map_entry.page_count as usize * PAGE_SIZE;
-                continue;
-            }
+        if let Some(ref mut previous_storage_entry) = previous_storage_entry
+            && previous_storage_entry.memory_type == memory_type
+            && previous_storage_entry.address as u64 + previous_storage_entry.size as u64
+                == memory_map_entry.phys_start
+        {
+            previous_storage_entry.size += memory_map_entry.page_count as usize * PAGE_SIZE;
+            continue;
         }
         if let Some(memory_map_storage_entry) = memory_map_storage_iterator.next() {
             *memory_map_storage_entry = MemoryMapEntry {
