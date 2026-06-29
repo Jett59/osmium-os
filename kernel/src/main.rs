@@ -16,6 +16,7 @@
 #![allow(dead_code)]
 // TEMPORARY: we need to fix the compile errors first.
 #![allow(unsafe_op_in_unsafe_fn)]
+#![warn(unsafe_code)]
 
 mod acpi;
 mod assert;
@@ -30,6 +31,8 @@ mod mmio;
 mod paging;
 mod physical_memory_manager;
 mod syscall;
+#[allow(unsafe_code)]
+mod unsafe_impl;
 mod user_memory;
 
 #[cfg_attr(target_arch = "x86_64", path = "x86_64/mod.rs")]
