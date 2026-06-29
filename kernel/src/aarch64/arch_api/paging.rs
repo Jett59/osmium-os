@@ -4,11 +4,11 @@ use bitflags::bitflags;
 use spin::lazylock::LazyLock;
 
 use crate::{
-    arch::asm,
     buddy::BuddyAllocator,
     heap::map_physical_memory,
     paging::{MemoryType, PagePermissions},
     physical_memory_manager,
+    unsafe_impl::arch::asm,
 };
 
 /// It was a lot simpler to use 4k pages, although we may consider using 16k or 64k pages in the future.

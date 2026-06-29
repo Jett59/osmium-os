@@ -17,6 +17,8 @@ use crate::{
 };
 
 pub mod fadt;
+#[cfg(target_arch = "aarch64")]
+pub mod gtdt;
 pub mod madt;
 
 #[derive(Debug, Clone, Copy)]

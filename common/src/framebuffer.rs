@@ -52,6 +52,7 @@ pub fn get_rgb_byte_positions() -> (u8, u8, u8) {
     }
 }
 
+// TODO: make this like remotely sound
 pub fn get_pixel_row(x: usize, y: usize, pixel_count: usize) -> &'static mut [u8] {
     unsafe {
         &mut FRAME_BUFFER.pixels[y * FRAME_BUFFER.pitch + x * FRAME_BUFFER.bytes_per_pixel as usize

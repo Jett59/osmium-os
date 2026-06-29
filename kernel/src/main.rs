@@ -46,7 +46,7 @@ use core::panic::PanicInfo;
 
 use crate::{
     arch_api::user_mode::enter_user_mode, elf::map_sections, initial_ramdisk::read_initial_ramdisk,
-    user_memory::UserAddressSpaceHandle,
+    unsafe_impl::init_cell::NoConcurrency, user_memory::UserAddressSpaceHandle,
 };
 
 extern crate alloc;
@@ -57,15 +57,21 @@ fn kpanic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 extern "C" fn kmain() -> ! {
+    // SAFETY: we are `kmain`, and know that there is nothing else running.
+    let no_concurrency = unsafe { NoConcurrency::new() };
+    // SAFETY: We are `kmain`, and therefore know for certain that there is nothing which could possibly be holding a handle to the address space.
+    let address_space = unsafe { UserAddressSpaceHandle::new() };
+
     arch_api::init::arch_init();
     physical_memory_manager::sanity_check();
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");
     let required_acpi_tables = acpi::find_required_acpi_tables().unwrap();
     let acpi_info = arch_api::acpi::handle_acpi_info(required_acpi_tables);
-    arch_api::irq::initialize(&acpi_info);
+    arch_api::irq::initialize(&acpi_info, no_concurrency);
     arch_api::timer::initialize(&acpi_info);
 
     let initial_ramdisk = read_initial_ramdisk(
@@ -75,8 +81,6 @@ extern "C" fn kmain() -> ! {
         .get("services/startup")
         .expect("No startup program found in initial ramdisk");
 
-    // SAFETY: We are the `main` function, and therefore know for certain that there is nothing which could possibly be holding a handle to the address space.
-    let address_space = unsafe { UserAddressSpaceHandle::new() };
 
     let startup_elf_info = load_elf(startup_program).expect("Failed to parse startup program");
     map_sections(&startup_elf_info, startup_program, &address_space);

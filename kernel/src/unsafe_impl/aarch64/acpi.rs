@@ -3,10 +3,7 @@ use core::mem::size_of;
 use alloc::vec::Vec;
 use common::beryllium::{AcpiTag, BootRequestTagType};
 
-use crate::{
-    acpi::{fadt::FadtInfo, madt::MadtInfo, AcpiTableHandle},
-    arch::gtdt::GtdtInfo,
-};
+use crate::acpi::{AcpiTableHandle, fadt::FadtInfo, gtdt::GtdtInfo, madt::MadtInfo};
 
 #[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
 #[unsafe(no_mangle)]

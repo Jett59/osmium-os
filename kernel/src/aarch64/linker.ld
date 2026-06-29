@@ -5,22 +5,18 @@ KERNEL_VIRTUAL_ADDRESS = 0xffffffff80000000;
 SECTIONS {
     . = KERNEL_VIRTUAL_ADDRESS + SIZEOF_HEADERS;
     .beryllium : ALIGN(4k) {
-        BYTE(66) 
-        BYTE(101)
-        BYTE(114)
-        BYTE(121)
-        BYTE(108)
-        BYTE(108)
-        BYTE(105)
-        BYTE(117)
-        BYTE(109)
-        BYTE(32)
-        BYTE(82)
-        BYTE(101)
-        BYTE(97)
-        BYTE(100)
-        BYTE(121)
-        BYTE(33)
+        /* "Berylliu" (note little endian) */
+        QUAD(0x75696c6c79726542)
+        /* "m Ready!" */
+        QUAD(0x217964616552206d)
+
+        /* Stack pointer tag */
+        LONG(0) /* BootRequestTagType::StackPointer */
+        SHORT(24) /* size */
+        SHORT(0) /* flags */
+        QUAD(kernel_stack_start) /* base */
+        QUAD(kernel_stack_end - kernel_stack_start) /* memory_size */
+
         KEEP(*(.beryllium))
     }
     .text : ALIGN(4k) {
@@ -33,6 +29,9 @@ SECTIONS {
         *(.data*)
     }
     .bss : ALIGN(4k) {
+        kernel_stack_start = .;
+        . += 8192;
+        kernel_stack_end = .;
         *(.bss*)
     }
     /DISCARD/ : {

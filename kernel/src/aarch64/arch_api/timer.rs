@@ -1,13 +1,10 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::arch::{
-    gtdt::TimerFlags,
-    registers::{get_cntfrq, get_cntvct, set_cntv_ctl, set_cntv_cval},
-};
+use crate::{acpi::gtdt::TimerFlags, arch::registers::{get_cntfrq, get_cntvct, set_cntv_ctl, set_cntv_cval}};
 
 use super::{
     acpi::AcpiInfo,
-    irq::{configure_interrupt, enable_interrupt, Priority},
+    irq::{Priority, configure_interrupt, enable_interrupt},
 };
 
 static TIMER_INTERRUPT: AtomicU32 = AtomicU32::new(0);

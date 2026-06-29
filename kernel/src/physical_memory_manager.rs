@@ -1,6 +1,6 @@
 use crate::{assert::const_assert, paging::PAGE_SIZE};
 use core::{
-    mem::{MaybeUninit, size_of},
+    mem::size_of,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -21,17 +21,8 @@ where
     [(); get_bitmap_size(BITS)]:,
 {
     pub const fn new() -> Self {
-        // A bit of a dirty hack, but there is no easy way to create a zero-initialised array of AtomicUsizes in a const context.
-        let mut result = [const { MaybeUninit::uninit() }; get_bitmap_size(BITS)];
-        // And there is also no for loop, so we do a range manually.
-        let mut i = 0;
-        while i < get_bitmap_size(BITS) {
-            result[i] = MaybeUninit::new(AtomicUsize::new(0));
-            i += 1;
-        }
-        Self {
-            bits: unsafe { MaybeUninit::array_assume_init(result) },
-        }
+        let bits = [const { AtomicUsize::new(0) }; get_bitmap_size(BITS)];
+        Self { bits }
     }
 
     fn get_index_and_bit_offset(bit: usize) -> (usize, usize) {

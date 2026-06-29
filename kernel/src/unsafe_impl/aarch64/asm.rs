@@ -1,5 +1,14 @@
 use core::arch::asm;
 
+use crate::unsafe_impl::init_cell::NoConcurrency;
+
+#[inline(always)]
+pub fn memory_barrier() {
+    unsafe {
+        asm!("dmb sy");
+    }
+}
+
 #[inline(always)]
 pub fn isb() {
     unsafe { asm!("isb", options(nomem, nostack)) }
@@ -20,10 +29,13 @@ pub fn yield_instruction() {
     unsafe { asm!("yield", options(nomem, nostack)) }
 }
 
-pub fn enable_interrupts() {
+#[inline(always)]
+pub fn enable_interrupts(_no_concurrency: NoConcurrency) {
+    // SAFETY: by taking NoConcurrency by-value, we ensure that all future code is concurrency-safe.
     unsafe { asm!("msr daifclr, #15", options(nomem, nostack)) }
 }
 
+#[inline(always)]
 pub unsafe fn eret(elr: u64, spsr: u64) -> ! {
     unsafe {
         asm!("msr elr_el1, {}", "msr spsr_el1, {}", "eret", in(reg) elr, in(reg) spsr, options(nomem, nostack, noreturn));
