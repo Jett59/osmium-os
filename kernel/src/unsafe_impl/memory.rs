@@ -1,0 +1,239 @@
+use core::ops::Deref;
+
+pub trait MemoryToken {
+    /// The type of the token that is used to represent a view into this memory region.
+    /// Ordinarily this should be `Self`, unless `new` or `Drop::drop` requires unique ownership.
+    type ViewToken: MemoryToken;
+
+    /// # Safety
+    /// Callers must ensure that the given memory region is valid for the token type and that it is uniquely owned.
+    /// For unsafe code, ownership of the token implies unique ownership of the memory region it represents.
+    /// Tokens may refer to memory outside the standard kernel address space (e.g. physical memory addresses), in which case uniqueness is only required within the token's particular address space.
+    /// Note that zero-sized regions are valid, and impose no requirements on the caller.
+    unsafe fn new(start: usize, size: usize) -> Self;
+
+    fn zero_sized(address: usize) -> Self
+    where
+        Self: Sized,
+    {
+        // SAFETY: zero-sized regions are valid, and impose no requirements on the caller.
+        unsafe { Self::new(address, 0) }
+    }
+
+    fn address(&self) -> usize;
+    fn size(&self) -> usize;
+
+    fn split_at(self, split_at: usize) -> (Self, Self)
+    where
+        Self: Sized,
+    {
+        assert!(
+            split_at <= self.size(),
+            "split point must be within the memory region"
+        );
+        let first = unsafe { Self::new(self.address(), split_at) };
+        let second = unsafe { Self::new(self.address() + split_at, self.size() - split_at) };
+        (first, second)
+    }
+
+    fn merge(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        assert!(
+            self.address() + self.size() == other.address(),
+            "memory regions must be contiguous to merge"
+        );
+        unsafe { Self::new(self.address(), self.size() + other.size()) }
+    }
+
+    fn view(&self, start: usize, size: usize) -> MemoryTokenView<'_, Self, Self::ViewToken>
+    where
+        Self: Sized,
+    {
+        assert!(
+            start >= self.address()
+                && size <= self.size()
+                && start + size <= self.address() + self.size(),
+            "view must be within the memory region"
+        );
+        // SAFETY: `view` is passed directly into the `MemoryTokenView` struct, which ensures that it cannot outlive the original token.
+        let view = unsafe { Self::ViewToken::new(start, size) };
+        MemoryTokenView { token: self, view }
+    }
+}
+
+/// A view into a memory region represented by a `MemoryToken`.
+///
+/// This type is used to provide a safe way to access a subset of a memory region without requiring unique ownership of the original token.
+/// The only way to recover the `view` token by value is in the `Drop::drop` implementation, making this approximately equivalent to `&'a View`.
+/// The lifetime bound ensures that the view cannot outlive the original token.
+pub struct MemoryTokenView<'a, Token: MemoryToken, View: MemoryToken> {
+    token: &'a Token,
+    // This is almost unsound, but the lifetime bound ensures that this duplicated instance will never out-live the original token.
+    // So long as `view` is never moved out of this type, meaning it can only be used to obtain a reference, this is sound.
+    // Since unsafe code (outside of this module) cannot have ownership of `view`, the requirement of uniqueness of ownership is still satisfied.
+    view: View,
+}
+
+impl<'a, Token: MemoryToken, View: MemoryToken> Deref for MemoryTokenView<'a, Token, View> {
+    type Target = View;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view
+    }
+}
+
+/// Represents ownership of an unused block of physical memory.
+/// Paging code consumes this type to prevent double-allocation.
+pub struct PhysicalMemoryToken {
+    start: usize,
+    size: usize,
+}
+
+impl MemoryToken for PhysicalMemoryToken {
+    type ViewToken = Self;
+
+    unsafe fn new(start: usize, size: usize) -> Self {
+        PhysicalMemoryToken { start, size }
+    }
+
+    fn address(&self) -> usize {
+        self.start
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
+/// Represents ownership of an unallocated block of virtual memory.
+pub struct VirtualMemoryToken {
+    start: usize,
+    size: usize,
+}
+
+impl MemoryToken for VirtualMemoryToken {
+    type ViewToken = Self;
+
+    unsafe fn new(start: usize, size: usize) -> Self {
+        VirtualMemoryToken { start, size }
+    }
+
+    fn address(&self) -> usize {
+        self.start
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
+/// Represents ownership of an allocated block of normal memory.
+/// This is more-or-less equivalent to a `Box<[u8]`, except that it is not automatically de-allocated when dropped, and it may not correspond to a heap allocation.
+/// It is not suitable for MMIO, as it dereferences into a byte slice.
+pub struct AllocatedMemoryToken {
+    start: usize,
+    size: usize,
+}
+
+impl AllocatedMemoryToken {
+    pub fn into_ptr(self) -> *mut u8 {
+        self.start as *mut u8
+    }
+}
+
+impl MemoryToken for AllocatedMemoryToken {
+    type ViewToken = Self;
+
+    unsafe fn new(start: usize, size: usize) -> Self {
+        AllocatedMemoryToken { start, size }
+    }
+
+    fn address(&self) -> usize {
+        self.start
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
+impl Deref for AllocatedMemoryToken {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: The caller has guaranteed that the memory region is valid and uniquely owned.
+        unsafe { core::slice::from_raw_parts(self.start as *const u8, self.size) }
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::unsafe_impl::memory::MemoryToken;
+
+    /// A simple implementation of `MemoryToken` for testing purposes.
+    /// Unlike all other memory tokens, these are Clone + Copy, and so do not guarantee uniqueness.
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct TestMemoryToken {
+        start: usize,
+        size: usize,
+    }
+
+    impl TestMemoryToken {
+        pub fn safe_new(start: usize, size: usize) -> Self {
+            TestMemoryToken { start, size }
+        }
+    }
+
+    impl super::MemoryToken for TestMemoryToken {
+        type ViewToken = Self;
+
+        unsafe fn new(start: usize, size: usize) -> Self {
+            TestMemoryToken { start, size }
+        }
+
+        fn address(&self) -> usize {
+            self.start
+        }
+
+        fn size(&self) -> usize {
+            self.size
+        }
+    }
+
+    #[test]
+    fn test_split_and_merge() {
+        // Simple: split in half
+        let token = TestMemoryToken::safe_new(0x1000, 0x1000);
+        let (first, second) = token.split_at(0x800);
+        assert_eq!(first.address(), 0x1000);
+        assert_eq!(first.size(), 0x800);
+        assert_eq!(second.address(), 0x1800);
+        assert_eq!(second.size(), 0x800);
+
+        // More complex: split into non-equal parts
+        let token = TestMemoryToken::safe_new(0x2000, 0x1000);
+        let (first, second) = token.split_at(0x600);
+        assert_eq!(first.address(), 0x2000);
+        assert_eq!(first.size(), 0x600);
+        assert_eq!(second.address(), 0x2600);
+        assert_eq!(second.size(), 0xA00);
+
+        // Split into a zero-sized left token
+        let token = TestMemoryToken::safe_new(0x3000, 0x1000);
+        let (first, second) = token.split_at(0);
+        assert_eq!(first.address(), 0x3000);
+        assert_eq!(first.size(), 0);
+        assert_eq!(second.address(), 0x3000);
+        assert_eq!(second.size(), 0x1000);
+    }
+
+    #[test]
+    fn test_view() {
+        let token = TestMemoryToken::safe_new(0x4000, 0x1000);
+        let view = token.view(0x4800, 0x400);
+        assert_eq!(view.address(), 0x4800);
+        assert_eq!(view.size(), 0x400); 
+    }
+}

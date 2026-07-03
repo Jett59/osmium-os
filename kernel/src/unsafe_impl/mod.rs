@@ -2,3 +2,4 @@
 #[cfg_attr(target_arch = "aarch64", path = "./aarch64/mod.rs")]
 pub mod arch;
 pub mod init_cell;
+pub mod memory;

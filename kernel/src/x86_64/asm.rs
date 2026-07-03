@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use crate::unsafe_impl::init_cell::NoConcurrency;
+
 /// # Safety
 /// This function could cause undefined behavior if the port does something strange.
 /// For example, a port-mapped DMA controller could overwrite parts of the kernel.
@@ -15,7 +17,7 @@ pub fn io_wait() {
 
 /// # Safety
 /// This could break code in the surrounding scope which relies on interrupts being disabled.
-pub unsafe fn enable_interrupts() {
+pub unsafe fn enable_interrupts(_no_concurency: NoConcurrency) {
     asm!("sti", options(nomem, nostack));
 }
 

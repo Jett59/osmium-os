@@ -6,6 +6,7 @@ use crate::{
     buddy::BuddyAllocator,
     paging::{MemoryType, PagePermissions},
     physical_memory_manager,
+    unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken},
 };
 
 pub const PAGE_SIZE: usize = 4096;
@@ -151,10 +152,12 @@ fn deconstruct_virtual_address(address: usize) -> PageTableIndices {
 }
 
 static PAGE_TABLE_ALLOCATION_POOL: LazyLock<
-    &spin::Mutex<BuddyAllocator<128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>>,
+    &spin::Mutex<
+        BuddyAllocator<PhysicalMemoryToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
+    >,
 > = LazyLock::new(|| {
     static ACTUAL_ALLOCATOR: spin::Mutex<
-        BuddyAllocator<128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
+        BuddyAllocator<PhysicalMemoryToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
     > = spin::Mutex::new(BuddyAllocator::unusable());
     ACTUAL_ALLOCATOR.lock().all_unused();
     &ACTUAL_ALLOCATOR
@@ -163,24 +166,27 @@ static PAGE_TABLE_ALLOCATION_POOL: LazyLock<
 fn allocate_page_table() -> usize {
     let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
     if let Some(allocated_page) = page_allocation_pool.allocate(4096) {
-        allocated_page
+        allocated_page.address()
     } else {
-        page_allocation_pool.add_entry(
-            physical_memory_manager::BLOCK_SIZE,
-            physical_memory_manager::allocate_block_address()
-                .expect("Failed to get physical memory for page tables"),
-        );
+        unsafe {
+            page_allocation_pool.add_entry(PhysicalMemoryToken::new(
+                physical_memory_manager::allocate_block_address()
+                    .expect("Failed to get physical memory for page tables"),
+                physical_memory_manager::BLOCK_SIZE,
+            ));
+        }
         page_allocation_pool
             .allocate(4096)
             .expect("Adding new entry to page table allocation pool didn't change anything")
+            .address()
     }
 }
 fn free_page_table(address: usize) {
     let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
-    page_allocation_pool.free(4096, address);
+    page_allocation_pool.free(unsafe { PhysicalMemoryToken::new(address, 4096) });
     // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
     if let Some(free_block) = page_allocation_pool.allocate(physical_memory_manager::BLOCK_SIZE) {
-        physical_memory_manager::mark_as_free(free_block);
+        physical_memory_manager::mark_as_free(free_block.address());
     }
 }
 

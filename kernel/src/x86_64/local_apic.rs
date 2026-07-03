@@ -1,15 +1,16 @@
-use core::{
-    cell::SyncUnsafeCell,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use bitflags::bitflags;
 
-use crate::{mmio::MmioMemoryHandle, paging::PagePermissions};
+use crate::{
+    mmio::MmioMemoryHandle,
+    paging::PagePermissions,
+    unsafe_impl::init_cell::{InitCell, NoConcurrency},
+};
 
 use super::interrupts::{SPURIOUS_INTERRUPT_VECTOR, TIMER_INTERRUPT};
 
-static APIC_HANDLE: SyncUnsafeCell<Option<MmioMemoryHandle>> = SyncUnsafeCell::new(None);
+static APIC_HANDLE: InitCell<MmioMemoryHandle> = InitCell::new();
 
 const LOCAL_APIC_MEMORY_RANGE_SIZE: usize = 0x1000;
 
@@ -43,14 +44,17 @@ const LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET: usize = 0x3E0;
 /// # Safety
 /// The physical address must both point to a APIC, and also not be in use by another instance of the APIC driver or be mapped anywhere else.
 /// Additionally, there will be massive confusion if the legacy PIC is not disabled by now, so callers must ensure that it is disabled.
-pub unsafe fn initialize(address: usize) {
-    *APIC_HANDLE.get() = Some(MmioMemoryHandle::new(
-        address,
-        LOCAL_APIC_MEMORY_RANGE_SIZE,
-        PagePermissions::KERNEL_READ_WRITE,
-    ));
+pub unsafe fn initialize(address: usize, no_concurrency: &NoConcurrency) {
+    APIC_HANDLE.set(
+        MmioMemoryHandle::new(
+            address,
+            LOCAL_APIC_MEMORY_RANGE_SIZE,
+            PagePermissions::KERNEL_READ_WRITE,
+        ),
+        no_concurrency,
+    );
 
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
+    let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
@@ -63,7 +67,7 @@ pub unsafe fn initialize(address: usize) {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn end_of_interrupt() {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
+    let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
@@ -87,7 +91,7 @@ bitflags! {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn initialize_timer() {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
+    let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
@@ -121,7 +125,7 @@ pub fn get_timer_frequency() -> u64 {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn read_timer() -> u64 {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
+    let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
@@ -135,7 +139,7 @@ pub unsafe fn read_timer() -> u64 {
 /// # Safety
 /// The APIC must be initialized properly (see above).
 pub unsafe fn set_timer(ticks: u64) {
-    let Some(apic_handle) = (*APIC_HANDLE.get()).as_ref() else {
+    let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 

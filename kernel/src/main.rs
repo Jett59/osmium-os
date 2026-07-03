@@ -6,16 +6,11 @@
     generic_const_exprs,
     const_trait_impl,
     iter_array_chunks,
-    // Every other part of MaybeUninit is stable, but this is still unstable for some reason.
-    maybe_uninit_array_assume_init,
-    sync_unsafe_cell,
 )]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
 // While I don't enjoy surpressing warnings, I think that this particular warning is unnecessary at this stage of development. It would be more useful when the basic components are in place and working.
 #![allow(dead_code)]
-// TEMPORARY: we need to fix the compile errors first.
-#![allow(unsafe_op_in_unsafe_fn)]
 #![warn(unsafe_code)]
 
 mod acpi;
@@ -80,7 +75,6 @@ extern "C" fn kmain() -> ! {
     let startup_program = initial_ramdisk
         .get("services/startup")
         .expect("No startup program found in initial ramdisk");
-
 
     let startup_elf_info = load_elf(startup_program).expect("Failed to parse startup program");
     map_sections(&startup_elf_info, startup_program, &address_space);

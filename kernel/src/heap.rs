@@ -14,6 +14,7 @@ use crate::{
     memory::align_address_up,
     paging::{MemoryType, PagePermissions, get_physical_address, map_block, unmap_block},
     physical_memory_manager::{self, BLOCK_SIZE, LOG2_BLOCK_SIZE, mark_as_free},
+    unsafe_impl::memory::{MemoryToken, VirtualMemoryToken},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -34,14 +35,18 @@ const_assert!(
 );
 
 static HEAP_VIRTUAL_MEMORY_ALLOCATOR: LazyLock<
-    &spin::Mutex<BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>>,
+    &spin::Mutex<BuddyAllocator<VirtualMemoryToken, 256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>>,
 > = LazyLock::new(|| {
-    static REAL_ALLOCATOR: spin::Mutex<BuddyAllocator<256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>> =
-        spin::Mutex::new(BuddyAllocator::unusable());
-    REAL_ALLOCATOR
-        .lock()
-        .all_unused()
-        .add_entry(HEAP_SIZE, VIRTUAL_HEAP_START);
+    static REAL_ALLOCATOR: spin::Mutex<
+        BuddyAllocator<VirtualMemoryToken, 256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>,
+    > = spin::Mutex::new(BuddyAllocator::unusable());
+    // SAFETY: according to the kernel memory map, this region is free to use for the heap.
+    unsafe {
+        REAL_ALLOCATOR
+            .lock()
+            .all_unused()
+            .add_entry(VirtualMemoryToken::new(VIRTUAL_HEAP_START, HEAP_SIZE));
+    }
     &REAL_ALLOCATOR
 });
 
@@ -96,12 +101,12 @@ impl SlabAllocator {
             let physical_address = physical_memory_manager::allocate_block_address();
             if let Some(physical_address) = physical_address {
                 map_block(
-                    virtual_address,
+                    virtual_address.address(),
                     physical_address,
                     MemoryType::Normal,
                     PagePermissions::KERNEL_READ_WRITE,
                 );
-                return virtual_address as *mut SlabEntry<SIZE>;
+                return virtual_address.address() as *mut SlabEntry<SIZE>;
             }
         }
         panic!("Out of memory allocating slab entry block");
@@ -114,7 +119,8 @@ impl SlabAllocator {
         mark_as_free(physical_address);
         HEAP_VIRTUAL_MEMORY_ALLOCATOR
             .lock()
-            .free(BLOCK_SIZE, virtual_address);
+            // SAFETY: this is not really safe unfortunately :(
+            .free(unsafe { VirtualMemoryToken::new(virtual_address, BLOCK_SIZE) });
     }
 
     /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
@@ -230,7 +236,8 @@ unsafe impl GlobalAlloc for HeapAllocator {
         // TODO: this isn't true, it only aligns to a power of 2 greater than the size
         assert!(layout.align() <= size);
         if size >= BLOCK_SIZE {
-            let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(size);
+            let token = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(size);
+            let address = token.map(|token| token.address());
             if let Some(address) = address {
                 for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
                     let physical_block_address = physical_memory_manager::allocate_block_address();
@@ -283,7 +290,10 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 mark_as_free(get_physical_address(block_address));
                 unmap_block(block_address);
             }
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(size, address);
+            // SAFETY: the allocator API ensures that the pointer and size are valid and owned by the caller, so this is safe.
+            HEAP_VIRTUAL_MEMORY_ALLOCATOR
+                .lock()
+                .free(unsafe { VirtualMemoryToken::new(address, size) });
         } else {
             let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // Again, we have to match on the size.
@@ -386,10 +396,11 @@ pub unsafe fn map_physical_memory(
     let offset_from_block = physical_address % BLOCK_SIZE;
     let aligned_physical_address = physical_address - offset_from_block;
     let allocated_size = align_address_up(size + offset_from_block, BLOCK_SIZE);
-    let address = HEAP_VIRTUAL_MEMORY_ALLOCATOR
+    let token = HEAP_VIRTUAL_MEMORY_ALLOCATOR
         .lock()
         .allocate(allocated_size)
         .unwrap();
+    let address = token.address();
     for (virtual_block_address, physical_block_address) in (address..(address + allocated_size))
         .step_by(BLOCK_SIZE)
         .zip(
