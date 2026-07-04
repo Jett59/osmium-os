@@ -247,6 +247,8 @@ pub(in crate::arch) fn initialize_lower_half_table() {
             MemoryType::Normal,
             PagePermissions::KERNEL_READ_WRITE,
         );
+        // Zero it out
+        page_table_handle.fill(0);
         let final_entry: &mut [u8; 8] = (&mut page_table_handle[PAGE_SIZE - 8..])
             .try_into()
             .unwrap();
