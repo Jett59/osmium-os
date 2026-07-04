@@ -5,7 +5,7 @@ AS=clang -target $(ARCH)-unknown-elf
 ASFLAGS=-g
 
 libasm-$(ARCH).a: $(OBJECTS) Makefile
-	ar r $@ $(OBJECTS)
+	llvm-ar r $@ $(OBJECTS)
 
 %.o: %.S Makefile
 	$(AS) $(ASFLAGS) -c -o $@ $<
