@@ -11,7 +11,7 @@ use alloc::{collections::BTreeMap, string::String};
 use crate::{
     memory::{
         Array, DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
-        FromBytes, FromBytesError, ReservedMemory,
+        FromBytes, FromBytesError,
     },
     memory_struct,
 };
