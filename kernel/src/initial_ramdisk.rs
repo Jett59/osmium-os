@@ -11,7 +11,7 @@ use alloc::{collections::BTreeMap, string::String};
 use crate::{
     memory::{
         Array, DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
-        FromBytes, FromBytesError,
+        FromBytes, FromBytesError, ReservedMemory,
     },
     memory_struct,
 };
@@ -22,15 +22,21 @@ struct OctalString<const MAX_LENGTH: usize>(u32);
 impl<const MAX_LENGTH: usize> FromBytes<'_> for OctalString<MAX_LENGTH> {
     fn from_bytes(_endianness: Endianness, bytes: &[u8]) -> Result<Self, FromBytesError> {
         let mut result = 0;
+        let mut saw_digit = false;
         for byte in &bytes[..MAX_LENGTH] {
-            if *byte == 0 {
-                break;
+            match *byte {
+                b'0'..=b'7' => {
+                    result *= 8;
+                    result += (byte - b'0') as u32;
+                    saw_digit = true;
+                }
+                0 | b' ' => {
+                    if saw_digit {
+                        break;
+                    }
+                }
+                _ => return Err(FromBytesError::InvalidMemory),
             }
-            if *byte < b'0' || *byte > b'7' {
-                return Err(FromBytesError::InvalidMemory);
-            }
-            result *= 8;
-            result += (byte - b'0') as u32;
         }
         Ok(Self(result))
     }
@@ -111,6 +117,7 @@ pub fn read_initial_ramdisk(initial_ramdisk: &[u8]) -> BTreeMap<String, &[u8]> {
 mod test {
     use super::*;
 
+    #[test]
     fn octal_string_test() {
         let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"3210");
         assert!(octal_string.is_ok());
@@ -126,6 +133,19 @@ mod test {
         let octal_string = OctalString::<4>::from_bytes(Endianness::Native, b"12\x003");
         assert!(octal_string.is_ok());
         assert_eq!(octal_string.unwrap().0, 0o12); // The null terminator should stop it
+
+        let octal_string = OctalString::<8>::from_bytes(Endianness::Native, b"000755 \0");
+        assert!(octal_string.is_ok());
+        assert_eq!(octal_string.unwrap().0, 0o755);
+
+        let octal_string = OctalString::<8>::from_bytes(Endianness::Native, b"  0755\0\0");
+        assert!(octal_string.is_ok());
+        assert_eq!(octal_string.unwrap().0, 0o755);
+    }
+
+    #[test]
+    fn file_header_size_test() {
+        assert_eq!(FileHeader::SIZE, 512);
     }
 
     #[test]
