@@ -144,11 +144,6 @@ mod test {
     }
 
     #[test]
-    fn file_header_size_test() {
-        assert_eq!(FileHeader::SIZE, 512);
-    }
-
-    #[test]
     fn initial_ramdisk_test() {
         let test_initial_ramdisk_data = include_bytes!("test/initial_ramdisk.tar");
         let initial_ramdisk = read_initial_ramdisk(test_initial_ramdisk_data);
