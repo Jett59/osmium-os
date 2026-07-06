@@ -1,8 +1,9 @@
 use common::elf::{ElfBinary, LoadableSegment};
 
 use crate::{
-    paging::{change_block_permissions, MemoryType, PagePermissions},
-    user_memory::{allocate_user_memory_at, UserAddressSpaceHandle},
+    paging::{MemoryType, PagePermissions, change_permissions},
+    unsafe_impl::memory::{AllocatedMemoryToken, MemoryToken},
+    user_memory::{UserAddressSpaceHandle, allocate_user_memory_at},
 };
 
 /// # Safety
@@ -37,8 +38,14 @@ pub fn map_sections(elf: &ElfBinary, file: &[u8], address_space: &UserAddressSpa
         );
         unsafe { copy_elf_section(loadable_segment, file, address_space) };
         // Now set the permissions
-        change_block_permissions(
-            loadable_segment.virtual_address,
+        change_permissions(
+            // SAFETY: This is absolutely not safe.
+            unsafe {
+                AllocatedMemoryToken::new(
+                    loadable_segment.virtual_address,
+                    loadable_segment.size_in_memory,
+                )
+            },
             MemoryType::Normal,
             PagePermissions::new(true, loadable_segment.writable, loadable_segment.executable),
         );

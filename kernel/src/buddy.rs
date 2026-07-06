@@ -19,7 +19,7 @@ impl<T: MemoryToken> LeafBuddyEntry<T> {
     fn take_token(&mut self) -> Option<T> {
         if self.is_free() {
             let token_address = self.token.address();
-            let token = replace(&mut self.token, T::zero_sized(token_address));
+            let token = replace(&mut self.token, T::empty(token_address));
             Some(token)
         } else {
             None

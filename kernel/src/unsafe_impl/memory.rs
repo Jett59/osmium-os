@@ -1,4 +1,4 @@
-use core::ops::Deref;
+use core::{mem, ops::Deref};
 
 pub trait MemoryToken {
     /// The type of the token that is used to represent a view into this memory region.
@@ -12,7 +12,7 @@ pub trait MemoryToken {
     /// Note that zero-sized regions are valid, and impose no requirements on the caller.
     unsafe fn new(start: usize, size: usize) -> Self;
 
-    fn zero_sized(address: usize) -> Self
+    fn empty(address: usize) -> Self
     where
         Self: Sized,
     {
@@ -22,6 +22,14 @@ pub trait MemoryToken {
 
     fn address(&self) -> usize;
     fn size(&self) -> usize;
+
+    /// Returns `self`, replacing `self` with an empty token at the same address.
+    fn take(&mut self) -> Self
+    where
+        Self: Sized,
+    {
+        mem::replace(self, Self::empty(self.address()))
+    }
 
     fn split_at(self, split_at: usize) -> (Self, Self)
     where
@@ -36,6 +44,16 @@ pub trait MemoryToken {
         (first, second)
     }
 
+    fn chunks(self, chunk_size: usize) -> MemoryTokenChunks<Self>
+    where
+        Self: Sized,
+    {
+        MemoryTokenChunks {
+            remaining_token: self,
+            chunk_size,
+        }
+    }
+
     fn merge(self, other: Self) -> Self
     where
         Self: Sized,
@@ -47,19 +65,44 @@ pub trait MemoryToken {
         unsafe { Self::new(self.address(), self.size() + other.size()) }
     }
 
-    fn view(&self, start: usize, size: usize) -> MemoryTokenView<'_, Self, Self::ViewToken>
+    fn view(&self, offset: usize, size: usize) -> MemoryTokenView<'_, Self, Self::ViewToken>
     where
         Self: Sized,
     {
         assert!(
-            start >= self.address()
-                && size <= self.size()
-                && start + size <= self.address() + self.size(),
+            size <= self.size() && offset + size <= self.size(),
             "view must be within the memory region"
         );
         // SAFETY: `view` is passed directly into the `MemoryTokenView` struct, which ensures that it cannot outlive the original token.
-        let view = unsafe { Self::ViewToken::new(start, size) };
+        let view = unsafe { Self::ViewToken::new(self.address() + offset, size) };
         MemoryTokenView { token: self, view }
+    }
+}
+
+/// An iterator over chunks of a `MemoryToken`.
+pub struct MemoryTokenChunks<Token: MemoryToken> {
+    remaining_token: Token,
+    chunk_size: usize,
+}
+
+impl<Token: MemoryToken> Iterator for MemoryTokenChunks<Token> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining_token.size() == 0 {
+            return None;
+        }
+        let chunk_size = self.chunk_size.min(self.remaining_token.size());
+        let remaining_token = self.remaining_token.take();
+        let (chunk, remaining) = remaining_token.split_at(chunk_size);
+        self.remaining_token = remaining;
+        Some(chunk)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining_size = self.remaining_token.size();
+        let num_chunks = remaining_size.div_ceil(self.chunk_size);
+        (num_chunks, Some(num_chunks))
     }
 }
 
@@ -86,6 +129,7 @@ impl<'a, Token: MemoryToken, View: MemoryToken> Deref for MemoryTokenView<'a, To
 
 /// Represents ownership of an unused block of physical memory.
 /// Paging code consumes this type to prevent double-allocation.
+#[must_use]
 pub struct PhysicalMemoryToken {
     start: usize,
     size: usize,
@@ -108,6 +152,7 @@ impl MemoryToken for PhysicalMemoryToken {
 }
 
 /// Represents ownership of an unallocated block of virtual memory.
+#[must_use]
 pub struct VirtualMemoryToken {
     start: usize,
     size: usize,
@@ -132,6 +177,7 @@ impl MemoryToken for VirtualMemoryToken {
 /// Represents ownership of an allocated block of normal memory.
 /// This is more-or-less equivalent to a `Box<[u8]`, except that it is not automatically de-allocated when dropped, and it may not correspond to a heap allocation.
 /// It is not suitable for MMIO, as it dereferences into a byte slice.
+#[must_use]
 pub struct AllocatedMemoryToken {
     start: usize,
     size: usize,
@@ -232,8 +278,8 @@ pub mod test {
     #[test]
     fn test_view() {
         let token = TestMemoryToken::safe_new(0x4000, 0x1000);
-        let view = token.view(0x4800, 0x400);
+        let view = token.view(0x800, 0x400);
         assert_eq!(view.address(), 0x4800);
-        assert_eq!(view.size(), 0x400); 
+        assert_eq!(view.size(), 0x400);
     }
 }

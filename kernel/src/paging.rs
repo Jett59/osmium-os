@@ -1,5 +1,7 @@
-pub use crate::arch_api::paging::{get_physical_address, map_page, unmap_page, PAGE_SIZE};
-use crate::physical_memory_manager::PAGES_PER_BLOCK;
+pub use crate::arch_api::paging::{PAGE_SIZE, create_page_mapping, take_page_mapping};
+use crate::unsafe_impl::memory::{
+    AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MemoryType {
@@ -56,44 +58,76 @@ impl PagePermissions {
     };
 }
 
-pub fn map_block(
-    virtual_address: usize,
-    physical_address: usize,
+pub fn create_mapping(
     memory_type: MemoryType,
     permissions: PagePermissions,
-) {
-    for i in 0..PAGES_PER_BLOCK {
-        map_page(
-            virtual_address + i * PAGE_SIZE,
-            physical_address + i * PAGE_SIZE,
-            memory_type,
-            permissions,
-        );
+    physical_address: PhysicalMemoryToken,
+    virtual_address: VirtualMemoryToken,
+) -> AllocatedMemoryToken {
+    assert!(
+        virtual_address.address().is_multiple_of(PAGE_SIZE),
+        "Virtual address must be page-aligned"
+    );
+    assert!(
+        physical_address.address().is_multiple_of(PAGE_SIZE),
+        "Physical address must be page-aligned"
+    );
+    assert_eq!(
+        virtual_address.size(),
+        physical_address.size(),
+        "Virtual and physical addresses must have the same size"
+    );
+    if virtual_address.size() == 0 {
+        return AllocatedMemoryToken::empty(virtual_address.address());
     }
+    virtual_address
+        .chunks(PAGE_SIZE)
+        .zip(physical_address.chunks(PAGE_SIZE))
+        .map(|(virtual_page, physical_page)| {
+            create_page_mapping(memory_type, permissions, physical_page, virtual_page)
+        })
+        .reduce(MemoryToken::merge)
+        .unwrap()
 }
 
-pub fn unmap_block(virtual_address: usize) {
-    for i in 0..PAGES_PER_BLOCK {
-        unmap_page(virtual_address + i * PAGE_SIZE);
-    }
+/// # Panics
+/// Panics if the allocated address is not page-aligned or has a size of 0
+/// Also panics if the address is not allocated to a contiguous range of physical memory.
+pub fn take_mapping(
+    allocated_address: AllocatedMemoryToken,
+) -> (PhysicalMemoryToken, VirtualMemoryToken) {
+    assert!(
+        allocated_address.address().is_multiple_of(PAGE_SIZE),
+        "Allocated address must be page-aligned"
+    );
+    assert_ne!(
+        allocated_address.size(),
+        0,
+        "Allocated address must have a non-zero size"
+    );
+    allocated_address
+        .chunks(PAGE_SIZE)
+        .map(take_page_mapping)
+        .reduce(|(phys_acc, virt_acc), (phys_page, virt_page)| {
+            (phys_acc.merge(phys_page), virt_acc.merge(virt_page))
+        })
+        .unwrap()
 }
 
 pub fn change_page_permissions(
-    virtual_address: usize,
+    allocated_address: AllocatedMemoryToken,
     memory_type: MemoryType,
     permissions: PagePermissions,
-) {
-    let physical_address = get_physical_address(virtual_address);
-    unmap_page(virtual_address);
-    map_page(virtual_address, physical_address, memory_type, permissions);
+) -> AllocatedMemoryToken {
+    let (physical_address, virtual_address) = take_page_mapping(allocated_address);
+    create_page_mapping(memory_type, permissions, physical_address, virtual_address)
 }
 
-pub fn change_block_permissions(
-    virtual_address: usize,
+pub fn change_permissions(
+    allocated_memory: AllocatedMemoryToken,
     memory_type: MemoryType,
     permissions: PagePermissions,
-) {
-    for i in 0..PAGES_PER_BLOCK {
-        change_page_permissions(virtual_address + i * PAGE_SIZE, memory_type, permissions);
-    }
+) -> AllocatedMemoryToken {
+    let (physical_address, virtual_address) = take_mapping(allocated_memory);
+    create_mapping(memory_type, permissions, physical_address, virtual_address)
 }

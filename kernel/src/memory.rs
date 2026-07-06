@@ -15,8 +15,8 @@ pub enum Endianness {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FromBytesError {
-    InvalidSize,
-    InvalidMemory,
+    InvalidSize { actual: usize, expected: usize },
+    InvalidMemory(&'static str),
 }
 
 pub trait FromBytes<'lifetime>: Sized {
@@ -30,15 +30,28 @@ macro_rules! impl_from_bytes {
         impl FromBytes<'_> for $type {
             fn from_bytes(endianness: Endianness, bytes: &[u8]) -> Result<Self, FromBytesError> {
                 match endianness {
-                    Endianness::Little => Ok(Self::from_le_bytes(
-                        bytes.try_into().map_err(|_| FromBytesError::InvalidSize)?,
-                    )),
-                    Endianness::Big => Ok(Self::from_be_bytes(
-                        bytes.try_into().map_err(|_| FromBytesError::InvalidSize)?,
-                    )),
-                    Endianness::Native => Ok(Self::from_ne_bytes(
-                        bytes.try_into().map_err(|_| FromBytesError::InvalidSize)?,
-                    )),
+                    Endianness::Little => {
+                        Ok(Self::from_le_bytes(bytes.try_into().map_err(|_| {
+                            FromBytesError::InvalidSize {
+                                actual: bytes.len(),
+                                expected: Self::SIZE,
+                            }
+                        })?))
+                    }
+                    Endianness::Big => Ok(Self::from_be_bytes(bytes.try_into().map_err(|_| {
+                        FromBytesError::InvalidSize {
+                            actual: bytes.len(),
+                            expected: Self::SIZE,
+                        }
+                    })?)),
+                    Endianness::Native => {
+                        Ok(Self::from_ne_bytes(bytes.try_into().map_err(|_| {
+                            FromBytesError::InvalidSize {
+                                actual: bytes.len(),
+                                expected: Self::SIZE,
+                            }
+                        })?))
+                    }
                 }
             }
 
@@ -70,7 +83,10 @@ where
 {
     fn from_bytes(endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError> {
         if bytes.len() < N * T::SIZE {
-            return Err(FromBytesError::InvalidSize);
+            return Err(FromBytesError::InvalidSize {
+                actual: bytes.len(),
+                expected: N * T::SIZE,
+            });
         }
         Ok(Self {
             data: bytes,
@@ -145,7 +161,10 @@ macro_rules! memory_struct {
         {
             fn from_bytes(endianness: $crate::memory::Endianness, bytes: &'lifetime [u8]) -> Result<Self, $crate::memory::FromBytesError> {
                 if bytes.len() < Self::SIZE {
-                    return Err($crate::memory::FromBytesError::InvalidSize);
+                    return Err($crate::memory::FromBytesError::InvalidSize {
+                        actual: bytes.len(),
+                        expected: Self::SIZE,
+                    });
                 }
                 Ok(Self {
                     memory: bytes,
@@ -188,7 +207,8 @@ macro_rules! __internal_memory_struct_accessors {
         $visibility fn $field_name(&self) -> $field_type {
             let offset = $offset_acc;
             let bytes = &self.memory[offset..offset + <$field_type as $crate::memory::FromBytes>::SIZE];
-            let value = $crate::memory::FromBytes::from_bytes(self.endianness, bytes).unwrap();
+            // Error message should include the field name and type for easier debugging.
+            let value = $crate::memory::FromBytes::from_bytes(self.endianness, bytes).expect(&alloc::format!("Failed to parse field {} of type {} from memory", stringify!($field_name), stringify!($field_type)));
             value
         }
         $crate::__internal_memory_struct_accessors!{$visibility, ($offset_acc + <$field_type as $crate::memory::FromBytes>::SIZE), $($extra_field_names: $extra_field_types),*}
@@ -222,9 +242,14 @@ pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
 impl<'lifetime, T: Validateable> FromBytes<'lifetime> for &'lifetime T {
     fn from_bytes(_endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError> {
         if bytes.len() < core::mem::size_of::<T>() {
-            return Err(FromBytesError::InvalidSize);
+            return Err(FromBytesError::InvalidSize {
+                actual: bytes.len(),
+                expected: core::mem::size_of::<T>(),
+            });
         }
-        Ok(unsafe { reinterpret_memory(bytes).ok_or(FromBytesError::InvalidMemory)? })
+        Ok(unsafe {
+            reinterpret_memory(bytes).ok_or(FromBytesError::InvalidMemory("Validation failed"))?
+        })
     }
 
     const SIZE: usize = size_of::<T>();

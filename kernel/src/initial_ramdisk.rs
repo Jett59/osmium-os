@@ -35,7 +35,11 @@ impl<const MAX_LENGTH: usize> FromBytes<'_> for OctalString<MAX_LENGTH> {
                         break;
                     }
                 }
-                _ => return Err(FromBytesError::InvalidMemory),
+                _ => {
+                    return Err(FromBytesError::InvalidMemory(
+                        "Unknown character in octal string",
+                    ));
+                }
             }
         }
         Ok(Self(result))

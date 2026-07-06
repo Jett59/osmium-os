@@ -12,9 +12,11 @@ use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
     memory::align_address_up,
-    paging::{MemoryType, PagePermissions, get_physical_address, map_block, unmap_block},
+    paging::{MemoryType, PagePermissions, create_mapping, take_mapping},
     physical_memory_manager::{self, BLOCK_SIZE, LOG2_BLOCK_SIZE, mark_as_free},
-    unsafe_impl::memory::{MemoryToken, VirtualMemoryToken},
+    unsafe_impl::memory::{
+        AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
+    },
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -100,27 +102,25 @@ impl SlabAllocator {
         if let Some(virtual_address) = virtual_address {
             let physical_address = physical_memory_manager::allocate_block_address();
             if let Some(physical_address) = physical_address {
-                map_block(
-                    virtual_address.address(),
-                    physical_address,
+                let allocated_address = create_mapping(
                     MemoryType::Normal,
                     PagePermissions::KERNEL_READ_WRITE,
+                    // SAFETY: this comes from the PMM, so it guaranteed to be a uniquely owned physical address.
+                    unsafe { PhysicalMemoryToken::new(physical_address, 65536) },
+                    virtual_address,
                 );
-                return virtual_address.address() as *mut SlabEntry<SIZE>;
+                return allocated_address.address() as *mut SlabEntry<SIZE>;
             }
         }
         panic!("Out of memory allocating slab entry block");
     }
 
     fn free_entry_list<const SIZE: usize>(entry_list: *mut SlabEntry<SIZE>) {
-        let virtual_address = entry_list as usize;
-        let physical_address = get_physical_address(virtual_address);
-        unmap_block(virtual_address);
-        mark_as_free(physical_address);
-        HEAP_VIRTUAL_MEMORY_ALLOCATOR
-            .lock()
-            // SAFETY: this is not really safe unfortunately :(
-            .free(unsafe { VirtualMemoryToken::new(virtual_address, BLOCK_SIZE) });
+        // SAFETY: this is not safe :(
+        let allocated_token = unsafe { AllocatedMemoryToken::new(entry_list as usize, BLOCK_SIZE) };
+        let (physical_address, virtual_address) = take_mapping(allocated_token);
+        mark_as_free(physical_address.address());
+        HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
     }
 
     /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
@@ -237,16 +237,17 @@ unsafe impl GlobalAlloc for HeapAllocator {
         assert!(layout.align() <= size);
         if size >= BLOCK_SIZE {
             let token = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(size);
-            let address = token.map(|token| token.address());
-            if let Some(address) = address {
-                for virtual_block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
+            if let Some(token) = token {
+                let address = token.address();
+                for block in token.chunks(BLOCK_SIZE) {
                     let physical_block_address = physical_memory_manager::allocate_block_address();
                     if let Some(physical_address) = physical_block_address {
-                        map_block(
-                            virtual_block_address,
-                            physical_address,
+                        create_mapping(
                             MemoryType::Normal,
                             PagePermissions::KERNEL_READ_WRITE,
+                            // SAFETY: this comes from the PMM, so it is guaranteed to be a uniquely owned physical address.
+                            unsafe { PhysicalMemoryToken::new(physical_address, BLOCK_SIZE) },
+                            block,
                         );
                     } else {
                         // TODO: fix the memory leak
@@ -284,16 +285,17 @@ unsafe impl GlobalAlloc for HeapAllocator {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
         let address = ptr as usize;
         let size = layout.size().next_power_of_two();
+        // SAFETY: the pointer and size are guaranteed to be valid and owned by the caller, so this is safe.
+        let token = unsafe { AllocatedMemoryToken::new(address, size) };
         // Same logic as above.
         if size >= BLOCK_SIZE {
-            for block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
-                mark_as_free(get_physical_address(block_address));
-                unmap_block(block_address);
+            let mut virtual_address = VirtualMemoryToken::empty(address);
+            for block in token.chunks(BLOCK_SIZE) {
+                let (this_physical_address, this_virtual_address) = take_mapping(block);
+                mark_as_free(this_physical_address.address());
+                virtual_address = virtual_address.merge(this_virtual_address);
             }
-            // SAFETY: the allocator API ensures that the pointer and size are valid and owned by the caller, so this is safe.
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR
-                .lock()
-                .free(unsafe { VirtualMemoryToken::new(address, size) });
+            HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
         } else {
             let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // Again, we have to match on the size.
@@ -319,40 +321,42 @@ unsafe impl GlobalAlloc for HeapAllocator {
 }
 
 pub struct PhysicalAddressHandle {
-    base_pointer: *mut u8,
-    allocated_size: usize,
-    pointer: *mut u8,
+    allocation: AllocatedMemoryToken,
+    trailing_virtual_memory: VirtualMemoryToken,
+    offset: usize,
     size: usize,
 }
 
 impl PhysicalAddressHandle {
     pub fn as_slice(handle: &Self) -> &[u8] {
-        // # Safety
-        // It is safe to construct a slice from the pointer and size the memory pointed to by handle.pointer is guaranteed to be at least handle.size bytes.
-        unsafe { core::slice::from_raw_parts(handle.pointer, handle.size) }
+        let view = handle.allocation.view(handle.offset, handle.size);
+        let view_pointer = view.address() as *const u8;
+        // SAFETY: the user owns the allocation, so it is safe to get a slice into it.
+        unsafe { core::slice::from_raw_parts(view_pointer, view.size()) }
     }
 
     pub fn as_slice_mut(handle: &mut Self) -> &mut [u8] {
-        // # Safety
-        // See above.
-        unsafe { core::slice::from_raw_parts_mut(handle.pointer, handle.size) }
+        let view = handle.allocation.view(handle.offset, handle.size);
+        let view_pointer = view.address() as *mut u8;
+        // SAFETY: the user owns the allocation, so it is safe to get a slice into it.
+        unsafe { core::slice::from_raw_parts_mut(view_pointer, view.size()) }
     }
 
     pub fn leak(handle: Self) -> &'static mut [u8] {
-        let data_pointer = handle.pointer;
-        let data_size = handle.size;
+        let view = handle.allocation.view(handle.offset, handle.size);
+        let data_pointer = view.address() as *mut u8;
+        let data_size = view.size();
         core::mem::forget(handle);
-        // # Safety
-        // See above.
+        // SAFETY: See above.
         unsafe { core::slice::from_raw_parts_mut(data_pointer, data_size) }
     }
 
     pub fn as_ptr(handle: &Self) -> *const u8 {
-        handle.pointer as *const u8
+        handle.allocation.view(handle.offset, handle.size).address() as *const u8
     }
 
     pub fn as_mut_ptr(handle: &mut Self) -> *mut u8 {
-        handle.pointer
+        handle.allocation.view(handle.offset, handle.size).address() as *mut u8
     }
 
     pub fn size(handle: &Self) -> usize {
@@ -376,7 +380,7 @@ impl DerefMut for PhysicalAddressHandle {
 
 impl Drop for PhysicalAddressHandle {
     fn drop(&mut self) {
-        unmap_physical_memory(self.base_pointer, self.allocated_size);
+        take_mapping(self.allocation.take());
     }
 }
 
@@ -396,37 +400,21 @@ pub unsafe fn map_physical_memory(
     let offset_from_block = physical_address % BLOCK_SIZE;
     let aligned_physical_address = physical_address - offset_from_block;
     let allocated_size = align_address_up(size + offset_from_block, BLOCK_SIZE);
-    let token = HEAP_VIRTUAL_MEMORY_ALLOCATOR
+    // SAFETY: this is not safe at all, but what can you do?
+    let physical_memory =
+        unsafe { PhysicalMemoryToken::new(aligned_physical_address, allocated_size) };
+    let virtual_memory = HEAP_VIRTUAL_MEMORY_ALLOCATOR
         .lock()
         .allocate(allocated_size)
         .unwrap();
-    let address = token.address();
-    for (virtual_block_address, physical_block_address) in (address..(address + allocated_size))
-        .step_by(BLOCK_SIZE)
-        .zip(
-            (aligned_physical_address..(aligned_physical_address + allocated_size))
-                .step_by(BLOCK_SIZE),
-        )
-    {
-        map_block(
-            virtual_block_address,
-            physical_block_address,
-            memory_type,
-            permissions,
-        );
-    }
+    // The buddy allocator sometimes (often) gives us a token which is larger than requested.
+    let (virtual_memory, trailing_virtual_memory) = virtual_memory.split_at(allocated_size);
+    let allocation = create_mapping(memory_type, permissions, physical_memory, virtual_memory);
     PhysicalAddressHandle {
-        base_pointer: address as *mut u8,
-        allocated_size,
-        pointer: (address + offset_from_block) as *mut u8,
+        allocation,
+        trailing_virtual_memory,
+        offset: offset_from_block,
         size,
-    }
-}
-
-fn unmap_physical_memory(pointer: *mut u8, size: usize) {
-    let address = pointer as usize;
-    for block_address in (address..(address + size)).step_by(BLOCK_SIZE) {
-        unmap_block(block_address);
     }
 }
 
