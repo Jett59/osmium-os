@@ -1,13 +1,15 @@
 use core::marker::PhantomData;
 
 use crate::{
-    arch_api::paging::is_valid_user_address, paging::{MemoryType, PagePermissions, create_mapping}, physical_memory_manager::{BLOCK_SIZE, allocate_block_address}, unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken, VirtualMemoryToken},
+    arch_api::paging::is_valid_user_address,
+    paging::{MemoryType, PagePermissions, create_mapping},
+    physical_memory_manager::{BLOCK_SIZE, allocate_block_address},
+    unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken, VirtualMemoryToken},
 };
 
 pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions: PagePermissions) {
-    assert_eq!(
-        virtual_address % BLOCK_SIZE,
-        0,
+    assert!(
+        virtual_address.is_multiple_of(BLOCK_SIZE),
         "virtual_address must be BLOCK_SIZE aligned"
     );
     assert!(
@@ -20,8 +22,10 @@ pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions:
         "Invalid virtual address {}",
         virtual_address + size
     );
-    // SAFETY: this is not safe :(
-    let virtual_memory = unsafe { VirtualMemoryToken::new(virtual_address, size) };
+    // SAFETY: this is not safe at all :(
+    // See https://github.com/jett59/osmium-os/issues/23
+    let virtual_memory =
+        unsafe { VirtualMemoryToken::new(virtual_address, size.next_multiple_of(BLOCK_SIZE)) };
 
     for virtual_block in virtual_memory.chunks(BLOCK_SIZE) {
         let physical_address = allocate_block_address().expect("Out of memory");
