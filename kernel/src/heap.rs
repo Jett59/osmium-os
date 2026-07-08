@@ -380,7 +380,8 @@ impl DerefMut for PhysicalAddressHandle {
 
 impl Drop for PhysicalAddressHandle {
     fn drop(&mut self) {
-        take_mapping(self.allocation.take());
+        let (_, virtual_address) = take_mapping(self.allocation.take());
+        HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
     }
 }
 

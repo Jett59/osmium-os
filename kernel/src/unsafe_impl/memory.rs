@@ -282,4 +282,39 @@ pub mod test {
         assert_eq!(view.address(), 0x4800);
         assert_eq!(view.size(), 0x400);
     }
+
+    #[test]
+    fn test_chunks() {
+        let token = TestMemoryToken::safe_new(0x5000, 0x1000);
+        let mut chunks = token.chunks(0x400);
+        let first_chunk = chunks.next().unwrap();
+        assert_eq!(first_chunk.address(), 0x5000);
+        assert_eq!(first_chunk.size(), 0x400);
+        let second_chunk = chunks.next().unwrap();
+        assert_eq!(second_chunk.address(), 0x5400);
+        assert_eq!(second_chunk.size(), 0x400);
+        let third_chunk = chunks.next().unwrap();
+        assert_eq!(third_chunk.address(), 0x5800);
+        assert_eq!(third_chunk.size(), 0x400);
+        let fourth_chunk = chunks.next().unwrap();
+        assert_eq!(fourth_chunk.address(), 0x5C00);
+        assert_eq!(fourth_chunk.size(), 0x400);
+        assert!(chunks.next().is_none());
+    }
+
+    #[test]
+    fn test_chunks_not_exact() {
+        let token = TestMemoryToken::safe_new(0x5000, 0x1000);
+        let mut chunks = token.chunks(0x600);
+        let first_chunk = chunks.next().unwrap();
+        assert_eq!(first_chunk.address(), 0x5000);
+        assert_eq!(first_chunk.size(), 0x600);
+        let second_chunk = chunks.next().unwrap();
+        assert_eq!(second_chunk.address(), 0x5600);
+        assert_eq!(second_chunk.size(), 0x600);
+        let third_chunk = chunks.next().unwrap();
+        assert_eq!(third_chunk.address(), 0x5C00);
+        assert_eq!(third_chunk.size(), 0x400);
+        assert!(chunks.next().is_none());
+    }
 }

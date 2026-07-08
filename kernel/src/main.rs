@@ -2,11 +2,7 @@
 // This whole no_main thing gets rather complicated when we want to support unit tests. See the (seemingly) random cfg attributes and other weirdness in this file and others (like skipping checks which won't work in the test environment etc.).
 #![cfg_attr(not(test), no_main)]
 // Lets just hope these aren't as unstable as the language says they are (it would be a pain to have to change everywhere one of these is used)
-#![feature(
-    generic_const_exprs,
-    const_trait_impl,
-    iter_array_chunks,
-)]
+#![feature(generic_const_exprs, const_trait_impl, iter_array_chunks)]
 // Shut up the compiler about const generic expressions.
 #![allow(incomplete_features)]
 // While I don't enjoy surpressing warnings, I think that this particular warning is unnecessary at this stage of development. It would be more useful when the basic components are in place and working.

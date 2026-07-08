@@ -30,7 +30,7 @@ SECTIONS {
     }
     .bss : ALIGN(4k) {
         kernel_stack_start = .;
-        . += 8192;
+        . += 65536;
         kernel_stack_end = .;
         *(.bss*)
     }

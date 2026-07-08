@@ -156,8 +156,11 @@ pub const MAX_PHYSICAL_MEMORY: usize = 0x1000000000;
 
 pub const BLOCK_COUNT: usize = MAX_PHYSICAL_MEMORY / BLOCK_SIZE;
 
-pub fn get_block_index(address: usize) -> usize {
+pub fn get_block_index_down(address: usize) -> usize {
     address / BLOCK_SIZE
+}
+pub fn get_block_index_up(address: usize) -> usize {
+    get_block_index_down(address + BLOCK_SIZE - 1)
 }
 
 pub fn get_address(block_index: usize) -> usize {
@@ -167,19 +170,33 @@ pub fn get_address(block_index: usize) -> usize {
 pub static GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
 
 pub fn mark_as_free(address: usize) {
-    GLOBAL_PMM.mark_as_free(get_block_index(address));
+    assert!(
+        address.is_multiple_of(BLOCK_SIZE),
+        "Address must be BLOCK_SIZE aligned"
+    );
+    GLOBAL_PMM.mark_as_free(get_block_index_down(address));
 }
 
 pub fn mark_as_used(address: usize) {
-    GLOBAL_PMM.mark_as_used(get_block_index(address));
+    assert!(
+        address.is_multiple_of(BLOCK_SIZE),
+        "Address must be BLOCK_SIZE aligned"
+    );
+    GLOBAL_PMM.mark_as_used(get_block_index_down(address));
 }
 
 pub fn mark_range_as_free(start_address: usize, end_address: usize) {
-    GLOBAL_PMM.mark_range_as_free(get_block_index(start_address), get_block_index(end_address));
+    GLOBAL_PMM.mark_range_as_free(
+        get_block_index_up(start_address),
+        get_block_index_down(end_address),
+    );
 }
 
 pub fn mark_range_as_used(start_address: usize, end_address: usize) {
-    GLOBAL_PMM.mark_range_as_used(get_block_index(start_address), get_block_index(end_address));
+    GLOBAL_PMM.mark_range_as_used(
+        get_block_index_down(start_address),
+        get_block_index_up(end_address),
+    );
 }
 
 pub fn allocate_block_address() -> Option<usize> {
