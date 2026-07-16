@@ -249,10 +249,13 @@ unsafe fn create_page_table(indices: PageTableIndices, _lock: &mut Lock) {
         | PageTableFlags::NOT_BLOCK
         | PageTableFlags::ACCESS
         | PageTableFlags::NORMAL_MEMORY;
+    let entry = flags.bits() | (physical_page_table.address() as u64 & PHYSICAL_PAGE_MASK);
     // SAFETY: the caller ensured that the parent page table is present.
     // We hold the lock, so there is no chance of data races.
     // So long as we zero out the page table before releasing the lock, this will not create any extraneous mappings.
-    unsafe { *entry_address = flags.bits() | physical_page_table.address() as u64 };
+    unsafe { *entry_address = entry };
+        asm::dsb_ish();
+    asm::isb();
 
     let page_table_address = indices.calculate_child_page_table_address();
     // SAFETY: it is guaranteed that the page table now exists, and we still hold the lock.
