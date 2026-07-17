@@ -1,5 +1,5 @@
 FROM alpine:latest
 
-RUN apk add --no-cache grub-bios xorriso
+RUN apk add --no-cache grub-bios grub-efi mtools xorriso
 
-CMD ["grub-mkrescue", "-d", "/usr/lib/grub/i386-pc", "-o", "/build/osmium.iso", "/build/isoroot"]
+CMD ["grub-mkrescue", "-o", "/build/osmium.iso", "/build/isoroot"]
