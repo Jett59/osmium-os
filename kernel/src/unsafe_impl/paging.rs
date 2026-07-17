@@ -558,7 +558,7 @@ pub mod init {
                 indices.calculate_page_table_entry_address(),
                 0,
                 true,
-                Some(0x7fff_ffff_ffff),
+                Some(0xffff_ff80_0000_0000),
             );
         }
     }
