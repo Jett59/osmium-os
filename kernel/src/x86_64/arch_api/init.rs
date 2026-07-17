@@ -3,9 +3,10 @@ use core::ptr::addr_of;
 use crate::{
     arch::{interrupts, syscall, task_state_segment},
     memory, physical_memory_manager,
+    unsafe_impl::paging::init::initialize_paging,
 };
 
-use super::{super::multiboot, paging};
+use super::super::multiboot;
 
 #[cfg(not(test))]
 unsafe extern "C" {
@@ -37,7 +38,7 @@ pub fn arch_init() {
             physical_memory_manager::BLOCK_SIZE,
         ),
     );
-    paging::initialize_paging();
+    initialize_paging();
 
     task_state_segment::initialize(unsafe { addr_of!(stack_end) as u64 });
     syscall::initialize(unsafe { addr_of!(stack_end) } as *mut u8);

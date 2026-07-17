@@ -9,11 +9,6 @@ pub mod initial_ramdisk {
     pub use crate::unsafe_impl::arch::initial_ramdisk::*;
 }
 pub mod irq;
-pub mod paging {
-    pub use crate::unsafe_impl::arch::paging::{
-        PAGE_SIZE, create_page_mapping, is_valid_user_address, take_page_mapping,
-    };
-}
 pub mod timer;
 pub mod user_mode {
     pub use crate::unsafe_impl::arch::user_mode::*;

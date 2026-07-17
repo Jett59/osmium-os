@@ -1,6 +1,8 @@
-pub use crate::arch_api::paging::{PAGE_SIZE, create_page_mapping, take_page_mapping};
 use crate::unsafe_impl::memory::{
     AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
+};
+pub use crate::unsafe_impl::paging::{
+    PAGE_SIZE, create_page_mapping, is_valid_user_address, take_page_mapping,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
