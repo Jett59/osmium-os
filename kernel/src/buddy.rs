@@ -1,5 +1,3 @@
-use core::mem::replace;
-
 use crate::unsafe_impl::memory::MemoryToken;
 
 struct LeafBuddyEntry<T: MemoryToken> {
@@ -18,9 +16,7 @@ impl<T: MemoryToken> LeafBuddyEntry<T> {
 
     fn take_token(&mut self) -> Option<T> {
         if self.is_free() {
-            let token_address = self.token.address();
-            let token = replace(&mut self.token, T::empty(token_address));
-            Some(token)
+            Some(self.token.take())
         } else {
             None
         }
@@ -102,6 +98,8 @@ pub struct BuddyAllocator<
     free_indices_for_orders: [Option<u32>; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
     allocated_indices_for_orders: [Option<u32>; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
     unused_entries: Option<u32>,
+    // All entries after this are assumed to be uninitialized
+    uninitialized_entries: u32, // out-of-bounds if all are initialized
 }
 
 impl<T: MemoryToken, const CAPACITY: usize, const HIGHEST_ORDER: u8, const LOWEST_ORDER: u8>
@@ -111,12 +109,10 @@ where
 {
     const NON_EXISTANT_INDEX: u32 = u32::MAX;
 
-    /// Creates a buddy allocator which has all elements initialized to zero and all indices None.
-    /// This is a good state in which to call .all_unused(), which initializes the unused indices properly.
-    /// The reason why this not the default is that initializing with zeros allows for storage in the BSS section (good for large buddy allocators).
-    /// Additionally, using assignment would mean (potentially) having to store one of these things on the stack, which may be impossible for large ones. Using a builder-style interface is the best I can think of.
-    pub const fn unusable() -> Self {
-        // Stupid const rules force us to do this as a separate function
+    /// Creates an empty buddy allocator.
+    /// Previous implementations led to unusable allocators, but this is no longer the case and the result can be immediately used.
+    pub const fn new() -> Self {
+        // Stupid const rules force us to do this as a separate function because of the generic type
         const fn construct_unusable<T: MemoryToken>() -> BuddyEntry<T> {
             BuddyEntry::<T>::Uninitialized
         }
@@ -125,27 +121,8 @@ where
             free_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             allocated_indices_for_orders: [None; (HIGHEST_ORDER - LOWEST_ORDER + 1) as usize],
             unused_entries: None,
+            uninitialized_entries: 0,
         }
-    }
-
-    pub fn all_unused(&mut self) -> &mut Self {
-        self.unused_entries = Some(0);
-        // Initialize the middle entries separately for simplicity.
-        self.entries[0] = BuddyEntry::Unused(UnusedBuddyEntry {
-            next: 1,
-            previous: Self::NON_EXISTANT_INDEX,
-        });
-        for i in 1..CAPACITY - 1 {
-            self.entries[i] = BuddyEntry::Unused(UnusedBuddyEntry {
-                next: (i + 1) as u32,
-                previous: (i - 1) as u32,
-            });
-        }
-        self.entries[CAPACITY - 1] = BuddyEntry::Unused(UnusedBuddyEntry {
-            next: Self::NON_EXISTANT_INDEX,
-            previous: (CAPACITY - 2) as u32,
-        });
-        self
     }
 
     fn get_order(size: usize) -> u8 {
@@ -175,7 +152,6 @@ where
     fn remove_from_free_list(&mut self, index: u32) {
         let LeafBuddyEntry {
             order,
-            token,
             next_of_this_size,
             previous_of_this_size,
             ..
@@ -203,17 +179,28 @@ where
     }
 
     fn find_unused_index(&mut self) -> u32 {
-        let unused_indices = self.unused_entries.expect("Buddy allocator full!");
-        let first_unused_entry = *self.entries[unused_indices as usize].as_unused();
-        if first_unused_entry.next != Self::NON_EXISTANT_INDEX {
-            let second_unused_entry =
-                self.entries[first_unused_entry.next as usize].as_unused_mut();
-            second_unused_entry.previous = Self::NON_EXISTANT_INDEX;
-            self.unused_entries = Some(first_unused_entry.next);
+        if let Some(unused_indices) = self.unused_entries {
+            let first_unused_entry = *self.entries[unused_indices as usize].as_unused();
+            if first_unused_entry.next != Self::NON_EXISTANT_INDEX {
+                let second_unused_entry =
+                    self.entries[first_unused_entry.next as usize].as_unused_mut();
+                second_unused_entry.previous = Self::NON_EXISTANT_INDEX;
+                self.unused_entries = Some(first_unused_entry.next);
+            } else {
+                self.unused_entries = None;
+            }
+            unused_indices
+        } else if self.uninitialized_entries < CAPACITY as u32 {
+            let index = self.uninitialized_entries;
+            self.uninitialized_entries += 1;
+            self.entries[index as usize] = BuddyEntry::Unused(UnusedBuddyEntry {
+                next: Self::NON_EXISTANT_INDEX,
+                previous: Self::NON_EXISTANT_INDEX,
+            });
+            index
         } else {
-            self.unused_entries = None;
+            panic!("Buddy allocator full!");
         }
-        unused_indices
     }
 
     pub fn add_entry(&mut self, token: T) -> &mut Self {
@@ -390,7 +377,6 @@ where
         while let Some(index) = optional_index {
             let LeafBuddyEntry {
                 sibling: sibling_index,
-                token,
                 parent: parent_index,
                 ..
             } = self.entries[index as usize].as_leaf();
@@ -493,8 +479,7 @@ mod test {
 
     #[test]
     fn test_buddy_allocator() {
-        let mut allocator: BuddyAllocator<TestMemoryToken, 64, 20, 16> = BuddyAllocator::unusable();
-        allocator.all_unused();
+        let mut allocator: BuddyAllocator<TestMemoryToken, 64, 20, 16> = BuddyAllocator::new();
         // Just a simple one for now: Put in a big entry and pull out a small entry or two or more than two.
         // Then try some freeing and allocating stuff to make sure it coalesces properly.
         allocator.add_entry(TestMemoryToken::safe_new(0, 1048576));

@@ -1,5 +1,3 @@
-use spin::LazyLock;
-
 use crate::{
     buddy::BuddyAllocator,
     paging::{MemoryType, PagePermissions},
@@ -316,16 +314,9 @@ impl PageTableIndices {
     }
 }
 
-static PAGE_TABLE_ALLOCATION_POOL: LazyLock<
-    &'static spin::Mutex<
-        BuddyAllocator<PhysicalMemoryToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
-    >,
-> = LazyLock::new(|| {
-    static ACTUAL_ALLOCATOR: spin::Mutex<BuddyAllocator<PhysicalMemoryToken, 128, 16, 12>> =
-        spin::Mutex::new(BuddyAllocator::unusable());
-    ACTUAL_ALLOCATOR.lock().all_unused();
-    &ACTUAL_ALLOCATOR
-});
+static PAGE_TABLE_ALLOCATION_POOL: spin::Mutex<
+    BuddyAllocator<PhysicalMemoryToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
+> = spin::Mutex::new(BuddyAllocator::new());
 
 fn allocate_page_table() -> PhysicalMemoryToken {
     let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
@@ -492,12 +483,11 @@ pub fn take_page_mapping(
 }
 
 pub mod init {
-    use crate::heap::map_physical_memory;
-
     use super::*;
 
     #[cfg(target_arch = "aarch64")]
     pub fn initialize_lower_half_table() {
+        use crate::heap::map_physical_memory;
         use crate::unsafe_impl::arch::asm;
         // We need to set the TTBR0_EL1 register to a newly allocated page table.
         // We also need to put the recursive mapping in it, so we need access first.
@@ -552,7 +542,12 @@ pub mod init {
         unsafe {
             let indices = PageTableIndices {
                 upper_half: false,
-                indices: [recursive_mapping_index(false), recursive_mapping_index(false), 511, 0],
+                indices: [
+                    recursive_mapping_index(false),
+                    recursive_mapping_index(false),
+                    511,
+                    0,
+                ],
             };
             write_page_table_entry(
                 indices.calculate_page_table_entry_address(),

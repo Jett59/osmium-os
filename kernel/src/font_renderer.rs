@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
+use alloc::vec;
 use common::font::{get_character_dimensions, get_glyph_count, render_character};
-use common::framebuffer::{get_bytes_per_pixel, get_pixel_row, get_screen_dimensions, PixelFormat};
+use common::framebuffer::{PixelFormat, get_bytes_per_pixel, get_pixel_row, get_screen_dimensions};
 use spin::LazyLock;
 
 // We cache the rendered versions of the characters here since they will be redrawn rather a lot (especially during scrolling).
@@ -9,21 +10,18 @@ fn get_character_cache_offset(glyph_index: usize) -> usize {
     glyph_index * character_width * character_height * get_bytes_per_pixel()
 }
 
-    static CHARACTER_CACHE: LazyLock<Box<[u8]>> = LazyLock::new(|| {
-        let glyph_count = get_glyph_count();
-        let mut result =
-            unsafe { Box::new_zeroed_slice(get_character_cache_offset(glyph_count)).assume_init() };
-        for i in 0..glyph_count {
-            unsafe {
-                render_character(
-                    char::from_u32_unchecked(i as u32),
-                    &mut result[get_character_cache_offset(i)..get_character_cache_offset(i + 1)],
-                    PixelFormat::default(),
-                )
-            };
-        }
-        result
-    });
+static CHARACTER_CACHE: LazyLock<Box<[u8]>> = LazyLock::new(|| {
+    let glyph_count = get_glyph_count();
+    let mut result = vec![0; get_character_cache_offset(glyph_count)].into_boxed_slice();
+    for i in 0..glyph_count {
+        render_character(
+            i as u32,
+            &mut result[get_character_cache_offset(i)..get_character_cache_offset(i + 1)],
+            PixelFormat::default(),
+        );
+    }
+    result
+});
 
 pub fn draw_character(character: char, x: usize, y: usize) {
     let (character_width, character_height) = get_character_dimensions();

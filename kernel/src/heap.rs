@@ -3,10 +3,10 @@ use core::{
     mem::size_of,
     ops::{Deref, DerefMut},
     ptr::null_mut,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use alloc::boxed::Box;
-use spin::LazyLock;
 
 use crate::{
     assert::const_assert,
@@ -36,21 +36,26 @@ const_assert!(
     "HEAP_SIZE must be a power of two"
 );
 
-static HEAP_VIRTUAL_MEMORY_ALLOCATOR: LazyLock<
-    &spin::Mutex<BuddyAllocator<VirtualMemoryToken, 256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>>,
-> = LazyLock::new(|| {
-    static REAL_ALLOCATOR: spin::Mutex<
-        BuddyAllocator<VirtualMemoryToken, 256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>,
-    > = spin::Mutex::new(BuddyAllocator::unusable());
-    // SAFETY: according to the kernel memory map, this region is free to use for the heap.
-    unsafe {
-        REAL_ALLOCATOR
-            .lock()
-            .all_unused()
-            .add_entry(VirtualMemoryToken::new(VIRTUAL_HEAP_START, HEAP_SIZE));
+static HEAP_VIRTUAL_MEMORY_ALLOCATOR: spin::Mutex<
+    BuddyAllocator<VirtualMemoryToken, 256, LOG2_HEAP_SIZE, LOG2_BLOCK_SIZE>,
+> = spin::Mutex::new(BuddyAllocator::new());
+
+static INITIALIZED_HEAP: AtomicBool = AtomicBool::new(false);
+
+fn allocate_virtual_memory(size: usize) -> Option<VirtualMemoryToken> {
+    let mut allocator = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock();
+    // Race conditions are avoided by the lock.
+    if !INITIALIZED_HEAP.swap(true, Ordering::SeqCst) {
+        // SAFETY: the kernel is guaranteed to have exclusive access to the virtual memory range, so this is safe.
+        let token = unsafe { VirtualMemoryToken::new(VIRTUAL_HEAP_START, HEAP_SIZE) };
+        allocator.add_entry(token);
     }
-    &REAL_ALLOCATOR
-});
+    allocator.allocate(size)
+}
+fn free_virtual_memory(token: VirtualMemoryToken) {
+    let mut allocator = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock();
+    allocator.free(token);
+}
 
 #[derive(Clone, Copy)]
 struct SlabUnusedEntry {
@@ -98,7 +103,7 @@ impl SlabAllocator {
     fn allocate_entry_list<const SIZE: usize>() -> *mut SlabEntry<SIZE> {
         // Rust doesn't let us use any kind of allocator api or anything, so this is the best I can think of.
         // It is a bit of repetition, but it's not too bad.
-        let virtual_address = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(BLOCK_SIZE);
+        let virtual_address = allocate_virtual_memory(BLOCK_SIZE);
         if let Some(virtual_address) = virtual_address {
             let physical_address = physical_memory_manager::allocate_block_address();
             if let Some(physical_address) = physical_address {
@@ -120,7 +125,7 @@ impl SlabAllocator {
         let allocated_token = unsafe { AllocatedMemoryToken::new(entry_list as usize, BLOCK_SIZE) };
         let (physical_address, virtual_address) = take_mapping(allocated_token);
         mark_as_free(physical_address.address());
-        HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
+        free_virtual_memory(virtual_address);
     }
 
     /// This function is to initialize the head entry of the list and assumes that there were no entries before (so it is only really useful for creating an entry when the list is empty).
@@ -236,7 +241,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
         // TODO: this isn't true, it only aligns to a power of 2 greater than the size
         assert!(layout.align() <= size);
         if size >= BLOCK_SIZE {
-            let token = HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().allocate(size);
+            let token = allocate_virtual_memory(size);
             if let Some(token) = token {
                 let address = token.address();
                 for block in token.chunks(BLOCK_SIZE) {
@@ -295,7 +300,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
                 mark_as_free(this_physical_address.address());
                 virtual_address = virtual_address.merge(this_virtual_address);
             }
-            HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
+            free_virtual_memory(virtual_address);
         } else {
             let size = usize::max(size, MIN_SLAB_ENTRY_SIZE);
             // Again, we have to match on the size.
@@ -381,7 +386,7 @@ impl DerefMut for PhysicalAddressHandle {
 impl Drop for PhysicalAddressHandle {
     fn drop(&mut self) {
         let (_, virtual_address) = take_mapping(self.allocation.take());
-        HEAP_VIRTUAL_MEMORY_ALLOCATOR.lock().free(virtual_address);
+        free_virtual_memory(virtual_address);
     }
 }
 
@@ -404,10 +409,7 @@ pub unsafe fn map_physical_memory(
     // SAFETY: this is not safe at all, but what can you do?
     let physical_memory =
         unsafe { PhysicalMemoryToken::new(aligned_physical_address, allocated_size) };
-    let virtual_memory = HEAP_VIRTUAL_MEMORY_ALLOCATOR
-        .lock()
-        .allocate(allocated_size)
-        .unwrap();
+    let virtual_memory = allocate_virtual_memory(allocated_size).unwrap();
     // The buddy allocator sometimes (often) gives us a token which is larger than requested.
     let (virtual_memory, trailing_virtual_memory) = virtual_memory.split_at(allocated_size);
     let allocation = create_mapping(memory_type, permissions, physical_memory, virtual_memory);

@@ -28,12 +28,12 @@ pub fn get_glyph_count() -> usize {
     font_header.glyph_count as usize
 }
 
-pub fn get_glyph_bitmap(character: char) -> &'static [u8] {
+pub fn get_glyph_bitmap(character: u32) -> &'static [u8] {
     let font_header = get_font_header();
-    let character = if (character as u32) < font_header.glyph_count {
+    let character = if character < font_header.glyph_count {
         character
     } else {
-        '\0'
+        0
     };
     &FONT[font_header.header_size as usize
         + character as usize * font_header.character_bytes as usize
@@ -44,7 +44,7 @@ pub fn get_glyph_bitmap(character: char) -> &'static [u8] {
 /// Renders the given character in the given buffer.
 ///
 /// This function doesn't support the unicode table since it is only meant for kernel logging and besides, the character cache is too small for unicode.
-pub fn render_character(character: char, buffer: &mut [u8], pixel_format: PixelFormat) {
+pub fn render_character(character: u32, buffer: &mut [u8], pixel_format: PixelFormat) {
     let glyph_bytes = get_glyph_bitmap(character);
     let (character_width, character_height) = get_character_dimensions();
     let bytes_per_row = (character_width + 7) / 8;
