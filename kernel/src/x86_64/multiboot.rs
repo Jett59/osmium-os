@@ -215,14 +215,14 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
         }
     }
     if let Some(module) = module {
-        parse_module(module);
+        parse_module(module, no_concurrency);
     }
     if let Some(frame_buffer) = frame_buffer {
         parse_frame_buffer(frame_buffer);
     }
 }
 
-fn parse_module(module: &MbiModuleTag) {
+fn parse_module(module: &MbiModuleTag, no_concurrency: &NoConcurrency) {
     // Since Grub puts the module in `available` memory, we need to explicitly mark it as used.
     let start_address = align_address_down(module.module_start as usize, BLOCK_SIZE);
     let end_address = align_address_up(module.module_end as usize, BLOCK_SIZE);
@@ -239,9 +239,10 @@ fn parse_module(module: &MbiModuleTag) {
         )
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
-    unsafe {
-        initial_ramdisk::INITIAL_RAMDISK = Some(PhysicalAddressHandle::leak(module_memory));
-    }
+    initial_ramdisk::set_initial_ramdisk(
+        PhysicalAddressHandle::leak(module_memory),
+        no_concurrency,
+    );
 }
 
 #[repr(C, packed)]
