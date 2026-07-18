@@ -2,25 +2,34 @@ use core::arch::asm;
 
 use crate::unsafe_impl::init_cell::NoConcurrency;
 
-/// # Safety
-/// This function could cause undefined behavior if the port does something strange.
-/// For example, a port-mapped DMA controller could overwrite parts of the kernel.
-pub unsafe fn write_port8(port: u16, value: u8) {
-    asm!("out dx, al", in("dx") port, in("al") value, options(nomem, nostack));
-}
-
-pub fn io_wait() {
+#[inline(always)]
+pub fn memory_barrier() {
     unsafe {
-        asm!("out dx, al", in("dx") 0x80, in("al") 0u8, options(nomem, nostack));
+        asm!("mfence");
     }
 }
 
 /// # Safety
-/// This could break code in the surrounding scope which relies on interrupts being disabled.
-pub unsafe fn enable_interrupts(_no_concurency: NoConcurrency) {
-    asm!("sti", options(nomem, nostack));
+/// This function could cause undefined behavior if the port does something strange.
+/// For example, a port-mapped DMA controller could overwrite parts of the kernel.
+#[inline(always)]
+pub unsafe fn write_port8(port: u16, value: u8) {
+    unsafe { asm!("out dx, al", in("dx") port, in("al") value, options(nomem, nostack)) };
 }
 
+#[inline(always)]
+pub fn io_wait() {
+    unsafe { asm!("out dx, al", in("dx") 0x80, in("al") 0u8, options(nomem, nostack)) };
+}
+
+/// # Safety
+/// This could break code in the surrounding scope which relies on interrupts being disabled.
+#[inline(always)]
+pub unsafe fn enable_interrupts(_no_concurency: NoConcurrency) {
+    unsafe { asm!("sti", options(nomem, nostack)) };
+}
+
+#[inline(always)]
 pub unsafe fn iret(
     stack_segment: u64,
     stack_pointer: u64,
@@ -28,34 +37,41 @@ pub unsafe fn iret(
     code_segment: u64,
     instruction_pointer: u64,
 ) -> ! {
-    asm!(
+    unsafe {
+        asm!(
         "push {}",
         "push {}",
         "push {}",
         "push {}",
         "push {}",
         "iretq",
-        in(reg) stack_segment, in(reg) stack_pointer, in(reg) flags, in(reg) code_segment, in(reg) instruction_pointer, options(nomem, nostack, noreturn));
+        in(reg) stack_segment, in(reg) stack_pointer, in(reg) flags, in(reg) code_segment, in(reg) instruction_pointer, options(nomem, nostack, noreturn))
+    };
 }
 
 pub const USER_CODE_SELECTOR: u16 = 0x23;
 pub const USER_DATA_SELECTOR: u16 = 0x1b;
 
+#[inline(always)]
 pub unsafe fn load_task_state_segment(selector: u16) {
-    asm!("ltr ax", in("ax") selector, options(nomem, nostack));
+    unsafe { asm!("ltr ax", in("ax") selector, options(nomem, nostack)) };
 }
 
+#[inline(always)]
 pub unsafe fn read_msr(msr: u32) -> u64 {
     let mut low: u32;
     let mut high: u32;
-    asm!("rdmsr", in("ecx") msr, out("eax") low, out("edx") high, options(nomem, nostack));
+    unsafe {
+        asm!("rdmsr", in("ecx") msr, out("eax") low, out("edx") high, options(nomem, nostack))
+    };
     ((high as u64) << 32) | low as u64
 }
 
+#[inline(always)]
 pub unsafe fn write_msr(msr: u32, value: u64) {
     let low = value as u32;
     let high = (value >> 32) as u32;
-    asm!("wrmsr", in("ecx") msr, in("eax") low, in("edx") high, options(nomem, nostack));
+    unsafe { asm!("wrmsr", in("ecx") msr, in("eax") low, in("edx") high, options(nomem, nostack)) };
 }
 
 /// Stores the CS and SS selectors for kernel mode and user mode.

@@ -2,7 +2,7 @@ use core::{mem::size_of, ptr::addr_of};
 
 use bitflags::bitflags;
 
-use super::asm::load_task_state_segment;
+use crate::unsafe_impl::arch::asm::load_task_state_segment;
 
 bitflags! {
     #[repr(C)]

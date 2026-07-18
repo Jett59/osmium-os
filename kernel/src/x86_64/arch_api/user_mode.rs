@@ -1,4 +1,4 @@
-use crate::arch::asm::{self, USER_CODE_SELECTOR, USER_DATA_SELECTOR};
+use crate::unsafe_impl::arch::asm::{self, USER_CODE_SELECTOR, USER_DATA_SELECTOR};
 
 /// Enter user mode at the specified address (ideally in user memory).
 ///

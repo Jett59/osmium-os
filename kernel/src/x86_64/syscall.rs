@@ -6,9 +6,9 @@ use core::{
 };
 use syscall_interface::{decode_syscall, encode_syscall_result};
 
-use crate::arch::asm::{LSTAR_MSR, SFMASK_MSR, STAR_MSR, USER_DATA_SELECTOR};
-
-use super::asm::{ALTERNATE_GS_BASE_MSR, write_msr};
+use crate::unsafe_impl::arch::asm::{
+    ALTERNATE_GS_BASE_MSR, LSTAR_MSR, SFMASK_MSR, STAR_MSR, USER_DATA_SELECTOR, write_msr,
+};
 
 #[unsafe(naked)]
 extern "C" fn syscall_entrypoint() {
