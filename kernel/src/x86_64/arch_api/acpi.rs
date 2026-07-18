@@ -1,30 +1,19 @@
 use alloc::vec::Vec;
 
 use crate::{
-    acpi::{madt::MadtInfo, AcpiTableHandle},
+    acpi::{AcpiTableHandle, madt::MadtInfo},
     arch::acpi::hpet::HpetInfo,
+    unsafe_impl::init_cell::{InitCell, NoConcurrency},
 };
 
-static mut ROOT_TABLE_ADDRESS: usize = 0;
+static ROOT_TABLE_ADDRESS: InitCell<usize> = InitCell::new();
 
-pub(in crate::arch) fn init(rsdt_address: usize) {
-    // # Safety
-    // It is safe to assign to ROOT_TABLE_ADDRESS because this function is only called once, and then before threading is initialized.
-    unsafe {
-        ROOT_TABLE_ADDRESS = rsdt_address;
-    }
+pub(in crate::arch) fn init(rsdt_address: usize, no_concurrency: &NoConcurrency) {
+    ROOT_TABLE_ADDRESS.set(rsdt_address, no_concurrency);
 }
 
 pub fn get_root_table_address() -> Option<usize> {
-    // # Safety
-    // Se above for init.
-    unsafe {
-        if ROOT_TABLE_ADDRESS == 0 {
-            None
-        } else {
-            Some(ROOT_TABLE_ADDRESS)
-        }
-    }
+    ROOT_TABLE_ADDRESS.get().copied()
 }
 
 pub struct AcpiInfo {

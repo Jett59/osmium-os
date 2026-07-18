@@ -1,9 +1,7 @@
 use core::ptr::addr_of;
 
 use crate::{
-    arch::{interrupts, syscall, task_state_segment},
-    memory, physical_memory_manager,
-    unsafe_impl::paging::init::initialize_paging,
+    arch::{interrupts, syscall, task_state_segment}, memory, physical_memory_manager, unsafe_impl::{init_cell::NoConcurrency, paging::init::initialize_paging},
 };
 
 use super::super::multiboot;
@@ -27,9 +25,9 @@ static KERNEL_PHYSICAL_END: () = ();
 static stack_end: () = ();
 
 #[allow(unused_unsafe)] // It isn't actually unused, but I think there is a bug in the compiler since removing it causes an error.
-pub fn arch_init() {
+pub fn arch_init(no_concurrency: &NoConcurrency) {
     interrupts::init();
-    multiboot::parse_multiboot_structures();
+    multiboot::parse_multiboot_structures(no_concurrency);
     // Unless we really want to have difficulties in the near future (possibly as soon as the very next function), we must tell people not to use the kernel's memory as a heap.]
     physical_memory_manager::mark_range_as_used(
         0,

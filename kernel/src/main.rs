@@ -56,7 +56,7 @@ extern "C" fn kmain() -> ! {
     // SAFETY: We are `kmain`, and therefore know for certain that there is nothing which could possibly be holding a handle to the address space.
     let address_space = unsafe { UserAddressSpaceHandle::new() };
 
-    arch_api::init::arch_init();
+    arch_api::init::arch_init(&no_concurrency);
     physical_memory_manager::sanity_check();
     heap::sanity_check();
     console::println!("Initialized the display (obviously)");

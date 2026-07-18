@@ -9,6 +9,7 @@ use crate::{
     },
     paging::{MemoryType, PagePermissions},
     physical_memory_manager::{BLOCK_SIZE, mark_range_as_free, mark_range_as_used},
+    unsafe_impl::init_cell::NoConcurrency,
 };
 use common::framebuffer::{self, FrameBuffer};
 
@@ -161,7 +162,7 @@ impl Validateable for MbiAcpiNewTag {
     }
 }
 
-pub fn parse_multiboot_structures() {
+pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
     let mbi_header: &MbiHeader = unsafe {
         reinterpret_memory(slice_from_memory(mbi_pointer, size_of::<MbiHeader>()).unwrap()).unwrap()
     };
@@ -201,13 +202,13 @@ pub fn parse_multiboot_structures() {
             MBI_TAG_ACPI_OLD if !found_new_acpi => {
                 let acpi_old_tag: &MbiAcpiOldTag =
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
-                acpi::init(acpi_old_tag.rsdt_address as usize);
+                acpi::init(acpi_old_tag.rsdt_address as usize, no_concurrency);
             }
             MBI_TAG_ACPI_NEW => {
                 found_new_acpi = true;
                 let acpi_new_tag: &MbiAcpiNewTag =
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
-                acpi::init(acpi_new_tag.xsdt_address as usize);
+                acpi::init(acpi_new_tag.xsdt_address as usize, no_concurrency);
             }
             0 => break, // End of tags
             _ => {}
