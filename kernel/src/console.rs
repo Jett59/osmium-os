@@ -81,9 +81,9 @@ fn possibly_scroll(console_backbuffer: &mut [char]) {
 }
 
 pub fn write_character(character: char) {
+    let mut console_backbuffer = CONSOLE_BACKBUFFER.lock();
     let x = X.load(Ordering::SeqCst);
     let y = Y.load(Ordering::SeqCst);
-    let mut console_backbuffer = CONSOLE_BACKBUFFER.lock();
     console_backbuffer[y * get_console_dimensions().0 + x] = character;
     if character == '\n' {
         X.store(0, Ordering::SeqCst);
@@ -99,6 +99,8 @@ pub fn write_character(character: char) {
             X.store(0, Ordering::SeqCst);
             Y.store(y + 1, Ordering::SeqCst);
             possibly_scroll(&mut console_backbuffer);
+        } else {
+            X.store(x + 1, Ordering::SeqCst);
         }
     }
 }
