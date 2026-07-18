@@ -10,19 +10,19 @@ use crate::{
 
 use super::acpi::AcpiInfo;
 
-pub(in crate::arch) struct InterruptInfo {
+pub struct InterruptInfo {
     pub interrupt_number: u32,
 
     pub acknowledge_register_value: u32,
 }
 
-pub(in crate::arch) enum Priority {
+pub enum Priority {
     Low,
     Normal,
     High,
 }
 
-pub(in crate::arch) trait GenericInterruptController: Sync {
+pub trait GenericInterruptController: Sync {
     /// Acknowledge that an interrupt was received, getting the interrupt number at the same time.
     /// On GICv2, this is done by reading the `IAR` register in the CPU interface.
     fn acknowledge_interrupt(&self) -> Option<InterruptInfo>;
@@ -103,23 +103,23 @@ pub fn initialize(acpi_info: &AcpiInfo, no_concurrency: NoConcurrency) {
     enable_interrupts(no_concurrency);
 }
 
-pub(in crate::arch) fn acknowledge_interrupt() -> Option<InterruptInfo> {
+pub fn acknowledge_interrupt() -> Option<InterruptInfo> {
     GIC.get().unwrap().acknowledge_interrupt()
 }
 
-pub(in crate::arch) fn end_of_interrupt(interrupt_info: InterruptInfo) {
+pub fn end_of_interrupt(interrupt_info: InterruptInfo) {
     GIC.get().unwrap().end_of_interrupt(interrupt_info)
 }
 
-pub(in crate::arch) fn enable_interrupt(interrupt_number: u32) {
+pub fn enable_interrupt(interrupt_number: u32) {
     GIC.get().unwrap().enable_interrupt(interrupt_number)
 }
 
-pub(in crate::arch) fn disable_interrupt(interrupt_number: u32) {
+pub fn disable_interrupt(interrupt_number: u32) {
     GIC.get().unwrap().disable_interrupt(interrupt_number)
 }
 
-pub(in crate::arch) fn configure_interrupt(
+pub fn configure_interrupt(
     interrupt_number: u32,
     edge_triggered: bool,
     priority: Priority,
@@ -129,10 +129,10 @@ pub(in crate::arch) fn configure_interrupt(
         .configure_interrupt(interrupt_number, edge_triggered, priority)
 }
 
-pub(in crate::arch) fn interrupt_is_usable(interrupt_number: u32) -> bool {
+pub fn interrupt_is_usable(interrupt_number: u32) -> bool {
     GIC.get().unwrap().interrupt_is_usable(interrupt_number)
 }
 
-pub(in crate::arch) fn enable_interrupts_for_this_cpu() {
+pub fn enable_interrupts_for_this_cpu() {
     GIC.get().unwrap().enable_interrupts_for_this_cpu()
 }

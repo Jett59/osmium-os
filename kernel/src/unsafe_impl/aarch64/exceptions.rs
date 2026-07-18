@@ -7,13 +7,13 @@ use core::{
 use syscall_interface::{decode_syscall, encode_syscall_result};
 
 use crate::{
-    arch::registers::{get_cntfrq, get_cntvct, get_esr, set_cntv_cval},
     arch_api::{
         irq::{acknowledge_interrupt, end_of_interrupt},
         timer,
     },
     print,
     syscall::handle_syscall,
+    unsafe_impl::arch::asm::{get_cntfrq, get_cntvct, get_esr, set_cntv_cval},
     user_memory::UserAddressSpaceHandle,
 };
 
