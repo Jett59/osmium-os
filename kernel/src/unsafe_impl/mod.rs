@@ -4,3 +4,4 @@ pub mod arch;
 pub mod init_cell;
 pub mod memory;
 pub mod paging;
+pub mod token_bitmap;

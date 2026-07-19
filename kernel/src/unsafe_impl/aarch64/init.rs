@@ -14,6 +14,7 @@ use common::{
 use crate::{
     heap::{PhysicalAddressHandle, map_physical_memory},
     paging::{MemoryType, PagePermissions},
+    unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken},
 };
 
 #[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
@@ -44,7 +45,7 @@ pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
 
 static GOT_MEMORY_MAP: AtomicBool = AtomicBool::new(false);
 
-pub fn available_memory_map_entries() -> impl Iterator<Item = (usize, usize)> {
+pub fn available_memory_map_entries() -> impl Iterator<Item = PhysicalMemoryToken> {
     let entries: &[MemoryMapEntry] = if GOT_MEMORY_MAP.swap(true, Ordering::SeqCst) {
         &[]
     } else {
@@ -60,7 +61,8 @@ pub fn available_memory_map_entries() -> impl Iterator<Item = (usize, usize)> {
     entries
         .iter()
         .filter(|entry| entry.memory_type == MemoryMapEntryType::Available)
-        .map(|entry| (entry.address as usize, entry.size))
+        // SAFETY: the memory map ensures that the regions are valid and unused.
+        .map(|entry| unsafe { PhysicalMemoryToken::new(entry.address as usize, entry.size) })
 }
 
 static GOT_FRAME_BUFFER: AtomicBool = AtomicBool::new(false);

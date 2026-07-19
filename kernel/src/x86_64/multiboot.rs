@@ -1,4 +1,4 @@
-use core::mem::size_of;
+use core::{mem::size_of, ptr::addr_of};
 
 use crate::{
     arch_api::{acpi, initial_ramdisk},
@@ -8,10 +8,22 @@ use crate::{
         Validateable, align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
     },
     paging::{MemoryType, PagePermissions},
-    physical_memory_manager::{BLOCK_SIZE, mark_range_as_free, mark_range_as_used},
-    unsafe_impl::init_cell::NoConcurrency,
+    physical_memory_manager::{BLOCK_SIZE, mark_as_free},
+    unsafe_impl::{
+        init_cell::NoConcurrency,
+        memory::{MemoryToken, PhysicalMemoryToken},
+    },
 };
 use common::framebuffer::{self, FrameBuffer};
+
+#[cfg(not(test))]
+unsafe extern "C" {
+    #[allow(improper_ctypes)]
+    static KERNEL_PHYSICAL_END: ();
+}
+
+#[cfg(test)]
+static KERNEL_PHYSICAL_END: () = ();
 
 #[repr(C, packed)]
 struct MbiHeader {
@@ -175,6 +187,8 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
     };
     let tag_iterator: DynamicallySizedObjectIterator<&MbiTag> =
         DynamicallySizedObjectIterator::new(Endianness::Little, tag_memory);
+    let mut memory_map = None; // Delayed initialization to allow for module to be detected first.
+    let mut memory_map_tag_memory = None;
     let mut frame_buffer = None; // Delayed initialization to allow for memory to be detected first.
     let mut module = None; // Same as above
     let mut found_new_acpi = false;
@@ -192,7 +206,8 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
             MBI_TAG_MEMORY_MAP => {
                 let memory_map_tag: &MbiMemoryMapTag =
                     unsafe { reinterpret_memory(tag_memory).unwrap() };
-                parse_memory_map(memory_map_tag, tag_memory);
+                memory_map = Some(memory_map_tag);
+                memory_map_tag_memory = Some(tag_memory);
             }
             MBI_TAG_FRAME_BUFFER => {
                 let frame_buffer_tag: &MbiFrameBufferTag =
@@ -214,6 +229,31 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
             _ => {}
         }
     }
+    // Since Grub puts the module in `available` memory, we need to explicitly mark it as used.
+    let module_start_address = align_address_down(
+        module.map_or(0, |module| module.module_start as usize),
+        BLOCK_SIZE,
+    );
+    let module_end_address = align_address_up(
+        module.map_or(0, |module| module.module_end as usize),
+        BLOCK_SIZE,
+    );
+    if let Some(memory_map) = memory_map {
+        parse_memory_map(
+            memory_map,
+            memory_map_tag_memory.unwrap(),
+            &[
+                (
+                    module_start_address,
+                    module_end_address - module_start_address,
+                ),
+                (
+                    0,
+                    align_address_up(addr_of!(KERNEL_PHYSICAL_END) as usize, BLOCK_SIZE),
+                ),
+            ],
+        );
+    }
     if let Some(module) = module {
         parse_module(module, no_concurrency);
     }
@@ -223,11 +263,6 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
 }
 
 fn parse_module(module: &MbiModuleTag, no_concurrency: &NoConcurrency) {
-    // Since Grub puts the module in `available` memory, we need to explicitly mark it as used.
-    let start_address = align_address_down(module.module_start as usize, BLOCK_SIZE);
-    let end_address = align_address_up(module.module_end as usize, BLOCK_SIZE);
-    mark_range_as_used(start_address, end_address);
-
     let module_size = module.module_end - module.module_start;
     // SAFETY: The memory should be valid (Grub makes sure of this), and it won't be given out to anyone since it is marked as used.
     let module_memory = unsafe {
@@ -260,7 +295,11 @@ impl Validateable for MemoryMapEntry {
     }
 }
 
-fn parse_memory_map(memory_map: &MbiMemoryMapTag, tag_memory: &[u8]) {
+fn parse_memory_map(
+    memory_map: &MbiMemoryMapTag,
+    tag_memory: &[u8],
+    exclusions: &[(usize, usize)],
+) {
     let entry_area_size = memory_map.base_tag.size - size_of::<MbiMemoryMapTag>() as u32;
     let entry_area = &tag_memory[size_of::<MbiMemoryMapTag>()..];
     let entry_size = memory_map.entry_size;
@@ -270,12 +309,30 @@ fn parse_memory_map(memory_map: &MbiMemoryMapTag, tag_memory: &[u8]) {
         let entry: &MemoryMapEntry = unsafe { reinterpret_memory(entry_memory).unwrap() };
         // Type 1 means available, so therefore we should mark them as such in the PMM (by default everything is used).
         if entry.entry_type == 1 {
-            let starting_address = align_address_up(entry.base_address as usize, BLOCK_SIZE);
-            let ending_address = align_address_down(
+            let start_address = align_address_up(entry.base_address as usize, BLOCK_SIZE);
+            let end_address = align_address_down(
                 entry.base_address as usize + entry.length as usize,
                 BLOCK_SIZE,
             );
-            mark_range_as_free(starting_address, ending_address);
+            // We must remove the exclusions here
+            // The easiest way is to go through each block and skip the excluded ones
+            for block_start_address in (start_address..end_address).step_by(BLOCK_SIZE) {
+                let block_end_address = block_start_address + BLOCK_SIZE;
+                if exclusions
+                    .iter()
+                    .any(|&(exclusion_start, exclusion_length)| {
+                        let exclusion_end = exclusion_start + exclusion_length;
+                        // Check if the block overlaps with the exclusion
+                        !(block_end_address <= exclusion_start
+                            || block_start_address >= exclusion_end)
+                    })
+                {
+                    continue; // Skip this block as it overlaps with an exclusion
+                }
+                // SAFETY: we know that this block is validand unused
+                let token = unsafe { PhysicalMemoryToken::new(block_start_address, BLOCK_SIZE) };
+                mark_as_free(token);
+            }
         }
     }
 }

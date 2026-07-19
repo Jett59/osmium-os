@@ -105,13 +105,12 @@ impl SlabAllocator {
         // It is a bit of repetition, but it's not too bad.
         let virtual_address = allocate_virtual_memory(BLOCK_SIZE);
         if let Some(virtual_address) = virtual_address {
-            let physical_address = physical_memory_manager::allocate_block_address();
+            let physical_address = physical_memory_manager::allocate_block();
             if let Some(physical_address) = physical_address {
                 let allocated_address = create_mapping(
                     MemoryType::Normal,
                     PagePermissions::KERNEL_READ_WRITE,
-                    // SAFETY: this comes from the PMM, so it guaranteed to be a uniquely owned physical address.
-                    unsafe { PhysicalMemoryToken::new(physical_address, 65536) },
+                    physical_address,
                     virtual_address,
                 );
                 return allocated_address.address() as *mut SlabEntry<SIZE>;
@@ -124,7 +123,7 @@ impl SlabAllocator {
         // SAFETY: this is not safe :(
         let allocated_token = unsafe { AllocatedMemoryToken::new(entry_list as usize, BLOCK_SIZE) };
         let (physical_address, virtual_address) = take_mapping(allocated_token);
-        mark_as_free(physical_address.address());
+        mark_as_free(physical_address);
         free_virtual_memory(virtual_address);
     }
 
@@ -245,13 +244,12 @@ unsafe impl GlobalAlloc for HeapAllocator {
             if let Some(token) = token {
                 let address = token.address();
                 for block in token.chunks(BLOCK_SIZE) {
-                    let physical_block_address = physical_memory_manager::allocate_block_address();
+                    let physical_block_address = physical_memory_manager::allocate_block();
                     if let Some(physical_address) = physical_block_address {
-                        create_mapping(
+                        let _ = create_mapping(
                             MemoryType::Normal,
                             PagePermissions::KERNEL_READ_WRITE,
-                            // SAFETY: this comes from the PMM, so it is guaranteed to be a uniquely owned physical address.
-                            unsafe { PhysicalMemoryToken::new(physical_address, BLOCK_SIZE) },
+                            physical_address,
                             block,
                         );
                     } else {
@@ -297,7 +295,7 @@ unsafe impl GlobalAlloc for HeapAllocator {
             let mut virtual_address = VirtualMemoryToken::empty(address);
             for block in token.chunks(BLOCK_SIZE) {
                 let (this_physical_address, this_virtual_address) = take_mapping(block);
-                mark_as_free(this_physical_address.address());
+                mark_as_free(this_physical_address);
                 virtual_address = virtual_address.merge(this_virtual_address);
             }
             free_virtual_memory(virtual_address);

@@ -1,140 +1,11 @@
-use crate::{assert::const_assert, paging::PAGE_SIZE};
-use core::{
-    mem::size_of,
-    sync::atomic::{AtomicUsize, Ordering},
+use crate::{
+    assert::const_assert,
+    paging::PAGE_SIZE,
+    unsafe_impl::{
+        memory::PhysicalMemoryToken,
+        token_bitmap::{BitmapToken, TokenBitmap},
+    },
 };
-
-pub const fn get_bitmap_size(bits: usize) -> usize {
-    bits.div_ceil(usize::BITS as usize)
-}
-
-pub struct MemoryBitmapAllocator<const BITS: usize>
-where
-    [(); get_bitmap_size(BITS)]:,
-{
-    // If a bit is one, that means that it is available (free). Otherwise it is marked as unavailable (used)
-    bits: [AtomicUsize; get_bitmap_size(BITS)],
-}
-
-impl<const BITS: usize> MemoryBitmapAllocator<BITS>
-where
-    [(); get_bitmap_size(BITS)]:,
-{
-    pub const fn new() -> Self {
-        let bits = [const { AtomicUsize::new(0) }; get_bitmap_size(BITS)];
-        Self { bits }
-    }
-
-    fn get_index_and_bit_offset(bit: usize) -> (usize, usize) {
-        let index = bit / usize::BITS as usize;
-        let bit_offset = bit % usize::BITS as usize;
-        (index, bit_offset)
-    }
-
-    pub fn mark_as_free(&self, bit: usize) {
-        let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
-        self.bits[index].fetch_or(1 << bit_offset, Ordering::SeqCst);
-    }
-
-    pub fn mark_as_used(&self, bit: usize) {
-        let (index, bit_offset) = Self::get_index_and_bit_offset(bit);
-        self.bits[index].fetch_and(!(1 << bit_offset), Ordering::SeqCst);
-    }
-
-    pub fn get_bit_range_mask(start: usize, end: usize) -> usize {
-        let mut mask = 0;
-        for i in start..end {
-            mask |= 1 << i;
-        }
-        mask
-    }
-
-    pub fn mark_range_as_free(&self, start: usize, end: usize) {
-        // If the start is outside the range, we can just return.
-        if start >= BITS {
-            return;
-        }
-        // If the end is outside the range, we can set it to the end.
-        let end = end.min(BITS);
-        // Split into a series of masks so that we don't have to do so many operations.
-        // This means that we take the leading bits before a multiple of the size of usize, we create a mask for that, then we go over all of the complete usizes and set them straight up, then we do the same with the trailing bits.
-        let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
-        let (end_index, end_bit_offset) = Self::get_index_and_bit_offset(end);
-        if start_index == end_index {
-            // If the start and end are in the same usize, we can just create a mask for the range between them.
-            self.bits[start_index].fetch_or(
-                Self::get_bit_range_mask(start_bit_offset, end_bit_offset),
-                Ordering::SeqCst,
-            );
-        } else {
-            // Otherwise the lengthier algorithm.
-            self.bits[start_index].fetch_or(
-                Self::get_bit_range_mask(start_bit_offset, usize::BITS as usize),
-                Ordering::SeqCst,
-            );
-            for i in start_index + 1..end_index {
-                self.bits[i].store(!0, Ordering::SeqCst);
-            }
-            if end_bit_offset != 0 {
-                self.bits[end_index].fetch_or(
-                    Self::get_bit_range_mask(0, end_bit_offset),
-                    Ordering::SeqCst,
-                );
-            }
-        }
-    }
-
-    pub fn mark_range_as_used(&self, start: usize, end: usize) {
-        // If the start is outside the range, we can just return.
-        if start >= BITS {
-            return;
-        }
-        // If the end is outside the range, we can set it to the end of the range.
-        let end = end.min(BITS);
-        let (start_index, start_bit_offset) = Self::get_index_and_bit_offset(start);
-        let (end_index, end_bit_offset) = Self::get_index_and_bit_offset(end);
-        if start_index == end_index {
-            self.bits[start_index].fetch_and(
-                !Self::get_bit_range_mask(start_bit_offset, end_bit_offset),
-                Ordering::SeqCst,
-            );
-        } else {
-            self.bits[start_index].fetch_and(
-                !Self::get_bit_range_mask(start_bit_offset, usize::BITS as usize),
-                Ordering::SeqCst,
-            );
-            for i in start_index + 1..end_index {
-                self.bits[i].store(0, Ordering::SeqCst);
-            }
-            if end_bit_offset != 0 {
-                self.bits[end_index].fetch_and(
-                    !Self::get_bit_range_mask(0, end_bit_offset),
-                    Ordering::SeqCst,
-                );
-            }
-        }
-    }
-
-    pub fn allocate_block(&self) -> Option<usize> {
-        // Simply traverse the list of usizes and find the first non-zero one. If there are none, we will return None.
-        // This does have a race condition if someone goes and frees some memory while we are allocating, however this is an edge-case and can be safely ignored to make it simpler and faster.
-        for i in 0..get_bitmap_size(BITS) {
-            if self.bits[i].load(Ordering::SeqCst) != 0 {
-                // Take the entire entry, set it to all ones (all used), then put it back with the relevant bits set to zero.
-                let entry = self.bits[i].swap(0, Ordering::SeqCst);
-                if entry == 0 {
-                    continue;
-                }
-                let bit = entry.trailing_zeros() as usize;
-                // Don't forget to write it back, otherwise no one will be able to allocate from this chunk of blocks anymore.
-                // Use or to include any frees which happened while we weren't looking.
-                self.bits[i].fetch_or(entry & !(1 << bit), Ordering::SeqCst);
-                return Some(i * size_of::<usize>() * 8 + bit);
-            }
-        }
-        None
-    }
-}
 
 // The size of a block (bit) in the bitmap allocator.
 pub const BLOCK_SIZE: usize = 65536;
@@ -156,91 +27,23 @@ pub const MAX_PHYSICAL_MEMORY: usize = 0x1000000000;
 
 pub const BLOCK_COUNT: usize = MAX_PHYSICAL_MEMORY / BLOCK_SIZE;
 
-pub fn get_block_index_down(address: usize) -> usize {
-    address / BLOCK_SIZE
-}
-pub fn get_block_index_up(address: usize) -> usize {
-    get_block_index_down(address + BLOCK_SIZE - 1)
-}
+static GLOBAL_PMM: TokenBitmap<PhysicalMemoryToken, BLOCK_SIZE, BLOCK_COUNT> = TokenBitmap::new();
 
-pub fn get_address(block_index: usize) -> usize {
-    block_index * BLOCK_SIZE
-}
-
-pub static GLOBAL_PMM: MemoryBitmapAllocator<BLOCK_COUNT> = MemoryBitmapAllocator::new();
-
-pub fn mark_as_free(address: usize) {
-    assert!(
-        address.is_multiple_of(BLOCK_SIZE),
-        "Address must be BLOCK_SIZE aligned"
-    );
-    GLOBAL_PMM.mark_as_free(get_block_index_down(address));
-}
-
-pub fn mark_as_used(address: usize) {
-    assert!(
-        address.is_multiple_of(BLOCK_SIZE),
-        "Address must be BLOCK_SIZE aligned"
-    );
-    GLOBAL_PMM.mark_as_used(get_block_index_down(address));
-}
-
-pub fn mark_range_as_free(start_address: usize, end_address: usize) {
-    GLOBAL_PMM.mark_range_as_free(
-        get_block_index_up(start_address),
-        get_block_index_down(end_address),
+pub fn mark_as_free(range: PhysicalMemoryToken) {
+    GLOBAL_PMM.store_range(
+        BitmapToken::try_from_inner(range).expect("address and size must be BLOCK_SIZE aligned"),
     );
 }
 
-pub fn mark_range_as_used(start_address: usize, end_address: usize) {
-    GLOBAL_PMM.mark_range_as_used(
-        get_block_index_down(start_address),
-        get_block_index_up(end_address),
-    );
-}
-
-pub fn allocate_block_address() -> Option<usize> {
-    GLOBAL_PMM.allocate_block().map(get_address)
+pub fn allocate_block() -> Option<PhysicalMemoryToken> {
+    GLOBAL_PMM
+        .read_range(0, BLOCK_COUNT)
+        .next()
+        .map(|token| token.into_inner())
 }
 
 // This is outside the test module because it is for testing in the real kernel environment and not part of the unit testing suite.
 pub fn sanity_check() {
     // Make sure there is some memory to work with. I'll probably add more stuff later.
-    mark_as_free(
-        allocate_block_address().expect("There should be at least some memory by this point"),
-    );
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn pmm_bitmap_test() {
-        let allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
-        assert_eq!(allocator.allocate_block(), None);
-        allocator.mark_range_as_free(52, 60);
-        for i in 52..60 {
-            assert_eq!(allocator.allocate_block(), Some(i));
-        }
-        assert_eq!(allocator.allocate_block(), None);
-        allocator.mark_as_free(17);
-        assert_eq!(allocator.allocate_block(), Some(17));
-    }
-
-    #[test]
-    fn pmm_bitmap_test_boundaries() {
-        let allocator: MemoryBitmapAllocator<1024> = MemoryBitmapAllocator::new();
-        allocator.mark_range_as_free(0, 1024);
-        for i in 0..1024 {
-            assert_eq!(allocator.allocate_block(), Some(i));
-        }
-        assert_eq!(allocator.allocate_block(), None);
-        // If we specify a range which is too large, it should clamp it to a valid range.
-        allocator.mark_range_as_free(0, 2048);
-        for i in 0..1024 {
-            assert_eq!(allocator.allocate_block(), Some(i));
-        }
-        assert_eq!(allocator.allocate_block(), None);
-    }
+    mark_as_free(allocate_block().expect("There should be at least some memory by this point"));
 }

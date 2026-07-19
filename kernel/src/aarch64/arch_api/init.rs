@@ -1,17 +1,25 @@
 use common::framebuffer;
 
-use crate::physical_memory_manager;
+use crate::physical_memory_manager::{self, BLOCK_SIZE};
 use crate::unsafe_impl::arch::exceptions::load_exceptions;
 use crate::unsafe_impl::arch::init::{available_memory_map_entries, frame_buffer};
 use crate::unsafe_impl::init_cell::NoConcurrency;
+use crate::unsafe_impl::memory::MemoryToken;
 use crate::unsafe_impl::paging::init::initialize_lower_half_table;
 
 pub fn arch_init(_no_concurrency: &NoConcurrency) {
     load_exceptions();
 
-    available_memory_map_entries().for_each(|(address, size)| {
-        physical_memory_manager::mark_range_as_free(address, address + size);
-    });
+    available_memory_map_entries()
+        .map(|token| {
+            // Align the tokens to block size, as expected by the PMM.
+            let token_address = token.address();
+            let (_, token) = token.split_at(BLOCK_SIZE - token_address % BLOCK_SIZE);
+            let token_size = token.size();
+            let (token, _) = token.split_at(token_size - (token_size % BLOCK_SIZE));
+            token
+        })
+        .for_each(physical_memory_manager::mark_as_free);
 
     initialize_lower_half_table();
 

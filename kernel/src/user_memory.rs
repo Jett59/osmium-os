@@ -3,8 +3,8 @@ use core::marker::PhantomData;
 use crate::{
     paging::is_valid_user_address,
     paging::{MemoryType, PagePermissions, create_mapping},
-    physical_memory_manager::{BLOCK_SIZE, allocate_block_address},
-    unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken, VirtualMemoryToken},
+    physical_memory_manager::{BLOCK_SIZE, allocate_block},
+    unsafe_impl::memory::{MemoryToken, VirtualMemoryToken},
 };
 
 pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions: PagePermissions) {
@@ -28,9 +28,7 @@ pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions:
         unsafe { VirtualMemoryToken::new(virtual_address, size.next_multiple_of(BLOCK_SIZE)) };
 
     for virtual_block in virtual_memory.chunks(BLOCK_SIZE) {
-        let physical_address = allocate_block_address().expect("Out of memory");
-        // SAFETY: the PMM ensures that this is safe.
-        let physical_block = unsafe { PhysicalMemoryToken::new(physical_address, BLOCK_SIZE) };
+        let physical_block = allocate_block().expect("Out of memory");
         create_mapping(
             MemoryType::Normal,
             permissions,

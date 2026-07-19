@@ -323,16 +323,13 @@ fn allocate_page_table() -> PhysicalMemoryToken {
     if let Some(allocated_page) = page_allocation_pool.allocate(4096) {
         allocated_page
     } else {
-        unsafe {
-            page_allocation_pool.add_entry(PhysicalMemoryToken::new(
-                physical_memory_manager::allocate_block_address()
-                    .expect("Failed to get physical memory for page tables"),
-                physical_memory_manager::BLOCK_SIZE,
-            ));
-            page_allocation_pool
-                .allocate(4096)
-                .expect("Adding new entry to page table allocation pool didn't change anything")
-        }
+        page_allocation_pool.add_entry(
+            physical_memory_manager::allocate_block()
+                .expect("Failed to get physical memory for page tables"),
+        );
+        page_allocation_pool
+            .allocate(4096)
+            .expect("Adding new entry to page table allocation pool didn't change anything")
     }
 }
 fn free_page_table(table: PhysicalMemoryToken) {
@@ -342,7 +339,7 @@ fn free_page_table(table: PhysicalMemoryToken) {
     if let Some(free_block) = page_allocation_pool.allocate(physical_memory_manager::BLOCK_SIZE) {
         // Unlock the page allocation pool
         drop(page_allocation_pool);
-        physical_memory_manager::mark_as_free(free_block.address());
+        physical_memory_manager::mark_as_free(free_block);
     }
 }
 
