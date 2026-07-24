@@ -1,5 +1,7 @@
 use core::{mem, ops::Deref};
 
+use alloc::boxed::Box;
+
 pub trait MemoryToken {
     /// The type of the token that is used to represent a view into this memory region.
     /// Ordinarily this should be `Self`, unless `new` or `Drop::drop` requires unique ownership.
@@ -176,6 +178,7 @@ impl MemoryToken for VirtualMemoryToken {
 
 /// Represents ownership of an allocated block of normal memory.
 /// This is more-or-less equivalent to a `Box<[u8]`, except that it is not automatically de-allocated when dropped, and it may not correspond to a heap allocation.
+/// However, the assumptions of `Box<[u8]>` are a strict superset of the requirements of `AllocatedMemoryToken`, so it is possible to convert a `Box<[u8]>` into an `AllocatedMemoryToken`, but not vice-versa.
 /// It is not suitable for MMIO, as it dereferences into a byte slice.
 #[must_use]
 pub struct AllocatedMemoryToken {
@@ -186,6 +189,16 @@ pub struct AllocatedMemoryToken {
 impl AllocatedMemoryToken {
     pub fn into_ptr(self) -> *mut u8 {
         self.start as *mut u8
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        // SAFETY: The caller has guaranteed that the memory region is valid and, and the self borrow prevents invalid aliasing.
+        unsafe { core::slice::from_raw_parts(self.start as *const u8, self.size) }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        // SAFETY: The caller has guaranteed that the memory region is valid and uniquely owned, and the self borrow prevents invalid aliasing.
+        unsafe { core::slice::from_raw_parts_mut(self.start as *mut u8, self.size) }
     }
 }
 
@@ -205,12 +218,19 @@ impl MemoryToken for AllocatedMemoryToken {
     }
 }
 
-impl Deref for AllocatedMemoryToken {
-    type Target = [u8];
+impl From<Box<[u8]>> for AllocatedMemoryToken {
+    fn from(boxed: Box<[u8]>) -> Self {
+        let size = boxed.len();
+        let start = boxed.as_ptr() as usize;
+        mem::forget(boxed);
+        // SAFETY: The box ensures unique ownership, and the code above effectively removes the box's own ownership of the region.
+        unsafe { Self::new(start, size) }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        // SAFETY: The caller has guaranteed that the memory region is valid and uniquely owned.
-        unsafe { core::slice::from_raw_parts(self.start as *const u8, self.size) }
+impl<const N: usize> From<Box<[u8; N]>> for AllocatedMemoryToken {
+    fn from(boxed: Box<[u8; N]>) -> Self {
+        (boxed as Box<[u8]>).into()
     }
 }
 
