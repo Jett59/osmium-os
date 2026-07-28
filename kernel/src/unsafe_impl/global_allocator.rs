@@ -85,7 +85,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     }
 }
 
-#[global_allocator]
+#[cfg_attr(not(test), global_allocator)]
 static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 // TODO: is there a better place for the small allocator?
