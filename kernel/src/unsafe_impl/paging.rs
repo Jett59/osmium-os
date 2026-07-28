@@ -484,7 +484,7 @@ pub mod init {
 
     #[cfg(target_arch = "aarch64")]
     pub fn initialize_lower_half_table() {
-        use crate::heap::map_physical_memory;
+        use crate::memory_allocator::map_physical_memory;
         use crate::unsafe_impl::arch::asm;
         // We need to set the TTBR0_EL1 register to a newly allocated page table.
         // We also need to put the recursive mapping in it, so we need access first.

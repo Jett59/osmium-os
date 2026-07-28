@@ -15,9 +15,9 @@ mod buddy;
 mod console;
 mod elf;
 mod font_renderer;
-mod heap;
 mod initial_ramdisk;
 mod memory;
+mod memory_allocator;
 mod mmio;
 mod paging;
 mod physical_memory_manager;
@@ -63,7 +63,7 @@ mod main {
 
         arch_api::init::arch_init(&no_concurrency);
         physical_memory_manager::sanity_check();
-        heap::sanity_check();
+        memory_allocator::sanity_check();
         console::println!("Initialized the display (obviously)");
         let required_acpi_tables = acpi::find_required_acpi_tables().unwrap();
         let acpi_info = arch_api::acpi::handle_acpi_info(required_acpi_tables);

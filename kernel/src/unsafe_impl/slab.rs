@@ -1,4 +1,7 @@
-use core::ptr::null_mut;
+use core::{
+    ops::{Deref, DerefMut},
+    ptr::null_mut,
+};
 
 use crate::{
     physical_memory_manager::BLOCK_SIZE,
@@ -13,7 +16,7 @@ struct SlabUnusedEntry {
 #[derive(Clone, Copy)]
 struct SlabHeadEntry<const SIZE: usize> {
     next: *mut SlabEntry<SIZE>,
-    previous_of_this_size: *mut SlabEntry<SIZE>,
+    previous: *mut SlabEntry<SIZE>,
     first_unused_index: u16,
     allocated_count: u16,
 }
@@ -31,13 +34,23 @@ pub struct Slab<const SIZE: usize> {
     pointer: *mut SlabEntry<SIZE>,
 }
 
+// SAFETY: the Slab owns the memory it points to, and does not mess with any other memory.
+unsafe impl<const SIZE: usize> Send for Slab<SIZE> {}
+// SAFETY: we do not use interior mutability.
+unsafe impl<const SIZE: usize> Sync for Slab<SIZE> {}
+
+pub const MIN_SLAB_ENTRY_SIZE: usize = size_of::<SlabEntry<0>>();
+
 impl<const SIZE: usize> Slab<SIZE> {
     const ENTRY_COUNT: usize = BLOCK_SIZE / size_of::<SlabEntry<SIZE>>();
 
     pub fn new(allocation: AllocatedMemoryToken) -> Self {
         // Slightly awkward, but basically checks that `32 <= SIZE <= BLOCK_SIZE / 2` at compile time.
         const fn check<const SIZE: usize>() {
-            assert!(SIZE >= 32, "Slab entries must be at least 32 bytes");
+            assert!(
+                SIZE >= MIN_SLAB_ENTRY_SIZE,
+                "Slab entries must be sufficiently large"
+            );
             assert!(
                 SIZE <= BLOCK_SIZE / 2,
                 "Slab entries must be at most half a block"
@@ -51,7 +64,7 @@ impl<const SIZE: usize> Slab<SIZE> {
         let entries = unsafe { core::slice::from_raw_parts_mut(pointer, Self::ENTRY_COUNT) };
         entries[0].head = SlabHeadEntry {
             next: null_mut(),
-            previous_of_this_size: null_mut(),
+            previous: null_mut(),
             first_unused_index: 1,
             allocated_count: 0,
         };
@@ -113,6 +126,14 @@ impl<const SIZE: usize> Slab<SIZE> {
         Self { pointer: ptr }
     }
 
+    /// # Safety
+    /// The pointer must have been obtained from a slab of the same size, and must not be held by another `Slab` instance.
+    pub unsafe fn from_raw(ptr: *mut u8) -> Self {
+        Self {
+            pointer: ptr as *mut SlabEntry<SIZE>,
+        }
+    }
+
     pub fn free(&mut self, token: AllocatedMemoryToken) {
         assert_eq!(token.size(), SIZE, "Token is wrong size for this slab");
         let offset = token.address() - self.pointer as usize;
@@ -125,7 +146,6 @@ impl<const SIZE: usize> Slab<SIZE> {
             index < Self::ENTRY_COUNT,
             "Token does not belong to this slab"
         );
-        debug_assert_ne!(index, 0, "Cannot free the head entry of a slab"); // Should be impossible
 
         let head = self.head_mut();
         debug_assert!(
@@ -163,20 +183,22 @@ impl<const SIZE: usize> Slab<SIZE> {
             None
         } else {
             // SAFETY: `next` is guaranteed to have been generated from a slab of the same size, which was previously owned by this slab.
-            let next_slab = unsafe { Slab::from_ptr(head.next) };
+            let mut next_slab = unsafe { Slab::from_ptr(head.next) };
             head.next = null_mut();
+            next_slab.head_mut().previous = null_mut();
             Some(next_slab)
         }
     }
 
     pub fn take_previous(&mut self) -> Option<Self> {
         let head = self.head_mut();
-        if head.previous_of_this_size.is_null() {
+        if head.previous.is_null() {
             None
         } else {
             // SAFETY: `previous_of_this_size` is guaranteed to have been generated from a slab of the same size, which was previously owned by this slab.
-            let previous_slab = unsafe { Slab::from_ptr(head.previous_of_this_size) };
-            head.previous_of_this_size = null_mut();
+            let mut previous_slab = unsafe { Slab::from_ptr(head.previous) };
+            head.previous = null_mut();
+            previous_slab.head_mut().next = null_mut();
             Some(previous_slab)
         }
     }
@@ -186,7 +208,7 @@ impl<const SIZE: usize> Slab<SIZE> {
     pub fn set_next(&mut self, mut next: Slab<SIZE>) -> (Option<Self>, Option<Self>) {
         let this_next = self.take_next();
         let provided_previous = next.take_previous();
-        next.head_mut().previous_of_this_size = self.pointer;
+        next.head_mut().previous = self.pointer;
         let next_ptr = next.into_ptr();
         let head = self.head_mut();
         head.next = next_ptr;
@@ -201,8 +223,118 @@ impl<const SIZE: usize> Slab<SIZE> {
         previous.head_mut().next = self.pointer;
         let previous_ptr = previous.into_ptr();
         let head = self.head_mut();
-        head.previous_of_this_size = previous_ptr;
+        head.previous = previous_ptr;
         (this_previous, provided_next)
+    }
+}
+
+pub struct DynamicSizedSlab {
+    pointer: *mut SlabEntry<0>,
+    size: usize,
+}
+
+unsafe impl Send for DynamicSizedSlab {}
+
+#[derive(Clone, Debug)]
+pub enum SlabSizeError {
+    IncorrectSize { expected: usize, actual: usize },
+}
+
+pub struct DynamicSizedSlabHandle<'a, const SIZE: usize> {
+    dynamic_slab: &'a DynamicSizedSlab,
+    slab: Slab<SIZE>,
+}
+
+pub struct MutDynamicSizedSlabHandle<'a, const SIZE: usize> {
+    dynamic_slab: &'a mut DynamicSizedSlab,
+    slab: Slab<SIZE>,
+}
+
+impl<const SIZE: usize> From<Slab<SIZE>> for DynamicSizedSlab {
+    fn from(slab: Slab<SIZE>) -> Self {
+        Self {
+            pointer: slab.into_ptr() as *mut SlabEntry<0>,
+            size: SIZE,
+        }
+    }
+}
+
+impl<const SIZE: usize> TryFrom<DynamicSizedSlab> for Slab<SIZE> {
+    type Error = SlabSizeError;
+
+    fn try_from(dynamic_slab: DynamicSizedSlab) -> Result<Self, Self::Error> {
+        if dynamic_slab.size != SIZE {
+            return Err(SlabSizeError::IncorrectSize {
+                expected: SIZE,
+                actual: dynamic_slab.size,
+            });
+        }
+        // SAFETY: The size has been checked, so the pointer is valid for this size.
+        Ok(unsafe { Slab::from_ptr(dynamic_slab.pointer as *mut SlabEntry<SIZE>) })
+    }
+}
+
+impl DynamicSizedSlab {
+    pub fn new<const SIZE: usize>(slab: Slab<SIZE>) -> Self {
+        slab.into()
+    }
+
+    pub fn get<const SIZE: usize>(
+        &self,
+    ) -> Result<DynamicSizedSlabHandle<'_, SIZE>, SlabSizeError> {
+        if self.size != SIZE {
+            return Err(SlabSizeError::IncorrectSize {
+                expected: SIZE,
+                actual: self.size,
+            });
+        }
+        // SAFETY: The size has been checked, so the pointer is valid for this size.
+        // By storing it in the handle, we ensure that parallel accesses obey Rust Rust's aliasing rules.
+        let slab = unsafe { Slab::from_ptr(self.pointer as *mut SlabEntry<SIZE>) };
+        Ok(DynamicSizedSlabHandle {
+            dynamic_slab: self,
+            slab,
+        })
+    }
+
+    pub fn get_mut<const SIZE: usize>(
+        &mut self,
+    ) -> Result<MutDynamicSizedSlabHandle<'_, SIZE>, SlabSizeError> {
+        if self.size != SIZE {
+            return Err(SlabSizeError::IncorrectSize {
+                expected: SIZE,
+                actual: self.size,
+            });
+        }
+        // SAFETY: The size has been checked, so the pointer is valid for this size.
+        // By storing it in the handle, we ensure that parallel accesses obey Rust Rust's aliasing rules.
+        let slab = unsafe { Slab::from_ptr(self.pointer as *mut SlabEntry<SIZE>) };
+        Ok(MutDynamicSizedSlabHandle {
+            dynamic_slab: self,
+            slab,
+        })
+    }
+}
+
+impl<const SIZE: usize> Deref for DynamicSizedSlabHandle<'_, SIZE> {
+    type Target = Slab<SIZE>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.slab
+    }
+}
+
+impl<const SIZE: usize> Deref for MutDynamicSizedSlabHandle<'_, SIZE> {
+    type Target = Slab<SIZE>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.slab
+    }
+}
+
+impl<const SIZE: usize> DerefMut for MutDynamicSizedSlabHandle<'_, SIZE> {
+    fn deref_mut(&mut self) -> &mut Slab<SIZE> {
+        &mut self.slab
     }
 }
 

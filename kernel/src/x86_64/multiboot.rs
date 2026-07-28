@@ -2,11 +2,11 @@ use core::{mem::size_of, ptr::addr_of};
 
 use crate::{
     arch_api::{acpi, initial_ramdisk},
-    heap::{PhysicalAddressHandle, map_physical_memory},
     memory::{
         DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         Validateable, align_address_down, align_address_up, reinterpret_memory, slice_from_memory,
     },
+    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     paging::{MemoryType, PagePermissions},
     physical_memory_manager::{BLOCK_SIZE, mark_as_free},
     unsafe_impl::{

@@ -14,6 +14,7 @@ pub fn arch_init(_no_concurrency: &NoConcurrency) {
         .map(|token| {
             // Align the tokens to block size, as expected by the PMM.
             let token_address = token.address();
+            // TODO: this calculation is slightly wrong, if the token is already aligned then it will skip a block.
             let (_, token) = token.split_at(BLOCK_SIZE - token_address % BLOCK_SIZE);
             let token_size = token.size();
             let (token, _) = token.split_at(token_size - (token_size % BLOCK_SIZE));

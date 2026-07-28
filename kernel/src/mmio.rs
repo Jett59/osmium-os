@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     arch_api::asm::memory_barrier,
-    heap::{map_physical_memory, PhysicalAddressHandle},
+    memory_allocator::{map_physical_memory, PhysicalAddressHandle},
     paging::{MemoryType, PagePermissions},
 };
 

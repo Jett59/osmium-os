@@ -10,7 +10,7 @@ use alloc::{
 
 use crate::{
     arch_api::acpi,
-    heap::{PhysicalAddressHandle, map_physical_memory},
+    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     memory::{Validateable, reinterpret_memory},
     paging::{MemoryType, PagePermissions},
     println,

@@ -12,7 +12,7 @@ use common::{
 };
 
 use crate::{
-    heap::{PhysicalAddressHandle, map_physical_memory},
+    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     paging::{MemoryType, PagePermissions},
     unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken},
 };
