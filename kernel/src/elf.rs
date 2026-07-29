@@ -2,7 +2,7 @@ use common::elf::{ElfBinary, LoadableSegment};
 
 use crate::{
     paging::{MemoryType, PAGE_SIZE, PagePermissions, change_permissions},
-    unsafe_impl::memory::{AllocatedMemoryToken, MemoryToken},
+    unsafe_impl::memory_token::{AllocatedMemoryToken, MemoryToken},
     user_memory::{UserAddressSpaceHandle, allocate_user_memory_at},
 };
 

@@ -2,7 +2,7 @@ use crate::{
     buddy::BuddyAllocator,
     paging::{MemoryType, PagePermissions},
     physical_memory_manager,
-    unsafe_impl::memory::{
+    unsafe_impl::memory_token::{
         AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
     },
 };

@@ -3,7 +3,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::unsafe_impl::memory::MemoryToken;
+use crate::unsafe_impl::memory_token::MemoryToken;
 
 /// A token that represents a range of memory in terms of blocks, where each block is of size `BLOCK_SIZE`.
 /// Slightly confusingly, the `address` and `size` methods return the address and size in blocks, not bytes.
@@ -245,7 +245,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::unsafe_impl::memory::test::TestMemoryToken;
+    use crate::unsafe_impl::memory_token::test::TestMemoryToken;
 
     use super::*;
 

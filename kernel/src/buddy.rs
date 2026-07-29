@@ -1,4 +1,4 @@
-use crate::unsafe_impl::memory::MemoryToken;
+use crate::unsafe_impl::memory_token::MemoryToken;
 
 struct LeafBuddyEntry<T: MemoryToken> {
     order: u8,
@@ -473,7 +473,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::unsafe_impl::memory::test::TestMemoryToken;
+    use crate::unsafe_impl::memory_token::test::TestMemoryToken;
 
     use super::*;
 

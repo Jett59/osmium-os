@@ -1,11 +1,8 @@
 use alloc::boxed::Box;
 
-use crate::{
-    arch::gicv2::Gicv2,
-    unsafe_impl::{
-        arch::asm::enable_interrupts,
-        init_cell::{InitCell, NoConcurrency},
-    },
+use crate::unsafe_impl::{
+    arch::{asm::enable_interrupts, gicv2::Gicv2},
+    init_cell::{InitCell, NoConcurrency},
 };
 
 use super::acpi::AcpiInfo;
@@ -119,11 +116,7 @@ pub fn disable_interrupt(interrupt_number: u32) {
     GIC.get().unwrap().disable_interrupt(interrupt_number)
 }
 
-pub fn configure_interrupt(
-    interrupt_number: u32,
-    edge_triggered: bool,
-    priority: Priority,
-) {
+pub fn configure_interrupt(interrupt_number: u32, edge_triggered: bool, priority: Priority) {
     GIC.get()
         .unwrap()
         .configure_interrupt(interrupt_number, edge_triggered, priority)

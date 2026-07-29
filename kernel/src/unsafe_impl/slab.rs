@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     physical_memory_manager::BLOCK_SIZE,
-    unsafe_impl::memory::{AllocatedMemoryToken, MemoryToken},
+    unsafe_impl::memory_token::{AllocatedMemoryToken, MemoryToken},
 };
 
 #[derive(Clone, Copy)]

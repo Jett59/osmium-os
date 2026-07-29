@@ -14,7 +14,7 @@ use common::{
 use crate::{
     memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     paging::{MemoryType, PagePermissions},
-    unsafe_impl::memory::{MemoryToken, PhysicalMemoryToken},
+    unsafe_impl::memory_token::{MemoryToken, PhysicalMemoryToken},
 };
 
 #[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]

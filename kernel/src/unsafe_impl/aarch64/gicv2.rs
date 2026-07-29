@@ -42,104 +42,106 @@ impl Gicv2 {
     /// # Safety
     /// There must be no other active drivers, and the provided addresses must point to valid GICs.
     pub unsafe fn new(distributor_address: usize, cpu_interface_address: usize) -> Self {
-        let distributor_registers = MmioMemoryHandle::new(
-            distributor_address,
-            DISTRIBUTOR_RANGE_LENGTH,
-            PagePermissions::KERNEL_READ_WRITE,
-        );
-        let cpu_interface_registers = MmioMemoryHandle::new(
-            cpu_interface_address,
-            CPU_INTERFACE_RANGE_LENGTH,
-            PagePermissions::KERNEL_READ_WRITE,
-        );
+        unsafe {
+            let distributor_registers = MmioMemoryHandle::new(
+                distributor_address,
+                DISTRIBUTOR_RANGE_LENGTH,
+                PagePermissions::KERNEL_READ_WRITE,
+            );
+            let cpu_interface_registers = MmioMemoryHandle::new(
+                cpu_interface_address,
+                CPU_INTERFACE_RANGE_LENGTH,
+                PagePermissions::KERNEL_READ_WRITE,
+            );
 
-        // The GIC spec recommends that we disable the GIC distributor before doing any discovery.
-        distributor_registers
-            .at_offset::<u32>(DISTRIBUTOR_CONTROL_OFFSET)
-            .write(0x0);
-
-        // The identification register (or interrupt controller type register, according to the spec) has these useful fields:
-        // - bits 4:0: 32(n+1) gives the number of interrupt lines supported by the GIC.
-        // - bits 7:5: n+1 gives the number of CPU interfaces connected to the distributor.
-        let identification_register = distributor_registers
-            .at_offset::<u32>(DISTRIBUTOR_IDENTIFICATION_OFFSET)
-            .read();
-        let interrupt_line_count = 32 * ((identification_register & 0b11111) + 1);
-        let cpu_interface_count = ((identification_register >> 5) & 0b111) + 1;
-
-        // To discover which interrupt lines are usable, we have to do the following:
-        // - Write 0xFFFFFFFF to the set-enable register.
-        // - Read the set-enable register. Any bits set to 0 are unusable.
-        // - Write 0xFFFFFFFF to the clear-enable register.
-        // - Read the clear-enable register. Any bits set to 1 are unusable.
-        // This is necessary since there may be interrupt lines which can't be enabled, or that can't be disabled. Either way we can't use them.
-        let mut unusable_interrupt_lines = Vec::new();
-
-        for enable_register_index in 0..(interrupt_line_count / 32) {
+            // The GIC spec recommends that we disable the GIC distributor before doing any discovery.
             distributor_registers
-                .at_offset::<u32>(
-                    DISTRIBUTOR_SET_ENABLE_OFFSET + (enable_register_index as usize * 4),
-                )
-                .write(0xFFFFFFFF);
-            let set_enable_register_value = distributor_registers
-                .at_offset::<u32>(
-                    DISTRIBUTOR_SET_ENABLE_OFFSET + (enable_register_index as usize * 4),
-                )
+                .at_offset::<u32>(DISTRIBUTOR_CONTROL_OFFSET)
+                .write(0x0);
+
+            // The identification register (or interrupt controller type register, according to the spec) has these useful fields:
+            // - bits 4:0: 32(n+1) gives the number of interrupt lines supported by the GIC.
+            // - bits 7:5: n+1 gives the number of CPU interfaces connected to the distributor.
+            let identification_register = distributor_registers
+                .at_offset::<u32>(DISTRIBUTOR_IDENTIFICATION_OFFSET)
                 .read();
+            let interrupt_line_count = 32 * ((identification_register & 0b11111) + 1);
+            let cpu_interface_count = ((identification_register >> 5) & 0b111) + 1;
 
-            distributor_registers
-                .at_offset::<u32>(
-                    DISTRIBUTOR_CLEAR_ENABLE_OFFSET + (enable_register_index as usize * 4),
-                )
-                .write(0xFFFFFFFF);
-            let clear_enable_register_value = distributor_registers
-                .at_offset::<u32>(
-                    DISTRIBUTOR_CLEAR_ENABLE_OFFSET + (enable_register_index as usize * 4),
-                )
-                .read();
+            // To discover which interrupt lines are usable, we have to do the following:
+            // - Write 0xFFFFFFFF to the set-enable register.
+            // - Read the set-enable register. Any bits set to 0 are unusable.
+            // - Write 0xFFFFFFFF to the clear-enable register.
+            // - Read the clear-enable register. Any bits set to 1 are unusable.
+            // This is necessary since there may be interrupt lines which can't be enabled, or that can't be disabled. Either way we can't use them.
+            let mut unusable_interrupt_lines = Vec::new();
 
-            for bit_index in 0..32 {
-                let interrupt_line_index = enable_register_index * 32 + bit_index;
-                let set_enable_bit = (set_enable_register_value >> bit_index) & 0b1;
-                let clear_enable_bit = (clear_enable_register_value >> bit_index) & 0b1;
+            for enable_register_index in 0..(interrupt_line_count / 32) {
+                distributor_registers
+                    .at_offset::<u32>(
+                        DISTRIBUTOR_SET_ENABLE_OFFSET + (enable_register_index as usize * 4),
+                    )
+                    .write(0xFFFFFFFF);
+                let set_enable_register_value = distributor_registers
+                    .at_offset::<u32>(
+                        DISTRIBUTOR_SET_ENABLE_OFFSET + (enable_register_index as usize * 4),
+                    )
+                    .read();
 
-                if set_enable_bit == 0 || clear_enable_bit == 1 {
-                    unusable_interrupt_lines.push(interrupt_line_index);
+                distributor_registers
+                    .at_offset::<u32>(
+                        DISTRIBUTOR_CLEAR_ENABLE_OFFSET + (enable_register_index as usize * 4),
+                    )
+                    .write(0xFFFFFFFF);
+                let clear_enable_register_value = distributor_registers
+                    .at_offset::<u32>(
+                        DISTRIBUTOR_CLEAR_ENABLE_OFFSET + (enable_register_index as usize * 4),
+                    )
+                    .read();
+
+                for bit_index in 0..32 {
+                    let interrupt_line_index = enable_register_index * 32 + bit_index;
+                    let set_enable_bit = (set_enable_register_value >> bit_index) & 0b1;
+                    let clear_enable_bit = (clear_enable_register_value >> bit_index) & 0b1;
+
+                    if set_enable_bit == 0 || clear_enable_bit == 1 {
+                        unusable_interrupt_lines.push(interrupt_line_index);
+                    }
                 }
             }
-        }
 
-        // Now we just have to compose the ranges of usable interrupts from the list of unusable ones.
-        // I think the easiest way would be to store the the last unusable interrupt + 1, then create a range from there to the next unusable one.
-        // It helps here that the list of unusable interrupts is sorted.
-        let mut available_interrupt_ranges = Vec::new();
-        let mut next_range_start = 0;
-        for unusable_interrupt_line in unusable_interrupt_lines {
-            if unusable_interrupt_line > next_range_start {
-                available_interrupt_ranges.push(next_range_start..unusable_interrupt_line);
+            // Now we just have to compose the ranges of usable interrupts from the list of unusable ones.
+            // I think the easiest way would be to store the the last unusable interrupt + 1, then create a range from there to the next unusable one.
+            // It helps here that the list of unusable interrupts is sorted.
+            let mut available_interrupt_ranges = Vec::new();
+            let mut next_range_start = 0;
+            for unusable_interrupt_line in unusable_interrupt_lines {
+                if unusable_interrupt_line > next_range_start {
+                    available_interrupt_ranges.push(next_range_start..unusable_interrupt_line);
+                }
+                next_range_start = unusable_interrupt_line + 1;
             }
-            next_range_start = unusable_interrupt_line + 1;
-        }
-        if next_range_start < interrupt_line_count {
-            available_interrupt_ranges.push(next_range_start..interrupt_line_count);
-        }
+            if next_range_start < interrupt_line_count {
+                available_interrupt_ranges.push(next_range_start..interrupt_line_count);
+            }
 
-        // Finally, we re-enable the distributor.
-        distributor_registers
-            .at_offset::<u32>(DISTRIBUTOR_CONTROL_OFFSET)
-            .write(0x1);
+            // Finally, we re-enable the distributor.
+            distributor_registers
+                .at_offset::<u32>(DISTRIBUTOR_CONTROL_OFFSET)
+                .write(0x1);
 
-        crate::println!(
-            "Available interrupt lines: {:?}",
-            available_interrupt_ranges
-        );
+            crate::println!(
+                "Available interrupt lines: {:?}",
+                available_interrupt_ranges
+            );
 
-        Self {
-            distributor_registers,
-            cpu_interface_registers,
+            Self {
+                distributor_registers,
+                cpu_interface_registers,
 
-            cpu_interface_count,
-            available_interrupt_ranges: available_interrupt_ranges.into_boxed_slice(),
+                cpu_interface_count,
+                available_interrupt_ranges: available_interrupt_ranges.into_boxed_slice(),
+            }
         }
     }
 }

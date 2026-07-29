@@ -10,7 +10,7 @@ use crate::{
     memory_allocator::{alloc_large, free_large},
     physical_memory_manager::{BLOCK_SIZE, LOG2_BLOCK_SIZE},
     unsafe_impl::{
-        memory::{AllocatedMemoryToken, MemoryToken},
+        memory_token::{AllocatedMemoryToken, MemoryToken},
         slab::{DynamicSizedSlab, MIN_SLAB_ENTRY_SIZE, Slab},
     },
 };

@@ -2,7 +2,7 @@ use crate::{
     assert::const_assert,
     paging::PAGE_SIZE,
     unsafe_impl::{
-        memory::PhysicalMemoryToken,
+        memory_token::PhysicalMemoryToken,
         token_bitmap::{BitmapToken, TokenBitmap},
     },
 };

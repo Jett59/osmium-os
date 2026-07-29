@@ -11,7 +11,7 @@ use crate::{
     memory::{align_address_down, align_address_up},
     paging::{MemoryType, PagePermissions, create_mapping, take_mapping},
     physical_memory_manager::{self, BLOCK_SIZE, LOG2_BLOCK_SIZE},
-    unsafe_impl::memory::{
+    unsafe_impl::memory_token::{
         AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
     },
 };

@@ -11,7 +11,7 @@ use crate::{
     physical_memory_manager::{BLOCK_SIZE, mark_as_free},
     unsafe_impl::{
         init_cell::NoConcurrency,
-        memory::{MemoryToken, PhysicalMemoryToken},
+        memory_token::{MemoryToken, PhysicalMemoryToken},
     },
 };
 use common::framebuffer::{self, FrameBuffer};

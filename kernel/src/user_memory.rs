@@ -4,7 +4,7 @@ use crate::{
     paging::is_valid_user_address,
     paging::{MemoryType, PagePermissions, create_mapping},
     physical_memory_manager::{BLOCK_SIZE, allocate_block},
-    unsafe_impl::memory::{MemoryToken, VirtualMemoryToken},
+    unsafe_impl::memory_token::{MemoryToken, VirtualMemoryToken},
 };
 
 pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions: PagePermissions) {

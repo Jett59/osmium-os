@@ -1,4 +1,4 @@
-use crate::unsafe_impl::memory::{
+use crate::unsafe_impl::memory_token::{
     AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
 };
 pub use crate::unsafe_impl::paging::{

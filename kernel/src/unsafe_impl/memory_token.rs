@@ -236,7 +236,7 @@ impl<const N: usize> From<Box<[u8; N]>> for AllocatedMemoryToken {
 
 #[cfg(test)]
 pub mod test {
-    use crate::unsafe_impl::memory::MemoryToken;
+    use crate::unsafe_impl::memory_token::MemoryToken;
 
     /// A simple implementation of `MemoryToken` for testing purposes.
     /// Unlike all other memory tokens, these are Clone + Copy, and so do not guarantee uniqueness.
