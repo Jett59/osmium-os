@@ -111,7 +111,7 @@ impl Gicv2 {
             }
 
             // Now we just have to compose the ranges of usable interrupts from the list of unusable ones.
-            // I think the easiest way would be to store the the last unusable interrupt + 1, then create a range from there to the next unusable one.
+            // The easiest way is to store the the last unusable interrupt + 1, then create a range from there to the next unusable one.
             // It helps here that the list of unusable interrupts is sorted.
             let mut available_interrupt_ranges = Vec::new();
             let mut next_range_start = 0;

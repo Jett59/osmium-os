@@ -11,6 +11,7 @@ pub fn arch_init(_no_concurrency: &NoConcurrency) {
     load_exceptions();
 
     available_memory_map_entries()
+        .filter(|token| token.size() >= BLOCK_SIZE) // <-- VERY IMPORTANT to make split_at not panic.
         .map(|token| {
             // Align the tokens to block size, as expected by the PMM.
             let token_address = token.address();
