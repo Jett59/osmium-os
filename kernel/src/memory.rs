@@ -120,8 +120,11 @@ where
     }
 }
 
-impl<const N: usize> Deref for Array<'_, u8, N> {
-    type Target = [u8; N];
+impl<const N: usize> Deref for Array<'_, u8, N>
+where
+    [(); Self::SIZE]:,
+{
+    type Target = [u8; Self::SIZE];
 
     fn deref(&self) -> &Self::Target {
         self.data[..N].try_into().unwrap()

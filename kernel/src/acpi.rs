@@ -10,8 +10,9 @@ use alloc::{
 
 use crate::{
     arch_api::acpi,
+    memory::{Array, Endianness, FromBytes, FromBytesError, Validateable},
     memory_allocator::{PhysicalAddressHandle, map_physical_memory},
-    memory::{Validateable, reinterpret_memory},
+    memory_struct,
     paging::{MemoryType, PagePermissions},
     println,
 };
@@ -21,28 +22,27 @@ pub mod fadt;
 pub mod gtdt;
 pub mod madt;
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-struct AcpiTableHeader {
-    identifier: [u8; 4],
+memory_struct! {
+struct AcpiTableHeader<'lifetime> {
+    identifier: Array<'lifetime, u8, 4>,
     length: u32,
     revision: u8,
     checksum: u8,
-    oem_id: [u8; 6],
-    oem_table_id: [u8; 8],
+    oem_id: Array<'lifetime, u8, 6>,
+    oem_table_id: Array<'lifetime, u8, 8>,
     oem_revision: u32,
     creator_id: u32,
     creator_revision: u32,
 }
+}
 
 const MAX_TABLE_SIZE: usize = 0x100_0000; // 16 MiB
 
-impl Validateable for AcpiTableHeader {
+impl<'a> Validateable for AcpiTableHeader<'a> {
     fn validate(&self) -> bool {
         // I would like to check the checksum here, but unfortunately we would need the rest of the table for that.
         // Instead we just check that the length is within a reasonable range.
-        self.length as usize >= size_of::<AcpiTableHeader>()
-            && self.length as usize <= MAX_TABLE_SIZE
+        self.length() as usize >= AcpiTableHeader::SIZE && self.length() as usize <= MAX_TABLE_SIZE
     }
 }
 
@@ -61,8 +61,15 @@ impl Debug for AcpiTableHandle {
 
 #[derive(Debug)]
 pub enum AcpiTableParseError {
-    InvalidHeader,
+    InvalidHeader(&'static str),
+    FromBytes(FromBytesError),
     ChecksumFailure,
+}
+
+impl From<FromBytesError> for AcpiTableParseError {
+    fn from(error: FromBytesError) -> Self {
+        Self::FromBytes(error)
+    }
 }
 
 impl AcpiTableHandle {
@@ -72,14 +79,16 @@ impl AcpiTableHandle {
     pub unsafe fn new(physical_address: usize) -> Result<Self, AcpiTableParseError> {
         let physical_memory_handle = map_physical_memory(
             physical_address,
-            size_of::<AcpiTableHeader>(),
+            AcpiTableHeader::SIZE,
             MemoryType::Normal,
             PagePermissions::KERNEL_READ_ONLY,
         );
-        let header = reinterpret_memory::<AcpiTableHeader>(&physical_memory_handle)
-            .ok_or(AcpiTableParseError::InvalidHeader)?;
-        let length = header.length as usize;
-        let identifier = header.identifier;
+        let header = AcpiTableHeader::from_bytes(Endianness::Little, &physical_memory_handle)?;
+        if !header.validate() {
+            return Err(AcpiTableParseError::InvalidHeader("Failed validation"));
+        }
+        let length = header.length() as usize;
+        let identifier = *header.identifier();
         // To be certain that we don't map the same memory multiple times, we have to drop our handle before creating a new one.
         drop(physical_memory_handle);
         let physical_memory_handle = map_physical_memory(
@@ -107,11 +116,11 @@ impl AcpiTableHandle {
     }
 
     pub fn body(&self) -> &[u8] {
-        &self.physical_memory_handle[size_of::<AcpiTableHeader>()..]
+        &self.physical_memory_handle[AcpiTableHeader::SIZE..]
     }
 
     pub fn body_mut(&mut self) -> &mut [u8] {
-        &mut self.physical_memory_handle[size_of::<AcpiTableHeader>()..]
+        &mut self.physical_memory_handle[AcpiTableHeader::SIZE..]
     }
 }
 
