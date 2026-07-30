@@ -162,7 +162,7 @@ pml2:
 
 .bss
 stack:
-.fill 8192
+.fill 65536
 .globl stack_end
 stack_end:
 
