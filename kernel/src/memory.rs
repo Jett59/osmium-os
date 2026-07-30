@@ -211,7 +211,7 @@ macro_rules! __internal_memory_struct_accessors {
             let offset = $offset_acc;
             let bytes = &self.memory[offset..offset + <$field_type as $crate::memory::FromBytes>::SIZE];
             // Error message should include the field name and type for easier debugging.
-            let value = $crate::memory::FromBytes::from_bytes(self.endianness, bytes).expect(&alloc::format!("Failed to parse field {} of type {} from memory", stringify!($field_name), stringify!($field_type)));
+            let value = $crate::memory::FromBytes::from_bytes(self.endianness, bytes).expect(concat!("Failed to parse field ", stringify!($field_name), " of type ", stringify!($field_type)));
             value
         }
         $crate::__internal_memory_struct_accessors!{$visibility, ($offset_acc + <$field_type as $crate::memory::FromBytes>::SIZE), $($extra_field_names: $extra_field_types),*}
@@ -227,35 +227,6 @@ impl<const N: usize> FromBytes<'_> for ReservedMemory<N> {
     }
 
     const SIZE: usize = N;
-}
-
-pub unsafe fn reinterpret_memory<T: Validateable>(memory: &[u8]) -> Option<&T> {
-    if memory.len() < core::mem::size_of::<T>() {
-        return None;
-    }
-    let ptr = memory.as_ptr() as *const T;
-    let reference = &*ptr;
-    if reference.validate() {
-        Some(reference)
-    } else {
-        None
-    }
-}
-
-impl<'lifetime, T: Validateable> FromBytes<'lifetime> for &'lifetime T {
-    fn from_bytes(_endianness: Endianness, bytes: &'lifetime [u8]) -> Result<Self, FromBytesError> {
-        if bytes.len() < core::mem::size_of::<T>() {
-            return Err(FromBytesError::InvalidSize {
-                actual: bytes.len(),
-                expected: core::mem::size_of::<T>(),
-            });
-        }
-        Ok(unsafe {
-            reinterpret_memory(bytes).ok_or(FromBytesError::InvalidMemory("Validation failed"))?
-        })
-    }
-
-    const SIZE: usize = size_of::<T>();
 }
 
 pub unsafe fn slice_from_memory<'lifetime>(
@@ -359,37 +330,32 @@ mod test {
 
     #[test]
     fn test_dynamic_sized_object_iterator() {
-        #[repr(C, packed)]
-        struct TestStruct {
-            a: u8,
-            b: u8,
-            c: u8,
-        }
-
-        impl Validateable for TestStruct {
-            fn validate(&self) -> bool {
-                true
+        memory_struct! {
+            struct TestStruct<'_> {
+                a: u8,
+                b: u8,
+                c: u8,
             }
         }
 
-        impl DynamicallySized for TestStruct {
+        impl DynamicallySized for TestStruct<'_> {
             fn size(&self) -> usize {
-                3
+                TestStruct::SIZE
             }
         }
 
         let memory = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let iterator: DynamicallySizedObjectIterator<&TestStruct> =
+        let iterator: DynamicallySizedObjectIterator<TestStruct> =
             DynamicallySizedObjectIterator::new(Endianness::Little, &memory);
         let mut iterator = iterator.peekable();
-        assert_eq!(iterator.peek().unwrap().value.a, 0);
-        assert_eq!(iterator.next().unwrap().value.b, 1);
-        assert_eq!(iterator.peek().unwrap().value.a, 3);
-        assert_eq!(iterator.next().unwrap().value.c, 5);
-        assert_eq!(iterator.peek().unwrap().value.a, 6);
-        assert_eq!(iterator.next().unwrap().value.a, 6);
-        assert_eq!(iterator.peek().unwrap().value.a, 9);
-        assert_eq!(iterator.next().unwrap().value.b, 10);
+        assert_eq!(iterator.peek().unwrap().value.a(), 0);
+        assert_eq!(iterator.next().unwrap().value.b(), 1);
+        assert_eq!(iterator.peek().unwrap().value.a(), 3);
+        assert_eq!(iterator.next().unwrap().value.c(), 5);
+        assert_eq!(iterator.peek().unwrap().value.a(), 6);
+        assert_eq!(iterator.next().unwrap().value.a(), 6);
+        assert_eq!(iterator.peek().unwrap().value.a(), 9);
+        assert_eq!(iterator.next().unwrap().value.b(), 10);
         assert!(iterator.peek().is_none());
         assert!(iterator.next().is_none());
     }

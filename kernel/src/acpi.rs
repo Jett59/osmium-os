@@ -38,7 +38,7 @@ struct AcpiTableHeader<'lifetime> {
 
 const MAX_TABLE_SIZE: usize = 0x100_0000; // 16 MiB
 
-impl<'a> Validateable for AcpiTableHeader<'a> {
+impl Validateable for AcpiTableHeader<'_> {
     fn validate(&self) -> bool {
         // I would like to check the checksum here, but unfortunately we would need the rest of the table for that.
         // Instead we just check that the length is within a reasonable range.
