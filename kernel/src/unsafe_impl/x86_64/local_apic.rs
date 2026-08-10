@@ -11,11 +11,11 @@ use crate::{
     },
 };
 
-use super::interrupts::{SPURIOUS_INTERRUPT_VECTOR, TIMER_INTERRUPT};
+use crate::unsafe_impl::arch::interrupts::{SPURIOUS_INTERRUPT_VECTOR, TIMER_INTERRUPT};
 
 static APIC_HANDLE: InitCell<MmioMemoryHandle> = InitCell::new();
 
-const LOCAL_APIC_MEMORY_RANGE_SIZE: usize = 0x1000;
+pub const LOCAL_APIC_MEMORY_RANGE_SIZE: usize = 0x1000;
 
 const LOCAL_APIC_ID_OFFSET: usize = 0x20;
 const LOCAL_APIC_VERSION_OFFSET: usize = 0x30;
@@ -47,12 +47,10 @@ const LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET: usize = 0x3E0;
 /// # Safety
 /// The physical address must both point to a APIC, and also not be in use by another instance of the APIC driver or be mapped anywhere else.
 /// Additionally, there will be massive confusion if the legacy PIC is not disabled by now, so callers must ensure that it is disabled.
-pub unsafe fn initialize(address: usize, no_concurrency: &NoConcurrency) {
+pub unsafe fn initialize(address: PhysicalMmioToken, no_concurrency: &NoConcurrency) {
+    assert_eq!(address.size(), LOCAL_APIC_MEMORY_RANGE_SIZE);
     APIC_HANDLE.set(
-        MmioMemoryHandle::new(
-            PhysicalMmioToken::new(address, LOCAL_APIC_MEMORY_RANGE_SIZE),
-            PagePermissions::KERNEL_READ_WRITE,
-        ),
+        MmioMemoryHandle::new(address, PagePermissions::KERNEL_READ_WRITE),
         no_concurrency,
     );
 
@@ -61,19 +59,19 @@ pub unsafe fn initialize(address: usize, no_concurrency: &NoConcurrency) {
     };
 
     // To enable the APIC, we have to set the spurious interrupt vector with bit 8 set to 1.
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_OFFSET)
-        .write(SPURIOUS_INTERRUPT_VECTOR as u32 | 0x100);
+    unsafe {
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_OFFSET)
+            .write(SPURIOUS_INTERRUPT_VECTOR as u32 | 0x100);
+    }
 }
 
-/// # Safety
-/// The APIC must be initialized properly (see above).
-pub unsafe fn end_of_interrupt() {
+pub fn end_of_interrupt() {
     let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
-    apic_handle.at_offset::<u32>(LOCAL_APIC_EOI_OFFSET).write(0);
+    unsafe { apic_handle.at_offset::<u32>(LOCAL_APIC_EOI_OFFSET).write(0) };
 }
 
 bitflags! {
@@ -90,30 +88,30 @@ bitflags! {
     }
 }
 
-/// # Safety
-/// The APIC must be initialized properly (see above).
-pub unsafe fn initialize_timer() {
+pub fn initialize_timer() {
     let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
     // We set the timer to be one-shot, with an initial count of 0 and a divisor of 64.
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_LVT_TIMER_OFFSET)
-        .write(TIMER_INTERRUPT as u32);
+    unsafe {
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_LVT_TIMER_OFFSET)
+            .write(TIMER_INTERRUPT as u32);
 
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_TIMER_INITIAL_COUNT_OFFSET)
-        .write(0);
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_TIMER_INITIAL_COUNT_OFFSET)
+            .write(0);
 
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET)
-        .write(0b1001);
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET)
+            .write(0b1001);
+    }
 }
 
 static TIMER_FREQUENCY: AtomicU64 = AtomicU64::new(0);
 
-pub fn set_timer_frequency(frequency: u64) {
+pub fn store_timer_frequency(frequency: u64) {
     TIMER_FREQUENCY.store(frequency, Ordering::SeqCst);
 }
 
@@ -123,29 +121,27 @@ pub fn get_timer_frequency() -> u64 {
 
 /// Read the raw count from the timer.
 /// Callers will generally want to convert this to some normal unit of time, which would generally involve multiplying by some value (e.g. 1000 for milliseconds) and dividing by the frequency.
-///
-/// # Safety
-/// The APIC must be initialized properly (see above).
-pub unsafe fn read_timer() -> u64 {
+pub fn read_timer() -> u64 {
     let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_TIMER_CURRENT_COUNT_OFFSET)
-        .read() as u64
+    unsafe {
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_TIMER_CURRENT_COUNT_OFFSET)
+            .read() as u64
+    }
 }
 
 /// Set the timer to fire after the given number of ticks.
-///
-/// # Safety
-/// The APIC must be initialized properly (see above).
 pub unsafe fn set_timer(ticks: u64) {
     let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };
 
-    apic_handle
-        .at_offset::<u32>(LOCAL_APIC_TIMER_INITIAL_COUNT_OFFSET)
-        .write(ticks as u32);
+    unsafe {
+        apic_handle
+            .at_offset::<u32>(LOCAL_APIC_TIMER_INITIAL_COUNT_OFFSET)
+            .write(ticks as u32);
+    }
 }

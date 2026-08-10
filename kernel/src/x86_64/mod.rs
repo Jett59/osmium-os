@@ -1,7 +1,4 @@
 pub mod arch_api;
-mod hpet;
-mod interrupts;
-mod local_apic;
 mod multiboot;
 mod syscall;
 mod task_state_segment;

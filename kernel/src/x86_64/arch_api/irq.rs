@@ -1,6 +1,7 @@
-use crate::arch::local_apic;
 use crate::unsafe_impl::arch::asm::{enable_interrupts, io_wait, write_port8};
+use crate::unsafe_impl::arch::local_apic::{self, LOCAL_APIC_MEMORY_RANGE_SIZE};
 use crate::unsafe_impl::init_cell::NoConcurrency;
+use crate::unsafe_impl::memory_token::{MemoryToken, PhysicalMmioToken};
 
 use super::acpi::AcpiInfo;
 
@@ -8,7 +9,10 @@ pub fn initialize(acpi_info: &AcpiInfo, no_concurrency: NoConcurrency) {
     // SAFETY: The MADT is required to contain the correct address for the local APIC, and this is the first place it is ever used.
     unsafe {
         local_apic::initialize(
-            acpi_info.madt.local_interrupt_controller_address as usize,
+            PhysicalMmioToken::new(
+                acpi_info.madt.local_interrupt_controller_address as usize,
+                LOCAL_APIC_MEMORY_RANGE_SIZE,
+            ),
             &no_concurrency,
         )
     };

@@ -70,9 +70,7 @@ unsafe impl Send for MmioMemoryHandle {}
 unsafe impl Sync for MmioMemoryHandle {}
 
 impl MmioMemoryHandle {
-    /// # Safety
-    /// see `heap::map_physical_memory`.
-    pub unsafe fn new(memory: PhysicalMmioToken, permissions: PagePermissions) -> Self {
+    pub fn new(memory: PhysicalMmioToken, permissions: PagePermissions) -> Self {
         let mut handle = map_physical_memory(memory, permissions);
         let mmio_range = MmioRange::new(handle.as_mut_ptr(), handle.size());
         Self {

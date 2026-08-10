@@ -1,6 +1,12 @@
 use crate::{
-    arch::{hpet::Hpet, local_apic},
     println,
+    unsafe_impl::{
+        arch::{
+            hpet::{HPET_MMIO_SIZE, Hpet},
+            local_apic,
+        },
+        memory_token::{MemoryToken, PhysicalMmioToken},
+    },
 };
 
 use super::acpi::AcpiInfo;
@@ -17,7 +23,12 @@ pub fn initialize(acpi_info: &AcpiInfo) {
 
     // SAFETY: The ACPI tables are required to give us a good HPET.
     // Additionally, this function is only called once, and then before anything else has had a chance to use the HPET.
-    let hpet = unsafe { Hpet::new(acpi_info.hpet.address as usize) };
+    let hpet = unsafe {
+        Hpet::new(PhysicalMmioToken::new(
+            acpi_info.hpet.address as usize,
+            HPET_MMIO_SIZE,
+        ))
+    };
 
     unsafe { local_apic::initialize_timer() };
     unsafe { local_apic::set_timer(0xffffffff) };
@@ -29,7 +40,7 @@ pub fn initialize(acpi_info: &AcpiInfo) {
     while unsafe { hpet.counter_value() } < end {}
 
     let frequency = 10 * (0xffffffff - unsafe { local_apic::read_timer() });
-    local_apic::set_timer_frequency(frequency);
+    local_apic::store_timer_frequency(frequency);
 
     println!("APIC timer frequency: {}Hz", frequency);
 

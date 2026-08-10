@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use core::arch::{asm, global_asm};
 use spin::LazyLock;
 
-use crate::{arch::local_apic, print, println};
+use crate::{print, println, unsafe_impl::arch::local_apic};
 
 bitflags! {
     struct IdtFlags: u8 {

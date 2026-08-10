@@ -1,8 +1,8 @@
 use core::ptr::addr_of;
 
 use crate::{
-    arch::{interrupts, syscall, task_state_segment},
-    unsafe_impl::{init_cell::NoConcurrency, paging::init::initialize_paging},
+    arch::{syscall, task_state_segment},
+    unsafe_impl::{arch::interrupts, init_cell::NoConcurrency, paging::init::initialize_paging},
 };
 
 use super::super::multiboot;
