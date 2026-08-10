@@ -29,12 +29,7 @@ pub fn allocate_user_memory_at(virtual_address: usize, size: usize, permissions:
 
     for virtual_block in virtual_memory.chunks(BLOCK_SIZE) {
         let physical_block = allocate_block().expect("Out of memory");
-        create_mapping(
-            MemoryType::Normal,
-            permissions,
-            physical_block,
-            virtual_block,
-        );
+        create_mapping(permissions, physical_block, virtual_block);
     }
 }
 

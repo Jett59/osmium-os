@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     physical_memory_manager::BLOCK_SIZE,
-    unsafe_impl::memory_token::{AllocatedMemoryToken, MemoryToken},
+    unsafe_impl::memory_token::{AllocatedMemoryToken, AllocatedRwToken, MemoryToken},
 };
 
 #[derive(Clone, Copy)]
@@ -44,7 +44,7 @@ pub const MIN_SLAB_ENTRY_SIZE: usize = size_of::<SlabEntry<0>>();
 impl<const SIZE: usize> Slab<SIZE> {
     const ENTRY_COUNT: usize = BLOCK_SIZE / size_of::<SlabEntry<SIZE>>();
 
-    pub fn new(allocation: AllocatedMemoryToken) -> Self {
+    pub fn new(allocation: AllocatedRwToken) -> Self {
         // Slightly awkward, but basically checks that `32 <= SIZE <= BLOCK_SIZE / 2` at compile time.
         const fn check<const SIZE: usize>() {
             assert!(
@@ -107,10 +107,10 @@ impl<const SIZE: usize> Slab<SIZE> {
         self.head().allocated_count == 0
     }
 
-    pub fn try_into_allocation(self) -> Result<AllocatedMemoryToken, Self> {
+    pub fn try_into_allocation(self) -> Result<AllocatedRwToken, Self> {
         if self.is_empty() {
             // SAFETY: we have recovered all entries, so we can reconstitute the original block-sized allocation.
-            Ok(unsafe { AllocatedMemoryToken::new(self.pointer as usize, BLOCK_SIZE) })
+            Ok(unsafe { AllocatedRwToken::new(self.pointer as usize, BLOCK_SIZE) })
         } else {
             Err(self)
         }
@@ -134,7 +134,7 @@ impl<const SIZE: usize> Slab<SIZE> {
         }
     }
 
-    pub fn free(&mut self, token: AllocatedMemoryToken) {
+    pub fn free(&mut self, token: AllocatedRwToken) {
         assert_eq!(token.size(), SIZE, "Token is wrong size for this slab");
         let offset = token.address() - self.pointer as usize;
         assert!(
@@ -161,7 +161,7 @@ impl<const SIZE: usize> Slab<SIZE> {
         };
     }
 
-    pub fn allocate(&mut self) -> Option<AllocatedMemoryToken> {
+    pub fn allocate(&mut self) -> Option<AllocatedRwToken> {
         let head = self.head_mut();
         if head.first_unused_index == 0 {
             return None; // No free entries
@@ -174,7 +174,7 @@ impl<const SIZE: usize> Slab<SIZE> {
         head.first_unused_index = new_unused_index;
         head.allocated_count += 1;
         // SAFETY: now that the entry is out of the linked list, we have effectively removed the slab's ownership over it.
-        Some(unsafe { AllocatedMemoryToken::new(self.pointer as usize + index * SIZE, SIZE) })
+        Some(unsafe { AllocatedRwToken::new(self.pointer as usize + index * SIZE, SIZE) })
     }
 
     pub fn take_next(&mut self) -> Option<Self> {

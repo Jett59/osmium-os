@@ -1,12 +1,13 @@
-use core::{mem, ops::Deref};
+use core::{
+    mem,
+    ops::{Deref, DerefMut},
+};
 
 use alloc::boxed::Box;
 
-pub trait MemoryToken {
-    /// The type of the token that is used to represent a view into this memory region.
-    /// Ordinarily this should be `Self`, unless `new` or `Drop::drop` requires unique ownership.
-    type ViewToken: MemoryToken;
+use crate::paging::{MemoryType, PagePermissions};
 
+pub trait MemoryToken {
     /// # Safety
     /// Callers must ensure that the given memory region is valid for the token type and that it is uniquely owned.
     /// For unsafe code, ownership of the token implies unique ownership of the memory region it represents.
@@ -67,7 +68,7 @@ pub trait MemoryToken {
         unsafe { Self::new(self.address(), self.size() + other.size()) }
     }
 
-    fn view(&self, offset: usize, size: usize) -> MemoryTokenView<'_, Self, Self::ViewToken>
+    fn view(&self, offset: usize, size: usize) -> MemoryTokenView<'_, Self>
     where
         Self: Sized,
     {
@@ -76,8 +77,21 @@ pub trait MemoryToken {
             "view must be within the memory region"
         );
         // SAFETY: `view` is passed directly into the `MemoryTokenView` struct, which ensures that it cannot outlive the original token.
-        let view = unsafe { Self::ViewToken::new(self.address() + offset, size) };
+        let view = unsafe { Self::new(self.address() + offset, size) };
         MemoryTokenView { token: self, view }
+    }
+    
+    fn view_mut(&mut self, offset: usize, size: usize) -> MemoryTokenViewMut<'_, Self>
+    where
+        Self: Sized,
+    {
+        assert!(
+            size <= self.size() && offset + size <= self.size(),
+            "view must be within the memory region"
+        );
+        // SAFETY: `view` is passed directly into the `MemoryTokenViewMut` struct, which ensures that it cannot outlive the original token.
+        let view = unsafe { Self::new(self.address() + offset, size) };
+        MemoryTokenViewMut { token: self, view }
     }
 }
 
@@ -108,127 +122,186 @@ impl<Token: MemoryToken> Iterator for MemoryTokenChunks<Token> {
     }
 }
 
-/// A view into a memory region represented by a `MemoryToken`.
+/// A shared view into a memory region represented by a `MemoryToken`.
 ///
 /// This type is used to provide a safe way to access a subset of a memory region without requiring unique ownership of the original token.
 /// The only way to recover the `view` token by value is in the `Drop::drop` implementation, making this approximately equivalent to `&'a View`.
 /// The lifetime bound ensures that the view cannot outlive the original token.
-pub struct MemoryTokenView<'a, Token: MemoryToken, View: MemoryToken> {
+pub struct MemoryTokenView<'a, Token: MemoryToken> {
     token: &'a Token,
     // This is almost unsound, but the lifetime bound ensures that this duplicated instance will never out-live the original token.
     // So long as `view` is never moved out of this type, meaning it can only be used to obtain a reference, this is sound.
     // Since unsafe code (outside of this module) cannot have ownership of `view`, the requirement of uniqueness of ownership is still satisfied.
-    view: View,
+    view: Token,
 }
 
-impl<'a, Token: MemoryToken, View: MemoryToken> Deref for MemoryTokenView<'a, Token, View> {
-    type Target = View;
+impl<'a, Token: MemoryToken> Deref for MemoryTokenView<'a, Token> {
+    type Target = Token;
 
     fn deref(&self) -> &Self::Target {
         &self.view
     }
 }
 
-/// Represents ownership of an unused block of physical memory.
-/// Paging code consumes this type to prevent double-allocation.
-#[must_use]
-pub struct PhysicalMemoryToken {
-    start: usize,
-    size: usize,
+/// A mutable view into a memory region represented by a `MemoryToken`.
+///
+/// This type is used to provide a safe way to access a subset of a memory region without requiring unique ownership of the original token.
+/// The only way to recover the `view` token by value is in the `Drop::drop` implementation, making this approximately equivalent to `&'a View`.
+/// The lifetime bound ensures that the view cannot outlive the original token.
+pub struct MemoryTokenViewMut<'a, Token: MemoryToken> {
+    token: &'a mut Token,
+    // See above for safety
+    view: Token,
 }
 
-impl MemoryToken for PhysicalMemoryToken {
-    type ViewToken = Self;
+impl<'a, Token: MemoryToken> Deref for MemoryTokenViewMut<'a, Token> {
+    type Target = Token;
 
-    unsafe fn new(start: usize, size: usize) -> Self {
-        PhysicalMemoryToken { start, size }
-    }
-
-    fn address(&self) -> usize {
-        self.start
-    }
-
-    fn size(&self) -> usize {
-        self.size
+    fn deref(&self) -> &Self::Target {
+        &self.view
     }
 }
 
-/// Represents ownership of an unallocated block of virtual memory.
-#[must_use]
-pub struct VirtualMemoryToken {
-    start: usize,
-    size: usize,
-}
-
-impl MemoryToken for VirtualMemoryToken {
-    type ViewToken = Self;
-
-    unsafe fn new(start: usize, size: usize) -> Self {
-        VirtualMemoryToken { start, size }
-    }
-
-    fn address(&self) -> usize {
-        self.start
-    }
-
-    fn size(&self) -> usize {
-        self.size
+impl<'a, Token: MemoryToken> DerefMut for MemoryTokenViewMut<'a, Token> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.view
     }
 }
 
-/// Represents ownership of an allocated block of normal memory.
-/// This is more-or-less equivalent to a `Box<[u8]`, except that it is not automatically de-allocated when dropped, and it may not correspond to a heap allocation.
-/// However, the assumptions of `Box<[u8]>` are a strict superset of the requirements of `AllocatedMemoryToken`, so it is possible to convert a `Box<[u8]>` into an `AllocatedMemoryToken`, but not vice-versa.
-/// It is not suitable for MMIO, as it dereferences into a byte slice.
-#[must_use]
-pub struct AllocatedMemoryToken {
-    start: usize,
-    size: usize,
+macro_rules! basic_token {
+    ($name:ident) => {
+        #[must_use]
+        pub struct $name {
+            address: usize,
+            size: usize,
+        }
+
+        impl MemoryToken for $name {
+            unsafe fn new(address: usize, size: usize) -> Self {
+                $name { address, size }
+            }
+
+            fn address(&self) -> usize {
+                self.address
+            }
+
+            fn size(&self) -> usize {
+                self.size
+            }
+        }
+    };
 }
 
-impl AllocatedMemoryToken {
-    pub fn into_ptr(self) -> *mut u8 {
-        self.start as *mut u8
+basic_token!(VirtualMemoryToken);
+
+pub unsafe trait PhysicalMemoryToken: MemoryToken {
+    type AllocatedToken: AllocatedMemoryToken<PhysicalToken = Self>;
+
+    const MEMORY_TYPE: MemoryType;
+    const MAX_PAGE_PERMISSIONS: PagePermissions;
+}
+
+macro_rules! physical_token {
+    ($name:ident, $allocated:ty, $memory_type:expr, $max_permissions:expr) => {
+        basic_token!($name);
+
+        unsafe impl PhysicalMemoryToken for $name {
+            type AllocatedToken = $allocated;
+
+            const MEMORY_TYPE: MemoryType = $memory_type;
+            const MAX_PAGE_PERMISSIONS: PagePermissions = $max_permissions;
+        }
+    };
+}
+
+physical_token!(
+    PhysicalRwToken,
+    AllocatedRwToken,
+    MemoryType::Normal,
+    PagePermissions::USER_READ_WRITE_EXECUTE
+);
+physical_token!(
+    PhysicalRoToken,
+    AllocatedRoToken,
+    MemoryType::Normal,
+    PagePermissions::USER_READ_EXECUTE
+);
+physical_token!(
+    PhysicalMmioToken,
+    AllocatedMmioToken,
+    MemoryType::Device,
+    PagePermissions::USER_READ_WRITE
+);
+
+basic_token!(AllocatedRwToken);
+basic_token!(AllocatedRoToken);
+basic_token!(AllocatedMmioToken);
+
+pub unsafe trait AllocatedMemoryToken: MemoryToken {
+    type PhysicalToken: PhysicalMemoryToken<AllocatedToken = Self>;
+
+fn as_ptr(&self) -> *const u8
+    where
+        Self: Sized,
+    {
+        self.address() as *const u8
     }
 
+fn as_mut_ptr(&mut self) -> *mut u8
+    where
+        Self: Sized,
+    {
+        self.address() as *mut u8
+    }
+
+    fn into_ptr(self) -> *mut u8
+    where
+        Self: Sized,
+    {
+        self.address() as *mut u8
+    }
+}
+
+unsafe impl AllocatedMemoryToken for AllocatedRwToken {
+    type PhysicalToken = PhysicalRwToken;
+}
+unsafe impl AllocatedMemoryToken for AllocatedRoToken {
+    type PhysicalToken = PhysicalRoToken;
+}
+unsafe impl AllocatedMemoryToken for AllocatedMmioToken {
+    type PhysicalToken = PhysicalMmioToken;
+}
+
+impl AllocatedRoToken {
     pub fn as_slice(&self) -> &[u8] {
         // SAFETY: The caller has guaranteed that the memory region is valid and, and the self borrow prevents invalid aliasing.
-        unsafe { core::slice::from_raw_parts(self.start as *const u8, self.size) }
+        unsafe { core::slice::from_raw_parts(self.address as *const u8, self.size) }
+    }
+}
+
+impl AllocatedRwToken {
+    pub fn as_slice(&self) -> &[u8] {
+        // SAFETY: The caller has guaranteed that the memory region is valid, and the self borrow prevents invalid aliasing.
+        unsafe { core::slice::from_raw_parts(self.address as *const u8, self.size) }
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         // SAFETY: The caller has guaranteed that the memory region is valid and uniquely owned, and the self borrow prevents invalid aliasing.
-        unsafe { core::slice::from_raw_parts_mut(self.start as *mut u8, self.size) }
+        unsafe { core::slice::from_raw_parts_mut(self.address as *mut u8, self.size) }
     }
 }
 
-impl MemoryToken for AllocatedMemoryToken {
-    type ViewToken = Self;
-
-    unsafe fn new(start: usize, size: usize) -> Self {
-        AllocatedMemoryToken { start, size }
-    }
-
-    fn address(&self) -> usize {
-        self.start
-    }
-
-    fn size(&self) -> usize {
-        self.size
-    }
-}
-
-impl From<Box<[u8]>> for AllocatedMemoryToken {
+impl From<Box<[u8]>> for AllocatedRwToken {
     fn from(boxed: Box<[u8]>) -> Self {
         let size = boxed.len();
-        let start = boxed.as_ptr() as usize;
+        let address = boxed.as_ptr() as usize;
         mem::forget(boxed);
         // SAFETY: The box ensures unique ownership, and the code above effectively removes the box's own ownership of the region.
-        unsafe { Self::new(start, size) }
+        unsafe { Self::new(address, size) }
     }
 }
 
-impl<const N: usize> From<Box<[u8; N]>> for AllocatedMemoryToken {
+impl<const N: usize> From<Box<[u8; N]>> for AllocatedRwToken {
     fn from(boxed: Box<[u8; N]>) -> Self {
         (boxed as Box<[u8]>).into()
     }
@@ -253,8 +326,6 @@ pub mod test {
     }
 
     impl super::MemoryToken for TestMemoryToken {
-        type ViewToken = Self;
-
         unsafe fn new(start: usize, size: usize) -> Self {
             TestMemoryToken { start, size }
         }

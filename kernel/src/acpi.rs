@@ -13,8 +13,9 @@ use crate::{
     memory::{Array, Endianness, FromBytes, FromBytesError, Validateable},
     memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     memory_struct,
-    paging::{MemoryType, PagePermissions},
+    paging::PagePermissions,
     println,
+    unsafe_impl::memory_token::PhysicalRoToken,
 };
 
 pub mod fadt;
@@ -47,7 +48,7 @@ impl Validateable for AcpiTableHeader<'_> {
 }
 
 pub struct AcpiTableHandle {
-    physical_memory_handle: PhysicalAddressHandle,
+    physical_memory_handle: PhysicalAddressHandle<PhysicalRoToken>,
     identifier: [u8; 4],
 }
 
@@ -77,13 +78,13 @@ impl AcpiTableHandle {
     /// If the provided address doesn't refer to an ACPI table, there will likely be undefined behaviour since it is impossible to tell at this point.
     /// Additionally, it is UB if the table has already been mapped, since this would create possible aliasing issues.
     pub unsafe fn new(physical_address: usize) -> Result<Self, AcpiTableParseError> {
-        let physical_memory_handle = map_physical_memory(
+        let physical_memory_handle = map_physical_memory::<PhysicalRoToken>(
             physical_address,
             AcpiTableHeader::SIZE,
-            MemoryType::Normal,
             PagePermissions::KERNEL_READ_ONLY,
         );
-        let header = AcpiTableHeader::from_bytes(Endianness::Little, &physical_memory_handle)?;
+        let header =
+            AcpiTableHeader::from_bytes(Endianness::Little, physical_memory_handle.as_slice())?;
         if !header.validate() {
             return Err(AcpiTableParseError::InvalidHeader("Failed validation"));
         }
@@ -91,14 +92,14 @@ impl AcpiTableHandle {
         let identifier = *header.identifier();
         // To be certain that we don't map the same memory multiple times, we have to drop our handle before creating a new one.
         drop(physical_memory_handle);
-        let physical_memory_handle = map_physical_memory(
+        let physical_memory_handle = map_physical_memory::<PhysicalRoToken>(
             physical_address,
             length,
-            MemoryType::Normal,
             PagePermissions::KERNEL_READ_ONLY,
         );
         // Check the checksum.
         let sum = physical_memory_handle
+            .as_slice()
             .iter()
             .fold(0u8, |acc, &x| acc.wrapping_add(x));
         if sum != 0 {
@@ -116,11 +117,7 @@ impl AcpiTableHandle {
     }
 
     pub fn body(&self) -> &[u8] {
-        &self.physical_memory_handle[AcpiTableHeader::SIZE..]
-    }
-
-    pub fn body_mut(&mut self) -> &mut [u8] {
-        &mut self.physical_memory_handle[AcpiTableHeader::SIZE..]
+        &self.physical_memory_handle.as_slice()[AcpiTableHeader::SIZE..]
     }
 }
 

@@ -2,7 +2,7 @@ use crate::{
     assert::const_assert,
     paging::PAGE_SIZE,
     unsafe_impl::{
-        memory_token::PhysicalMemoryToken,
+        memory_token::PhysicalRwToken,
         token_bitmap::{BitmapToken, TokenBitmap},
     },
 };
@@ -27,15 +27,15 @@ pub const MAX_PHYSICAL_MEMORY: usize = 0x1000000000;
 
 pub const BLOCK_COUNT: usize = MAX_PHYSICAL_MEMORY / BLOCK_SIZE;
 
-static GLOBAL_PMM: TokenBitmap<PhysicalMemoryToken, BLOCK_SIZE, BLOCK_COUNT> = TokenBitmap::new();
+static GLOBAL_PMM: TokenBitmap<PhysicalRwToken, BLOCK_SIZE, BLOCK_COUNT> = TokenBitmap::new();
 
-pub fn mark_as_free(range: PhysicalMemoryToken) {
+pub fn mark_as_free(range: PhysicalRwToken) {
     GLOBAL_PMM.store_range(
         BitmapToken::try_from_inner(range).expect("address and size must be BLOCK_SIZE aligned"),
     );
 }
 
-pub fn allocate_block() -> Option<PhysicalMemoryToken> {
+pub fn allocate_block() -> Option<PhysicalRwToken> {
     GLOBAL_PMM
         .read_range(0, BLOCK_COUNT)
         .next()

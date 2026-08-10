@@ -14,7 +14,9 @@ use common::{
 use crate::{
     memory_allocator::{PhysicalAddressHandle, map_physical_memory},
     paging::{MemoryType, PagePermissions},
-    unsafe_impl::memory_token::{MemoryToken, PhysicalMemoryToken},
+    unsafe_impl::memory_token::{
+        MemoryToken, PhysicalMemoryToken, PhysicalMmioToken, PhysicalRwToken,
+    },
 };
 
 #[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
@@ -45,7 +47,7 @@ pub static mut MEMORY_MAP_TAG: MemoryMapTag = MemoryMapTag {
 
 static GOT_MEMORY_MAP: AtomicBool = AtomicBool::new(false);
 
-pub fn available_memory_map_entries() -> impl Iterator<Item = PhysicalMemoryToken> {
+pub fn available_memory_map_entries() -> impl Iterator<Item = PhysicalRwToken> {
     let entries: &[MemoryMapEntry] = if GOT_MEMORY_MAP.swap(true, Ordering::SeqCst) {
         &[]
     } else {
@@ -62,7 +64,7 @@ pub fn available_memory_map_entries() -> impl Iterator<Item = PhysicalMemoryToke
         .iter()
         .filter(|entry| entry.memory_type == MemoryMapEntryType::Available)
         // SAFETY: the memory map ensures that the regions are valid and unused.
-        .map(|entry| unsafe { PhysicalMemoryToken::new(entry.address as usize, entry.size) })
+        .map(|entry| unsafe { PhysicalRwToken::new(entry.address as usize, entry.size) })
 }
 
 static GOT_FRAME_BUFFER: AtomicBool = AtomicBool::new(false);
@@ -75,10 +77,9 @@ pub fn frame_buffer() -> Option<FrameBuffer> {
         let tag = unsafe { FRAME_BUFFER_TAG };
         // SAFETY: the spec ensures that the frame buffer is distinct from other memory regions, so it is safe to map it.
         let physical_memory_handle = unsafe {
-            map_physical_memory(
+            map_physical_memory::<PhysicalMmioToken>(
                 tag.address,
                 tag.pitch as usize * tag.height as usize,
-                MemoryType::Device,
                 PagePermissions::KERNEL_READ_WRITE,
             )
         };
@@ -90,7 +91,7 @@ pub fn frame_buffer() -> Option<FrameBuffer> {
             red_byte: tag.red_byte,
             green_byte: tag.green_byte,
             blue_byte: tag.blue_byte,
-            pixels: PhysicalAddressHandle::leak(physical_memory_handle),
+            pixels: physical_memory_handle.into_mut_ptr(),
         })
     }
 }

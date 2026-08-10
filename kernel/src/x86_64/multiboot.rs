@@ -7,13 +7,13 @@ use crate::{
         FromBytes, ReservedMemory, Validateable, align_address_down, align_address_up,
         slice_from_memory,
     },
-    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
+    memory_allocator::map_physical_memory,
     memory_struct,
-    paging::{MemoryType, PagePermissions},
+    paging::PagePermissions,
     physical_memory_manager::{BLOCK_SIZE, mark_as_free},
     unsafe_impl::{
         init_cell::NoConcurrency,
-        memory_token::{MemoryToken, PhysicalMemoryToken},
+        memory_token::{MemoryToken, PhysicalMmioToken, PhysicalRoToken, PhysicalRwToken},
     },
 };
 use common::framebuffer::{self, FrameBuffer};
@@ -284,18 +284,14 @@ fn parse_module(module: MbiModuleTag, no_concurrency: &NoConcurrency) {
     let module_size = module.module_end() - module.module_start();
     // SAFETY: The memory should be valid (Grub makes sure of this), and it won't be given out to anyone since it is marked as used.
     let module_memory = unsafe {
-        map_physical_memory(
+        map_physical_memory::<PhysicalRoToken>(
             module.module_start() as usize,
             module_size as usize,
-            MemoryType::Normal,
             PagePermissions::KERNEL_READ_ONLY,
         )
     };
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
-    initial_ramdisk::set_initial_ramdisk(
-        PhysicalAddressHandle::leak(module_memory),
-        no_concurrency,
-    );
+    initial_ramdisk::set_initial_ramdisk(module_memory.into_slice(), no_concurrency);
 }
 
 memory_struct! {
@@ -347,7 +343,7 @@ fn parse_memory_map(memory_map: MbiMemoryMapTag, tag_memory: &[u8], exclusions: 
                     continue; // Skip this block as it overlaps with an exclusion
                 }
                 // SAFETY: we know that this block is validand unused
-                let token = unsafe { PhysicalMemoryToken::new(block_start_address, BLOCK_SIZE) };
+                let token = unsafe { PhysicalRwToken::new(block_start_address, BLOCK_SIZE) };
                 mark_as_free(token);
             }
         }
@@ -368,14 +364,13 @@ fn parse_frame_buffer(frame_buffer: MbiFrameBufferTag) {
                 // # Safety
                 // This is the only place where the framebuffer is mapped, so there should be no aliasing issues.
                 let physical_address_handle = unsafe {
-                    map_physical_memory(
+                    map_physical_memory::<PhysicalMmioToken>(
                         frame_buffer.address() as usize,
                         frame_buffer.pitch() as usize * frame_buffer.height() as usize,
-                        MemoryType::Device,
                         PagePermissions::KERNEL_READ_WRITE,
                     )
                 };
-                PhysicalAddressHandle::leak(physical_address_handle)
+                physical_address_handle.into_mut_ptr()
             },
         });
     }

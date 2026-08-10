@@ -14,8 +14,6 @@ pub struct BitmapToken<Inner: MemoryToken, const BLOCK_SIZE: usize> {
 }
 
 impl<Inner: MemoryToken, const BLOCK_SIZE: usize> MemoryToken for BitmapToken<Inner, BLOCK_SIZE> {
-    type ViewToken = Self;
-
     unsafe fn new(start: usize, size: usize) -> Self {
         Self {
             block_index: start,

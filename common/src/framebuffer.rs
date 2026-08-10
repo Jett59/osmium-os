@@ -1,3 +1,5 @@
+use core::ptr::null_mut;
+
 pub struct FrameBuffer {
     pub width: usize,
     pub height: usize,
@@ -9,7 +11,7 @@ pub struct FrameBuffer {
     pub red_byte: u8,
     pub green_byte: u8,
     pub blue_byte: u8,
-    pub pixels: &'static mut [u8],
+    pub pixels: *mut u8,
 }
 
 static mut FRAME_BUFFER: FrameBuffer = FrameBuffer {
@@ -21,7 +23,7 @@ static mut FRAME_BUFFER: FrameBuffer = FrameBuffer {
     red_byte: 0,
     green_byte: 0,
     blue_byte: 0,
-    pixels: &mut [],
+    pixels: null_mut(),
 };
 
 pub fn init(frame_buffer: FrameBuffer) {
@@ -52,13 +54,11 @@ pub fn get_rgb_byte_positions() -> (u8, u8, u8) {
     }
 }
 
-// TODO: make this like remotely sound
-pub fn get_pixel_row(x: usize, y: usize, pixel_count: usize) -> &'static mut [u8] {
+pub fn get_pixel_row(x: usize, y: usize) -> *mut u8 {
     unsafe {
-        &mut FRAME_BUFFER.pixels[y * FRAME_BUFFER.pitch + x * FRAME_BUFFER.bytes_per_pixel as usize
-            ..y * FRAME_BUFFER.pitch
-                + x * FRAME_BUFFER.bytes_per_pixel as usize
-                + pixel_count * FRAME_BUFFER.bytes_per_pixel as usize]
+        FRAME_BUFFER
+            .pixels
+            .add(y * FRAME_BUFFER.pitch + x * FRAME_BUFFER.bytes_per_pixel as usize)
     }
 }
 

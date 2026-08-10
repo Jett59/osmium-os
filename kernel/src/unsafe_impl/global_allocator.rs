@@ -10,7 +10,7 @@ use crate::{
     memory_allocator::{alloc_large, free_large},
     physical_memory_manager::{BLOCK_SIZE, LOG2_BLOCK_SIZE},
     unsafe_impl::{
-        memory_token::{AllocatedMemoryToken, MemoryToken},
+        memory_token::{AllocatedMemoryToken, AllocatedRwToken, MemoryToken},
         slab::{DynamicSizedSlab, MIN_SLAB_ENTRY_SIZE, Slab},
     },
 };
@@ -55,11 +55,11 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         let size = layout.size().max(MIN_SMALL_SIZE).next_power_of_two();
         if size <= BLOCK_SIZE / 2 {
             // SAFETY: see `alloc`: the pointer here must have originated in that function.
-            let allocated_token = unsafe { AllocatedMemoryToken::new(ptr as usize, size) };
+            let allocated_token = unsafe { AllocatedRwToken::new(ptr as usize, size) };
             // SAFETY: The token must have been created by `alloc_small`.
             unsafe { free_small(allocated_token) };
         } else {
-            let allocated_token = unsafe { AllocatedMemoryToken::new(ptr as usize, size) };
+            let allocated_token = unsafe { AllocatedRwToken::new(ptr as usize, size) };
             free_large(allocated_token);
         }
     }
@@ -102,7 +102,7 @@ static SMALL_ALLOCATOR: spin::Mutex<SmallAllocator> = spin::Mutex::new(SmallAllo
 const_assert!(MIN_SMALL_SIZE == 32, "MIN_SMALL_SIZE currently must be 32");
 const_assert!(BLOCK_SIZE == 65536, "BLOCK_SIZE currently must be 65536");
 
-fn alloc_small(size: usize) -> Option<AllocatedMemoryToken> {
+fn alloc_small(size: usize) -> Option<AllocatedRwToken> {
     match size {
         32 => alloc_small_const::<32>(),
         64 => alloc_small_const::<64>(),
@@ -124,7 +124,7 @@ fn alloc_small(size: usize) -> Option<AllocatedMemoryToken> {
     }
 }
 
-fn alloc_small_const<const SIZE: usize>() -> Option<AllocatedMemoryToken> {
+fn alloc_small_const<const SIZE: usize>() -> Option<AllocatedRwToken> {
     let mut allocator = SMALL_ALLOCATOR.lock();
     let index = SIZE.trailing_zeros() as usize;
     if let Some(slab) = allocator.partial_lists[index].as_mut() {
@@ -154,7 +154,7 @@ fn alloc_small_const<const SIZE: usize>() -> Option<AllocatedMemoryToken> {
 
 /// # Safety
 /// The token must have been created by `alloc_small`.
-unsafe fn free_small(token: AllocatedMemoryToken) {
+unsafe fn free_small(token: AllocatedRwToken) {
     let size = token.size();
     unsafe {
         match size {
@@ -179,7 +179,7 @@ unsafe fn free_small(token: AllocatedMemoryToken) {
     }
 }
 
-unsafe fn free_small_const<const SIZE: usize>(token: AllocatedMemoryToken) {
+unsafe fn free_small_const<const SIZE: usize>(token: AllocatedRwToken) {
     // We must hold the lock to prevent races, although we do not immediately use it.
     let mut allocator = SMALL_ALLOCATOR.lock();
     let index = SIZE.trailing_zeros() as usize;

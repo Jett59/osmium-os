@@ -1,9 +1,9 @@
 use crate::{
     buddy::BuddyAllocator,
-    paging::{MemoryType, PagePermissions},
+    paging::PagePermissions,
     physical_memory_manager,
     unsafe_impl::memory_token::{
-        AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
+        AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, PhysicalRwToken, VirtualMemoryToken,
     },
 };
 
@@ -138,7 +138,7 @@ mod arch {
 
     use bitflags::bitflags;
 
-    use crate::paging::MemoryType;
+    use crate::paging::{MemoryType, PagePermissions};
 
     pub const PAGE_SIZE: usize = 4096;
     pub const PAGE_TABLE_LEVELS: usize = 4;
@@ -181,8 +181,8 @@ mod arch {
             .union(PageTableFlags::USER_ACCESSIBLE);
 
         pub fn from_type_permissions(
-            memory_type: super::MemoryType,
-            permissions: super::PagePermissions,
+            memory_type: MemoryType,
+            permissions: PagePermissions,
         ) -> Self {
             let mut flags = PageTableFlags::PRESENT | PageTableFlags::ACCESSED;
             if permissions.writable {
@@ -315,10 +315,10 @@ impl PageTableIndices {
 }
 
 static PAGE_TABLE_ALLOCATION_POOL: spin::Mutex<
-    BuddyAllocator<PhysicalMemoryToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
+    BuddyAllocator<PhysicalRwToken, 128, { physical_memory_manager::LOG2_BLOCK_SIZE }, 12>,
 > = spin::Mutex::new(BuddyAllocator::new());
 
-fn allocate_page_table() -> PhysicalMemoryToken {
+fn allocate_page_table() -> PhysicalRwToken {
     let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
     if let Some(allocated_page) = page_allocation_pool.allocate(4096) {
         allocated_page
@@ -332,7 +332,7 @@ fn allocate_page_table() -> PhysicalMemoryToken {
             .expect("Adding new entry to page table allocation pool didn't change anything")
     }
 }
-fn free_page_table(table: PhysicalMemoryToken) {
+fn free_page_table(table: PhysicalRwToken) {
     let mut page_allocation_pool = PAGE_TABLE_ALLOCATION_POOL.lock();
     page_allocation_pool.free(table);
     // If this merged into a 64 kb block, return it to the physical memory manager (PMM) so it can be used by someone else.
@@ -403,12 +403,14 @@ fn ensure_page_tables_exist(indices: PageTableIndices, lock: &mut Lock) {
     }
 }
 
-pub fn create_page_mapping(
-    memory_type: MemoryType,
+/// Create a page mapping from the given physical address to the given virtual address.
+///
+/// The memory is mapped with the intersection of the provided permissions and the inherent permissions of the physical memory token.
+pub fn create_page_mapping<P: PhysicalMemoryToken>(
     permissions: PagePermissions,
-    physical_address: PhysicalMemoryToken,
+    physical_address: P,
     virtual_address: VirtualMemoryToken,
-) -> AllocatedMemoryToken {
+) -> P::AllocatedToken {
     assert!(
         virtual_address.address().is_multiple_of(PAGE_SIZE),
         "Virtual address must be page-aligned"
@@ -430,7 +432,10 @@ pub fn create_page_mapping(
 
     let mut lock = LOCK.write();
     let indices = PageTableIndices::new(virtual_address.address());
-    let flags = PageTableFlags::from_type_permissions(memory_type, permissions);
+    let flags = PageTableFlags::from_type_permissions(
+        P::MEMORY_TYPE,
+        permissions.intersect(P::MAX_PAGE_PERMISSIONS),
+    );
     let physical_address = physical_address.address() as u64;
     let entry = flags.bits() | physical_address & PHYSICAL_PAGE_MASK;
     let entry_address = indices.calculate_page_table_entry_address();
@@ -440,12 +445,12 @@ pub fn create_page_mapping(
     unsafe { write_page_table_entry(entry_address, entry, false, None) };
 
     // SAFETY: the mapping is now present, so the caller can safely use the address.
-    unsafe { AllocatedMemoryToken::new(virtual_address.address(), 4096) }
+    unsafe { P::AllocatedToken::new(virtual_address.address(), 4096) }
 }
 
-pub fn take_page_mapping(
-    allocated_address: AllocatedMemoryToken,
-) -> (PhysicalMemoryToken, VirtualMemoryToken) {
+pub fn take_page_mapping<A: AllocatedMemoryToken>(
+    allocated_address: A,
+) -> (A::PhysicalToken, VirtualMemoryToken) {
     assert!(
         allocated_address.address().is_multiple_of(PAGE_SIZE),
         "Allocated address must be page-aligned"
@@ -473,7 +478,7 @@ pub fn take_page_mapping(
     // SAFETY: the physical and virtual addresses are guaranteed to be owned by the caller.
     unsafe {
         (
-            PhysicalMemoryToken::new(physical_address as usize, 4096),
+            A::PhysicalToken::new(physical_address as usize, 4096),
             VirtualMemoryToken::new(allocated_address.address(), 4096),
         )
     }
@@ -499,12 +504,12 @@ pub mod init {
             let mut page_table_handle = map_physical_memory(
                 page_table_address.address(),
                 PAGE_SIZE,
-                MemoryType::Normal,
                 PagePermissions::KERNEL_READ_WRITE,
             );
             // Zero it out
-            page_table_handle.fill(0);
-            let final_entry: &mut [u8; 8] = (&mut page_table_handle[PAGE_SIZE - 8..])
+            page_table_handle.as_mut_slice().fill(0);
+            let final_entry: &mut [u8; 8] = (&mut page_table_handle.as_mut_slice()
+                [PAGE_SIZE - 8..])
                 .try_into()
                 .unwrap();
             *final_entry = recursive_mapping_entry.to_ne_bytes();

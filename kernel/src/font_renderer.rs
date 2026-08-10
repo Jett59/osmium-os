@@ -38,7 +38,9 @@ pub fn draw_character(character: char, x: usize, y: usize) {
     for row in 0..character_height {
         let row_pixel_cache = &character_cache[row * character_width * bytes_per_pixel
             ..(row + 1) * character_width * bytes_per_pixel];
-        let row_pixels = get_pixel_row(x, y + row, character_width);
-        row_pixels.copy_from_slice(row_pixel_cache);
+        let row_pixels = get_pixel_row(x, y + row);
+        unsafe {
+            row_pixels.copy_from_nonoverlapping(row_pixel_cache.as_ptr(), row_pixel_cache.len())
+        };
     }
 }

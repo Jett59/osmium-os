@@ -1,7 +1,4 @@
-use core::{
-    ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use alloc::{boxed::Box, vec};
 
@@ -9,10 +6,11 @@ use crate::{
     assert::const_assert,
     buddy::BuddyAllocator,
     memory::{align_address_down, align_address_up},
-    paging::{MemoryType, PagePermissions, create_mapping, take_mapping},
+    paging::{PagePermissions, create_mapping, take_mapping},
     physical_memory_manager::{self, BLOCK_SIZE, LOG2_BLOCK_SIZE},
     unsafe_impl::memory_token::{
-        AllocatedMemoryToken, MemoryToken, PhysicalMemoryToken, VirtualMemoryToken,
+        AllocatedMemoryToken, AllocatedRwToken, MemoryToken, MemoryTokenView, MemoryTokenViewMut,
+        PhysicalMemoryToken, PhysicalRoToken, PhysicalRwToken, VirtualMemoryToken,
     },
 };
 
@@ -54,13 +52,12 @@ fn free_virtual_memory(token: VirtualMemoryToken) {
     allocator.free(token);
 }
 
-pub fn alloc_large(size: usize) -> Option<AllocatedMemoryToken> {
+pub fn alloc_large(size: usize) -> Option<AllocatedRwToken> {
     let virtual_token = allocate_virtual_memory(size)?;
-    let mut allocation = AllocatedMemoryToken::empty(virtual_token.address());
+    let mut allocation = AllocatedRwToken::empty(virtual_token.address());
     for virtual_block in virtual_token.chunks(BLOCK_SIZE) {
         let physical_block = physical_memory_manager::allocate_block()?;
         let allocated_block = create_mapping(
-            MemoryType::Normal,
             PagePermissions::KERNEL_READ_WRITE,
             physical_block,
             virtual_block,
@@ -70,7 +67,7 @@ pub fn alloc_large(size: usize) -> Option<AllocatedMemoryToken> {
     Some(allocation)
 }
 
-pub fn free_large(token: AllocatedMemoryToken) {
+pub fn free_large(token: AllocatedRwToken) {
     let mut virtual_token = VirtualMemoryToken::empty(token.address());
     for allocated_block in token.chunks(BLOCK_SIZE) {
         let (physical_block, virtual_block) = take_mapping(allocated_block);
@@ -80,35 +77,49 @@ pub fn free_large(token: AllocatedMemoryToken) {
     free_virtual_memory(virtual_token);
 }
 
-pub struct PhysicalAddressHandle {
-    allocation: AllocatedMemoryToken,
+pub struct PhysicalAddressHandle<P: PhysicalMemoryToken> {
+    allocation: P::AllocatedToken,
     extra_virtual_memory: VirtualMemoryToken,
     offset: usize,
     size: usize,
 }
 
-impl PhysicalAddressHandle {
-    pub fn slice(&self) -> &[u8] {
-        &self.allocation.as_slice()[self.offset..self.offset + self.size]
+impl<P: PhysicalMemoryToken> PhysicalAddressHandle<P> {
+    pub fn memory(&self) -> MemoryTokenView<P::AllocatedToken> {
+        self.allocation.view(self.offset, self.size)
     }
 
-    pub fn mut_slice(&mut self) -> &mut [u8] {
-        &mut self.allocation.as_mut_slice()[self.offset..self.offset + self.size]
+    pub fn memory_mut(&mut self) -> MemoryTokenViewMut<P::AllocatedToken> {
+        self.allocation.view_mut(self.offset, self.size)
     }
 
     pub fn as_ptr(&self) -> *const u8 {
-        (self.allocation.address() as *const u8).wrapping_add(self.offset)
+        self.memory().as_ptr()
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        (self.allocation.address() as *mut u8).wrapping_add(self.offset)
+        self.memory_mut().as_mut_ptr()
+    }
+
+pub fn into_mut_ptr(mut self) -> *mut u8 {
+        let ptr = self.as_mut_ptr();
+        core::mem::forget(self);
+        ptr
     }
 
     pub fn size(&self) -> usize {
         self.size
     }
+}
 
-    pub fn leak(mut self) -> &'static mut [u8] {
+impl PhysicalAddressHandle<PhysicalRoToken> {
+    pub fn as_slice(&self) -> &[u8] {
+        let ptr = self.as_ptr();
+        let size = self.size();
+        unsafe { core::slice::from_raw_parts(ptr, size) }
+    }
+
+    pub fn into_slice(mut self) -> &'static [u8] {
         let ptr = self.as_mut_ptr();
         let size = self.size();
         core::mem::forget(self);
@@ -116,21 +127,28 @@ impl PhysicalAddressHandle {
     }
 }
 
-impl Deref for PhysicalAddressHandle {
-    type Target = [u8];
+impl PhysicalAddressHandle<PhysicalRwToken> {
+    pub fn as_slice(&self) -> &[u8] {
+        let ptr = self.as_ptr();
+        let size = self.size();
+        unsafe { core::slice::from_raw_parts(ptr, size) }
+    }
 
-    fn deref(&self) -> &Self::Target {
-        self.slice()
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        let ptr = self.as_mut_ptr();
+        let size = self.size();
+        unsafe { core::slice::from_raw_parts_mut(ptr, size) }
+    }
+
+    pub fn into_mut_slice(mut self) -> &'static mut [u8] {
+        let ptr = self.as_mut_ptr();
+        let size = self.size();
+        core::mem::forget(self);
+        unsafe { core::slice::from_raw_parts_mut(ptr, size) }
     }
 }
 
-impl DerefMut for PhysicalAddressHandle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.mut_slice()
-    }
-}
-
-impl Drop for PhysicalAddressHandle {
+impl<P: PhysicalMemoryToken> Drop for PhysicalAddressHandle<P> {
     fn drop(&mut self) {
         let allocation = self.allocation.take();
         let (_physical_token, virtual_token) = take_mapping(allocation);
@@ -139,28 +157,21 @@ impl Drop for PhysicalAddressHandle {
     }
 }
 
-pub unsafe fn map_physical_memory(
+pub unsafe fn map_physical_memory<P: PhysicalMemoryToken>(
     address: usize,
     size: usize,
-    memory_type: MemoryType,
     permissions: PagePermissions,
-) -> PhysicalAddressHandle {
+) -> PhysicalAddressHandle<P> {
     let physical_block_address = align_address_down(address, BLOCK_SIZE);
     let physical_block_size =
         align_address_up(size + (address - physical_block_address), BLOCK_SIZE);
     // SAFETY: this is not safe :(
-    let physical_token =
-        unsafe { PhysicalMemoryToken::new(physical_block_address, physical_block_size) };
+    let physical_token = unsafe { P::new(physical_block_address, physical_block_size) };
     let virtual_token = allocate_virtual_memory(physical_block_size)
         .expect("Failed to allocate virtual memory for physical memory mapping");
     let (necessary_virtual_token, extra_virtual_token) =
         virtual_token.split_at(physical_block_size);
-    let allocation = create_mapping(
-        memory_type,
-        permissions,
-        physical_token,
-        necessary_virtual_token,
-    );
+    let allocation = create_mapping(permissions, physical_token, necessary_virtual_token);
     PhysicalAddressHandle {
         allocation,
         extra_virtual_memory: extra_virtual_token,
