@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use crate::{
     paging::is_valid_user_address,
-    paging::{MemoryType, PagePermissions, create_mapping},
+    paging::{PagePermissions, create_mapping},
     physical_memory_manager::{BLOCK_SIZE, allocate_block},
     unsafe_impl::memory_token::{MemoryToken, VirtualMemoryToken},
 };

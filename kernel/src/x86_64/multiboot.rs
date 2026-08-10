@@ -283,13 +283,10 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
 fn parse_module(module: MbiModuleTag, no_concurrency: &NoConcurrency) {
     let module_size = module.module_end() - module.module_start();
     // SAFETY: The memory should be valid (Grub makes sure of this), and it won't be given out to anyone since it is marked as used.
-    let module_memory = unsafe {
-        map_physical_memory::<PhysicalRoToken>(
-            module.module_start() as usize,
-            module_size as usize,
-            PagePermissions::KERNEL_READ_ONLY,
-        )
-    };
+    let module_memory = map_physical_memory(
+        unsafe { PhysicalRoToken::new(module.module_start() as usize, module_size as usize) },
+        PagePermissions::KERNEL_READ_ONLY,
+    );
     // SAFETY: There are no data races possible, since there is only one thread running at the moment.
     initial_ramdisk::set_initial_ramdisk(module_memory.into_slice(), no_concurrency);
 }
@@ -363,13 +360,15 @@ fn parse_frame_buffer(frame_buffer: MbiFrameBufferTag) {
             pixels: {
                 // # Safety
                 // This is the only place where the framebuffer is mapped, so there should be no aliasing issues.
-                let physical_address_handle = unsafe {
-                    map_physical_memory::<PhysicalMmioToken>(
-                        frame_buffer.address() as usize,
-                        frame_buffer.pitch() as usize * frame_buffer.height() as usize,
-                        PagePermissions::KERNEL_READ_WRITE,
-                    )
-                };
+                let physical_address_handle = map_physical_memory(
+                    unsafe {
+                        PhysicalMmioToken::new(
+                            frame_buffer.address() as usize,
+                            frame_buffer.pitch() as usize * frame_buffer.height() as usize,
+                        )
+                    },
+                    PagePermissions::KERNEL_READ_WRITE,
+                );
                 physical_address_handle.into_mut_ptr()
             },
         });

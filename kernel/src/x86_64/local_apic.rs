@@ -5,7 +5,10 @@ use bitflags::bitflags;
 use crate::{
     mmio::MmioMemoryHandle,
     paging::PagePermissions,
-    unsafe_impl::init_cell::{InitCell, NoConcurrency},
+    unsafe_impl::{
+        init_cell::{InitCell, NoConcurrency},
+        memory_token::{MemoryToken, PhysicalMmioToken},
+    },
 };
 
 use super::interrupts::{SPURIOUS_INTERRUPT_VECTOR, TIMER_INTERRUPT};
@@ -47,8 +50,7 @@ const LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_OFFSET: usize = 0x3E0;
 pub unsafe fn initialize(address: usize, no_concurrency: &NoConcurrency) {
     APIC_HANDLE.set(
         MmioMemoryHandle::new(
-            address,
-            LOCAL_APIC_MEMORY_RANGE_SIZE,
+            PhysicalMmioToken::new(address, LOCAL_APIC_MEMORY_RANGE_SIZE),
             PagePermissions::KERNEL_READ_WRITE,
         ),
         no_concurrency,

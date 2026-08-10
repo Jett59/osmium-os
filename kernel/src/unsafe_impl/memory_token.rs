@@ -194,6 +194,8 @@ macro_rules! basic_token {
 
 basic_token!(VirtualMemoryToken);
 
+/// # Safety
+/// Unsafe code relies on uniqueness of ownership, which must be upheld by the caller.
 pub unsafe trait PhysicalMemoryToken: MemoryToken {
     type AllocatedToken: AllocatedMemoryToken<PhysicalToken = Self>;
 
@@ -237,6 +239,8 @@ basic_token!(AllocatedRwToken);
 basic_token!(AllocatedRoToken);
 basic_token!(AllocatedMmioToken);
 
+/// # Safety
+/// Unsafe code relies on uniqueness of ownership, which must be upheld by the caller.
 pub unsafe trait AllocatedMemoryToken: MemoryToken {
     type PhysicalToken: PhysicalMemoryToken<AllocatedToken = Self>;
 

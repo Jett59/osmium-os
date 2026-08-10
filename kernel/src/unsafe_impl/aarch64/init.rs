@@ -12,11 +12,9 @@ use common::{
 };
 
 use crate::{
-    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
-    paging::{MemoryType, PagePermissions},
-    unsafe_impl::memory_token::{
-        MemoryToken, PhysicalMemoryToken, PhysicalMmioToken, PhysicalRwToken,
-    },
+    memory_allocator::map_physical_memory,
+    paging::PagePermissions,
+    unsafe_impl::memory_token::{MemoryToken, PhysicalMmioToken, PhysicalRwToken},
 };
 
 #[cfg_attr(not(test), unsafe(link_section = ".beryllium"))]
@@ -77,9 +75,8 @@ pub fn frame_buffer() -> Option<FrameBuffer> {
         let tag = unsafe { FRAME_BUFFER_TAG };
         // SAFETY: the spec ensures that the frame buffer is distinct from other memory regions, so it is safe to map it.
         let physical_memory_handle = unsafe {
-            map_physical_memory::<PhysicalMmioToken>(
-                tag.address,
-                tag.pitch as usize * tag.height as usize,
+            map_physical_memory(
+                PhysicalMmioToken::new(tag.address, tag.pitch as usize * tag.height as usize),
                 PagePermissions::KERNEL_READ_WRITE,
             )
         };

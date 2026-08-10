@@ -1,4 +1,8 @@
-use crate::{mmio::MmioMemoryHandle, paging::PagePermissions};
+use crate::{
+    mmio::MmioMemoryHandle,
+    paging::PagePermissions,
+    unsafe_impl::memory_token::{MemoryToken, PhysicalMmioToken},
+};
 
 pub struct Hpet {
     mmio_handle: MmioMemoryHandle,
@@ -18,8 +22,7 @@ impl Hpet {
     /// The physical address must both point to a HPET, and also not be in use by another instance of the HPET driver or anything else.
     pub unsafe fn new(physical_address: usize) -> Self {
         let mmio_handle = MmioMemoryHandle::new(
-            physical_address,
-            HPET_MMIO_SIZE,
+            unsafe { PhysicalMmioToken::new(physical_address, HPET_MMIO_SIZE) },
             PagePermissions::KERNEL_READ_WRITE,
         );
 

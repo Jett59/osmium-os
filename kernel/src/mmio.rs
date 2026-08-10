@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     arch_api::asm::memory_barrier,
-    memory_allocator::{PhysicalAddressHandle, map_physical_memory},
+    memory_allocator::{PhysicalMemoryHandle, map_physical_memory},
     paging::PagePermissions,
     unsafe_impl::memory_token::PhysicalMmioToken,
 };
@@ -61,7 +61,7 @@ impl MmioRange {
 }
 
 pub struct MmioMemoryHandle {
-    physical_memory_handle: PhysicalAddressHandle<PhysicalMmioToken>,
+    physical_memory_handle: PhysicalMemoryHandle<PhysicalMmioToken>,
     mmio_range: MmioRange,
 }
 
@@ -72,8 +72,8 @@ unsafe impl Sync for MmioMemoryHandle {}
 impl MmioMemoryHandle {
     /// # Safety
     /// see `heap::map_physical_memory`.
-    pub unsafe fn new(physical_address: usize, size: usize, permissions: PagePermissions) -> Self {
-        let mut handle = map_physical_memory(physical_address, size, permissions);
+    pub unsafe fn new(memory: PhysicalMmioToken, permissions: PagePermissions) -> Self {
+        let mut handle = map_physical_memory(memory, permissions);
         let mmio_range = MmioRange::new(handle.as_mut_ptr(), handle.size());
         Self {
             physical_memory_handle: handle,

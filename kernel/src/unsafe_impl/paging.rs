@@ -502,8 +502,7 @@ pub mod init {
             let recursive_mapping_entry =
                 recursive_mapping_entry_flags.bits() | page_table_address.address() as u64;
             let mut page_table_handle = map_physical_memory(
-                page_table_address.address(),
-                PAGE_SIZE,
+                PhysicalRwToken::new(page_table_address.address(), PAGE_SIZE),
                 PagePermissions::KERNEL_READ_WRITE,
             );
             // Zero it out

@@ -6,6 +6,7 @@ use crate::{
     arch_api::irq::{GenericInterruptController, InterruptInfo, Priority},
     mmio::MmioMemoryHandle,
     paging::PagePermissions,
+    unsafe_impl::memory_token::{MemoryToken, PhysicalMmioToken},
 };
 
 pub struct Gicv2 {
@@ -44,13 +45,11 @@ impl Gicv2 {
     pub unsafe fn new(distributor_address: usize, cpu_interface_address: usize) -> Self {
         unsafe {
             let distributor_registers = MmioMemoryHandle::new(
-                distributor_address,
-                DISTRIBUTOR_RANGE_LENGTH,
+                PhysicalMmioToken::new(distributor_address, DISTRIBUTOR_RANGE_LENGTH),
                 PagePermissions::KERNEL_READ_WRITE,
             );
             let cpu_interface_registers = MmioMemoryHandle::new(
-                cpu_interface_address,
-                CPU_INTERFACE_RANGE_LENGTH,
+                PhysicalMmioToken::new(cpu_interface_address, CPU_INTERFACE_RANGE_LENGTH),
                 PagePermissions::KERNEL_READ_WRITE,
             );
 
