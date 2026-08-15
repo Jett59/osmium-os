@@ -62,6 +62,14 @@ pub fn get_pixel_row(x: usize, y: usize) -> *mut u8 {
     }
 }
 
+pub fn write_pixel_row(x: usize, y: usize, row: &[u8]) {
+    assert!(x + row.len() / get_bytes_per_pixel() <= unsafe { FRAME_BUFFER.width });
+    let row_pixels = get_pixel_row(x, y);
+    unsafe {
+        row_pixels.copy_from_nonoverlapping(row.as_ptr(), row.len());
+    }
+}
+
 pub struct PixelFormat {
     pub bytes_per_pixel: u8,
     pub red_byte: u8,
