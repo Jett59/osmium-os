@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, mem::size_of, ops::Deref, slice};
+use core::{marker::PhantomData, mem::size_of, ops::Deref};
 
 pub trait Validateable {
     /// Ensure that an instance of this type is valid. This is used to ensure that
@@ -158,11 +158,11 @@ macro_rules! memory_struct {
             endianness: $crate::memory::Endianness,
         }
 
-        impl<'lifetime> $crate::memory::FromBytes<'lifetime> for $Name<'lifetime>
+        impl<$lifetime> $crate::memory::FromBytes<$lifetime> for $Name<$lifetime>
         where
-            $($field_type: $crate::memory::FromBytes<'lifetime>),*
+            $($field_type: $crate::memory::FromBytes<$lifetime>),*
         {
-            fn from_bytes(endianness: $crate::memory::Endianness, bytes: &'lifetime [u8]) -> Result<Self, $crate::memory::FromBytesError> {
+            fn from_bytes(endianness: $crate::memory::Endianness, bytes: &$lifetime [u8]) -> Result<Self, $crate::memory::FromBytesError> {
                 if bytes.len() < Self::SIZE {
                     return Err($crate::memory::FromBytesError::InvalidSize {
                         actual: bytes.len(),
@@ -180,9 +180,9 @@ macro_rules! memory_struct {
             )* 0;
         }
 
-        impl<'lifetime> core::fmt::Debug for $Name<'lifetime>
+        impl<$lifetime> core::fmt::Debug for $Name<$lifetime>
         where
-            $($field_type: $crate::memory::FromBytes<'lifetime> + core::fmt::Debug),*
+            $($field_type: $crate::memory::FromBytes<$lifetime> + core::fmt::Debug),*
         {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_struct(stringify!($Name))
@@ -193,9 +193,9 @@ macro_rules! memory_struct {
             }
         }
 
-        impl<'lifetime> $Name<'lifetime>
+        impl<$lifetime> $Name<$lifetime>
         where
-            $($field_type: $crate::memory::FromBytes<'lifetime>),*,
+            $($field_type: $crate::memory::FromBytes<$lifetime>),*,
         {
             $crate::__internal_memory_struct_accessors!{$visibility, 0, $($field_name: $field_type),*}
         }
@@ -227,16 +227,6 @@ impl<const N: usize> FromBytes<'_> for ReservedMemory<N> {
     }
 
     const SIZE: usize = N;
-}
-
-pub unsafe fn slice_from_memory<'lifetime>(
-    pointer: *const u8,
-    length: usize,
-) -> Option<&'lifetime [u8]> {
-    if pointer.is_null() {
-        return None;
-    }
-    Some(slice::from_raw_parts(pointer, length))
 }
 
 // For types which have a field which represents the size of the structure. This is often useful for lists of structures (in some sort of table) which may have any of a number of different types of field. In these cases, there is some mechanism for determining the size of the entry, either through a 'length' field or a type field, where the type implies a size.
@@ -331,7 +321,7 @@ mod test {
     #[test]
     fn test_dynamic_sized_object_iterator() {
         memory_struct! {
-            struct TestStruct<'_> {
+            struct TestStruct<'a> {
                 a: u8,
                 b: u8,
                 c: u8,

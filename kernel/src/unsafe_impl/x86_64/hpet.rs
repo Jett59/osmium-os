@@ -52,7 +52,7 @@ impl Hpet {
         self.frequency
     }
 
-    pub unsafe fn counter_value(&self) -> u64 {
+    pub fn counter_value(&self) -> u64 {
         unsafe {
             self.mmio_handle
                 .at_offset::<u64>(HPET_MAIN_COUNTER_VALUE_OFFSET)
@@ -60,7 +60,7 @@ impl Hpet {
         }
     }
 
-    pub unsafe fn enable(&self) {
+    pub fn enable(&self) {
         unsafe {
             let mut general_configuration = self
                 .mmio_handle
@@ -73,7 +73,7 @@ impl Hpet {
         }
     }
 
-    pub unsafe fn disable(&self) {
+    pub fn disable(&self) {
         unsafe {
             let mut general_configuration = self
                 .mmio_handle
@@ -87,7 +87,7 @@ impl Hpet {
     }
 
     /// Restart the counter at 0.
-    pub unsafe fn reset(&self) {
+    pub fn reset(&self) {
         unsafe {
             self.disable();
             self.mmio_handle

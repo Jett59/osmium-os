@@ -114,9 +114,7 @@ impl<P: PhysicalMemoryToken> PhysicalMemoryHandle<P> {
 
 impl PhysicalMemoryHandle<PhysicalRoToken> {
     pub fn as_slice(&self) -> &[u8] {
-        let ptr = self.as_ptr();
-        let size = self.size();
-        unsafe { core::slice::from_raw_parts(ptr, size) }
+        &self.allocation.as_slice()[self.offset..self.offset + self.size]
     }
 
     pub fn into_slice(mut self) -> &'static [u8] {
@@ -129,15 +127,11 @@ impl PhysicalMemoryHandle<PhysicalRoToken> {
 
 impl PhysicalMemoryHandle<PhysicalRwToken> {
     pub fn as_slice(&self) -> &[u8] {
-        let ptr = self.as_ptr();
-        let size = self.size();
-        unsafe { core::slice::from_raw_parts(ptr, size) }
+        &self.allocation.as_slice()[self.offset..self.offset + self.size]
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        let ptr = self.as_mut_ptr();
-        let size = self.size();
-        unsafe { core::slice::from_raw_parts_mut(ptr, size) }
+        &mut self.allocation.as_mut_slice()[self.offset..self.offset + self.size]
     }
 
     pub fn into_mut_slice(mut self) -> &'static mut [u8] {

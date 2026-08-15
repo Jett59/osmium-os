@@ -5,7 +5,6 @@ use crate::{
     memory::{
         Array, DynamicallySized, DynamicallySizedItem, DynamicallySizedObjectIterator, Endianness,
         FromBytes, ReservedMemory, Validateable, align_address_down, align_address_up,
-        slice_from_memory,
     },
     memory_allocator::map_physical_memory,
     memory_struct,
@@ -28,7 +27,7 @@ unsafe extern "C" {
 static KERNEL_PHYSICAL_END: () = ();
 
 memory_struct! {
-struct MbiHeader<'_> {
+struct MbiHeader<'a> {
     total_size: u32,
     _reserved: ReservedMemory<4>,
 }
@@ -51,7 +50,7 @@ unsafe extern "C" {
 const mbi_pointer: *const u8 = core::ptr::null();
 
 memory_struct! {
-struct MbiTag<'_> {
+struct MbiTag<'a> {
     tag_type: u32,
     size: u32,
 }
@@ -186,16 +185,15 @@ pub fn parse_multiboot_structures(no_concurrency: &NoConcurrency) {
     let mbi_header: MbiHeader = unsafe {
         MbiHeader::from_bytes(
             Endianness::Little,
-            slice_from_memory(mbi_pointer, size_of::<MbiHeader>()).unwrap(),
+            core::slice::from_raw_parts(mbi_pointer, size_of::<MbiHeader>()),
         )
         .unwrap()
     };
     let tag_memory = unsafe {
-        slice_from_memory(
+        core::slice::from_raw_parts(
             mbi_pointer.add(MbiHeader::SIZE),
             mbi_header.total_size() as usize - MbiHeader::SIZE,
         )
-        .unwrap()
     };
     let tag_iterator: DynamicallySizedObjectIterator<MbiTag> =
         DynamicallySizedObjectIterator::new(Endianness::Little, tag_memory);
@@ -292,7 +290,7 @@ fn parse_module(module: MbiModuleTag, no_concurrency: &NoConcurrency) {
 }
 
 memory_struct! {
-struct MemoryMapEntry<'_> {
+struct MemoryMapEntry<'a> {
     base_address: u64,
     length: u64,
     entry_type: u32,

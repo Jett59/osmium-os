@@ -66,10 +66,18 @@ static mut TASK_STATE_SEGMENT: TaskStateSegment = TaskStateSegment {
 };
 
 unsafe extern "C" {
+    #[cfg(not(test))]
+    #[allow(improper_ctypes)]
+    static stack_end: ();
+
     static mut task_state_segment_descriptor: TaskStateSegmentDescriptor;
 }
 
-pub fn initialize(rsp0_address: u64) {
+#[cfg(test)]
+#[allow(non_upper_case_globals)]
+static stack_end: () = ();
+
+pub fn initialize() {
     let task_state_segment_address = addr_of!(TASK_STATE_SEGMENT) as usize;
     let limit = size_of::<TaskStateSegment>() - 1;
     unsafe {
@@ -84,7 +92,7 @@ pub fn initialize(rsp0_address: u64) {
             offset_high: (task_state_segment_address >> 32) as u32,
             zero: 0,
         };
-        TASK_STATE_SEGMENT.rsp0 = rsp0_address;
+        TASK_STATE_SEGMENT.rsp0 = addr_of!(stack_end) as u64;
 
         load_task_state_segment(0x28);
     }

@@ -134,7 +134,7 @@ pub fn read_timer() -> u64 {
 }
 
 /// Set the timer to fire after the given number of ticks.
-pub unsafe fn set_timer(ticks: u64) {
+pub fn set_timer(ticks: u64) {
     let Some(apic_handle) = APIC_HANDLE.get() else {
         panic!("APIC handle not initialized");
     };

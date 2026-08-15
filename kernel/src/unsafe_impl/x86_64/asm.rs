@@ -22,10 +22,8 @@ pub fn io_wait() {
     unsafe { asm!("out dx, al", in("dx") 0x80, in("al") 0u8, options(nomem, nostack)) };
 }
 
-/// # Safety
-/// This could break code in the surrounding scope which relies on interrupts being disabled.
 #[inline(always)]
-pub unsafe fn enable_interrupts(_no_concurency: NoConcurrency) {
+pub fn enable_interrupts(_no_concurrency: NoConcurrency) {
     unsafe { asm!("sti", options(nomem, nostack)) };
 }
 

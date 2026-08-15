@@ -1,7 +1,7 @@
 use crate::user_memory::UserAddressSpaceHandle;
 use core::{
     arch::naked_asm,
-    ptr::null_mut,
+    ptr::{addr_of, null_mut},
     sync::atomic::{self, AtomicPtr},
 };
 use syscall_interface::{decode_syscall, encode_syscall_result};
@@ -59,12 +59,22 @@ extern "C" fn syscall_handler(number: u16, arguments: &mut syscall_interface::Re
     *arguments = encode_syscall_result(result);
 }
 
+unsafe extern "C" {
+    #[cfg(not(test))]
+    #[allow(improper_ctypes)]
+    static stack_end: ();
+}
+
+#[cfg(test)]
+#[allow(non_upper_case_globals)]
+static stack_end: () = ();
+
 static SYSCALL_STACK_POINTER: AtomicPtr<u8> = AtomicPtr::new(null_mut());
 
-pub fn initialize(stack_pointer: *mut u8) {
+pub fn initialize() {
     // The plan is to store a pointer to the stack pointer in the alternate GS register.
     // This way, the syscall handler can do a swapgs, read the stack pointer, and swapgs back.
-    SYSCALL_STACK_POINTER.store(stack_pointer, atomic::Ordering::SeqCst);
+    SYSCALL_STACK_POINTER.store(addr_of!(stack_end) as *mut u8, atomic::Ordering::SeqCst);
     unsafe {
         write_msr(
             ALTERNATE_GS_BASE_MSR,

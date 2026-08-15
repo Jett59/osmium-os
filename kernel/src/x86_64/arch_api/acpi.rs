@@ -8,7 +8,7 @@ use crate::{
 
 static ROOT_TABLE_ADDRESS: InitCell<usize> = InitCell::new();
 
-pub(in crate::arch) fn init(rsdt_address: usize, no_concurrency: &NoConcurrency) {
+pub fn init(rsdt_address: usize, no_concurrency: &NoConcurrency) {
     ROOT_TABLE_ADDRESS.set(rsdt_address, no_concurrency);
 }
 

@@ -201,7 +201,7 @@ fn handle_interrupt(number: u64, saved_registers: &SavedRegisters) {
     if number == TIMER_INTERRUPT as u64 {
         print!(".");
         unsafe { local_apic::set_timer(local_apic::get_timer_frequency()) };
-        unsafe { local_apic::end_of_interrupt() };
+        local_apic::end_of_interrupt();
         return;
     }
 

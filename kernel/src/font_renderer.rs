@@ -1,7 +1,9 @@
 use alloc::boxed::Box;
 use alloc::vec;
 use common::font::{get_character_dimensions, get_glyph_count, render_character};
-use common::framebuffer::{PixelFormat, get_bytes_per_pixel, get_pixel_row, get_screen_dimensions};
+use common::framebuffer::{
+    PixelFormat, get_bytes_per_pixel, get_screen_dimensions, write_pixel_row,
+};
 use spin::LazyLock;
 
 // We cache the rendered versions of the characters here since they will be redrawn rather a lot (especially during scrolling).
@@ -38,9 +40,6 @@ pub fn draw_character(character: char, x: usize, y: usize) {
     for row in 0..character_height {
         let row_pixel_cache = &character_cache[row * character_width * bytes_per_pixel
             ..(row + 1) * character_width * bytes_per_pixel];
-        let row_pixels = get_pixel_row(x, y + row);
-        unsafe {
-            row_pixels.copy_from_nonoverlapping(row_pixel_cache.as_ptr(), row_pixel_cache.len())
-        };
+        write_pixel_row(x, y + row, row_pixel_cache);
     }
 }

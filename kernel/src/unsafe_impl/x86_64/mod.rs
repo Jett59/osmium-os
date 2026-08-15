@@ -1,4 +1,9 @@
 pub mod asm;
 pub mod hpet;
 pub mod interrupts;
+pub mod irq;
 pub mod local_apic;
+pub mod multiboot;
+pub mod syscall;
+pub mod task_state_segment;
+pub mod user_mode;

@@ -30,19 +30,19 @@ pub fn initialize(acpi_info: &AcpiInfo) {
         ))
     };
 
-    unsafe { local_apic::initialize_timer() };
-    unsafe { local_apic::set_timer(0xffffffff) };
+    local_apic::initialize_timer();
+    local_apic::set_timer(0xffffffff);
 
-    unsafe { hpet.reset() };
+    hpet.reset();
 
-    let end = unsafe { hpet.counter_value() + hpet.frequency() / 10 };
+    let end = hpet.counter_value() + hpet.frequency() / 10;
 
-    while unsafe { hpet.counter_value() } < end {}
+    while hpet.counter_value() < end {}
 
-    let frequency = 10 * (0xffffffff - unsafe { local_apic::read_timer() });
+    let frequency = 10 * (0xffffffff - local_apic::read_timer());
     local_apic::store_timer_frequency(frequency);
 
     println!("APIC timer frequency: {}Hz", frequency);
 
-    unsafe { local_apic::set_timer(frequency) };
+    local_apic::set_timer(frequency);
 }
